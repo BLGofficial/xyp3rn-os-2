@@ -55,8 +55,25 @@ export type ContextBundle = {
   };
 };
 
+/** One current canonical claim (`canonical_prompts.structured.claims[]`), with the row it lives in. */
+export type ClaimItem = {
+  readonly ref: EntityRef;
+  readonly slug: string;
+  readonly version: number;
+  readonly title: string;
+  readonly module: string;
+  readonly topic: string;
+  readonly value: unknown;
+  readonly modelScope: string;
+  readonly source: { readonly id: string; readonly uri: string } | null;
+};
+
+export type ClaimBundle = { readonly topicPrefix: string; readonly items: readonly ClaimItem[] };
+
 export type ContextEngine = {
   readonly retrieve: (query: string, options?: { readonly limits?: RankLimits; readonly scope?: ContextScope }) => Promise<ContextBundle>;
+  /** Exact lookup of current claims by topic prefix (Phase 8); no vectors involved. */
+  readonly claims: (topicPrefix: string) => Promise<ClaimBundle>;
 };
 
 const RELATION_TABLES: Readonly<Record<string, ContextTable>> = {
@@ -218,5 +235,37 @@ export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine
     return { ...bundle, cache: 'miss' };
   };
 
-  return { retrieve };
+  return { retrieve, claims: (topicPrefix) => readClaims(sql, topicPrefix) };
+};
+
+const TOPIC_PREFIX = /^[a-z0-9]+([.-][a-z0-9]+)*\.?$/;
+
+/**
+ * Current canonical claims whose topic starts with a prefix — the exact path to structured
+ * knowledge (e.g. `x3lius.` → the guide's `x3lius.voice-reference`). Vector ranking over whole
+ * rows can miss a claim for an on-topic query (Phase 3's known weak sharpness); a topic can't.
+ * Reads the `canonical_claims` view (current versions only) as xyp_runtime, read-only.
+ * @param sql - pool allowed to SET ROLE xyp_runtime
+ * @param topicPrefix - e.g. `x3lius.`; lowercase dotted/kebab segments
+ * @returns claims ordered by topic, then slug
+ * @throws Error on a malformed prefix
+ */
+export const readClaims = async (sql: Sql, topicPrefix: string): Promise<ClaimBundle> => {
+  if (!TOPIC_PREFIX.test(topicPrefix)) throw new Error(`claims: topic prefix must be lowercase dotted segments like "x3lius.", got ${JSON.stringify(topicPrefix)}`);
+  const rows = await asRuntime(sql, (tx) => tx<{ id: string; slug: string; version: number; title: string; module: string; topic: string; value: unknown; model_scope: string; source_id: string | null; uri: string | null }[]>`
+    select cc.canonical_prompt_id as id, cc.slug, cc.version, cp.title, m.slug as module, cc.topic, cc.value, cc.model_scope, cp.source_id, s.uri
+    from canonical_claims cc
+    join canonical_prompts cp on cp.id = cc.canonical_prompt_id
+    join modules m on m.id = cp.module_id
+    left join sources s on s.id = cp.source_id
+    where starts_with(cc.topic, ${topicPrefix})
+    order by cc.topic, cc.slug`);
+  return {
+    topicPrefix,
+    items: rows.map((r) => ({
+      ref: { table: 'canonical_prompts', id: r.id },
+      slug: r.slug, version: r.version, title: r.title, module: r.module, topic: r.topic, value: r.value, modelScope: r.model_scope,
+      source: r.source_id && r.uri ? { id: r.source_id, uri: r.uri } : null,
+    })),
+  };
 };

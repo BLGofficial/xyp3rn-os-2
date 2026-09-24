@@ -27,6 +27,7 @@ pnpm route "your request"       # domain routing decision with evidence
 pnpm ask "your request"         # front door: route → plan → run the domain entrypoint (research, X3LIUS sub-domains)
 pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_party   # Phase 7: X3LIUS module + 10 sub-domains via the gate
 pnpm research <cmd> '<json>'    # 6C engines by hand: observation, cite, finding, candidate, eligibility, resolve, experiment:*
+pnpm dispatch x3lius-lyrics '{"request":"..."}'   # Phase 8 Creative agent (also x3lius-songwriting, x3lius-composition); needs the key for its model's provider
 pnpm gate run <candidateId>     # 6D Promotion Gate: the nine-step state machine, the only canonical writer
 pnpm gate queue                 # pending human approvals with the gate's reasons
 pnpm gate decide <approvalId> approve|reject "<approver>" "<reason>"   # operator decision, then re-run the gate

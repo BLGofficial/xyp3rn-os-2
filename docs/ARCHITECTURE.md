@@ -64,7 +64,7 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
 
 **Purpose.** The label and artist system. It has two parts:
 
-- The X3LIUS Music System: ten creative sub-domains (Phases 7–12). Built in Phase 7 as gate-written modules from `records/x3lius/music-system.manifest.yaml`, with one read-only stub agent per sub-domain. A promoted rule tagged with a sub-domain's slug lands in that module and is consumable on its scoped context path.
+- The X3LIUS Music System: ten creative sub-domains (Phases 7–12). Built in Phase 7 as gate-written modules from `records/x3lius/music-system.manifest.yaml`, with one read-only stub agent per sub-domain. A promoted rule tagged with a sub-domain's slug lands in that module and is consumable on its scoped context path. Phase 8 replaced the Songwriting, Lyrics and Composition stubs with Creative agents of the same names. They write versioned, schema-validated artifacts to `creative_artifacts` from canonical rules and claims pulled at run time.
 - Records ops: catalog, releases, rights splits and release calendar (Phase 13).
 
 **Owns.** Creative artifacts (song structures, lyrics, Suno prompts, takes, critiques, revisions) plus `releases`, `tracks` and `rights_splits`.
@@ -179,3 +179,17 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - The Phase 3 global path (`xyp_match_knowledge`) searched every embedded version, so a v1 and its v2 could both rank.
 - It now applies the same current-version filter as the Phase 7 scoped path, scanning canonical prompts exactly. Sources keep their HNSW branch.
 - Proof: `tests/phase-07/propagation.test.ts` ("F16: …"), which was red before the migration.
+
+**F17. LLM provider.** DECIDED (user, Phase 8): provider-agnostic.
+- `core/llm/` has two paths:
+  - native Anthropic Messages through the official SDK;
+  - OpenAI-compatible chat completions for Groq and OpenRouter.
+- An agent names its provider in frontmatter `model` (`<provider>:<model>`, or a bare `claude-*`). Keys are per provider (`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`) and are read at call time.
+- Replies are validated against the caller's schema whatever the provider claims.
+- The Anthropic base URL is pinned, not read from `ANTHROPIC_BASE_URL` (hosted dev containers set that variable for their own tooling).
+- Still unverified against live providers: no key existed when it was built.
+
+**F18. Canonical knowledge is too sparse for a distinct X3LIUS voice.** OPEN (flagged by Phase 8, as the guide requires).
+- The creative sub-domains and Vocal DNA hold 0 rules. The model's whole voice context is the guide's one claim, `x3lius.voice-reference` (4 descriptors).
+- Every artifact is written with `knowledge.sparse = true` and a long `ungroundedChoices` list. No fallback voice exists in code, and a test enforces that.
+- It closes only through data: rules tagged with a sub-domain slug, promoted by the gate (Research Intelligence, or an operator-cited first-party source).

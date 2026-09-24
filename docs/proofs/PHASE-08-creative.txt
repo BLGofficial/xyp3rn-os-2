@@ -1,0 +1,157 @@
+Phase 8 — Songwriting + Lyrics (+ F15 Composition) Agents: proof (2026-09-24)
+Produced with the repo's own commands against the local Supabase-emulating Postgres 16.
+================================================================================
+
+## 0. Status of the guide's "one real generated verse using live canonical context"
+# NOT PRODUCED IN THIS SESSION. No provider key (OPENROUTER_API_KEY / GROQ_API_KEY /
+# ANTHROPIC_API_KEY) exists in this container. Sections 3 and 4 show everything up to the model
+# call on the live dev DB; section 6 is the command that produces the verse in a keyed session.
+# Nothing below is a generated verse. Test replies are labelled [FAKE] in every field.
+
+## 1. Tests (tests/phase-08; FAKE model = real runner + transports, fake fetch; FIXTURE rule = throwaway DB only)
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > claude-sonnet-5
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > anthropic:claude-opus-5
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > groq:llama-3.3-70b-versatile
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > openrouter:anthropic/claude-opus-5
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > refuses "none" (unknown provider or no model)
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > refuses "gpt-5" (unknown provider or no model)
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > refuses "mistral:large" (unknown provider or no model)
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > refuses "groq:" (unknown provider or no model)
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > refuses "" (unknown provider or no model)
+ ✓ tests/phase-08/llm-runner.test.ts > model references: frontmatter `model` picks the provider > each provider reads its own key variable
+ ✓ tests/phase-08/llm-runner.test.ts > missing key: fails at the call, naming the variable — never a silent fallback provider > openrouter:anthropic/claude-opus-5 → OPENROUTER_API_KEY
+ ✓ tests/phase-08/llm-runner.test.ts > missing key: fails at the call, naming the variable — never a silent fallback provider > groq:llama-3.3-70b-versatile → GROQ_API_KEY
+ ✓ tests/phase-08/llm-runner.test.ts > missing key: fails at the call, naming the variable — never a silent fallback provider > claude-sonnet-5 → ANTHROPIC_API_KEY
+ ✓ tests/phase-08/llm-runner.test.ts > Anthropic transport (official SDK, FAKE fetch) > sends system + user + json_schema output_config to api.anthropic.com, parses text blocks and usage
+ ✓ tests/phase-08/llm-runner.test.ts > Anthropic transport (official SDK, FAKE fetch) > a refusal is an error carrying the category, never parsed as output
+ ✓ tests/phase-08/llm-runner.test.ts > Anthropic transport (official SDK, FAKE fetch) > an API error surfaces its status
+ ✓ tests/phase-08/llm-runner.test.ts > OpenAI-compatible transport (Groq, OpenRouter; FAKE fetch) > groq:llama-3.3-70b-versatile → https://api.groq.com/openai/v1/chat/completions with a bearer key and a strict json_schema response_format
+ ✓ tests/phase-08/llm-runner.test.ts > OpenAI-compatible transport (Groq, OpenRouter; FAKE fetch) > openrouter:anthropic/claude-opus-5 → https://openrouter.ai/api/v1/chat/completions with a bearer key and a strict json_schema response_format
+ ✓ tests/phase-08/llm-runner.test.ts > OpenAI-compatible transport (Groq, OpenRouter; FAKE fetch) > a reply cut off by the token limit is an error, not partial JSON
+ ✓ tests/phase-08/llm-runner.test.ts > OpenAI-compatible transport (Groq, OpenRouter; FAKE fetch) > a non-2xx reply surfaces status and provider message
+ ✓ tests/phase-08/llm-runner.test.ts > reply validation: JSON, then the schema — whatever the provider promised > accepts JSON wrapped in one fenced block
+ ✓ tests/phase-08/llm-runner.test.ts > reply validation: JSON, then the schema — whatever the provider promised > rejects prose
+ ✓ tests/phase-08/llm-runner.test.ts > reply validation: JSON, then the schema — whatever the provider promised > rejects JSON that violates the schema, listing every violation
+ ✓ tests/phase-08/llm-runner.test.ts > validateJson (the subset the creative schemas use) > passes a valid value and reports nested paths
+ ✓ tests/phase-08/llm-runner.test.ts > createLlmRunner: the shared LlmRunner the dispatcher calls for every non-`none` model > runs the program registered for the agent, handing it a client bound to the agent’s model
+ ✓ tests/phase-08/llm-runner.test.ts > createLlmRunner: the shared LlmRunner the dispatcher calls for every non-`none` model > an LLM agent with no registered program fails loudly (the generic tool-loop runner is not built)
+ ✓ tests/phase-08/creative-artifacts.test.ts > versioning is derived by the database > v1 starts its own lineage; v2 and v3 chain from their parents
+ ✓ tests/phase-08/creative-artifacts.test.ts > versioning is derived by the database > caller-supplied lineage/version are ignored, not trusted
+ ✓ tests/phase-08/creative-artifacts.test.ts > versioning is derived by the database > history is linear: a second child of the same parent is refused
+ ✓ tests/phase-08/creative-artifacts.test.ts > versioning is derived by the database > a new version keeps its parent’s schema
+ ✓ tests/phase-08/creative-artifacts.test.ts > versioning is derived by the database > every artifact names the run that wrote it and a versioned schema id
+ ✓ tests/phase-08/creative-artifacts.test.ts > insert-only for every role > xyp_creative is granted INSERT and SELECT, nothing else
+ ✓ tests/phase-08/creative-artifacts.test.ts > insert-only for every role > as xyp_creative: insert works; UPDATE and DELETE are refused
+ ✓ tests/phase-08/creative-artifacts.test.ts > insert-only for every role > even the table owner cannot rewrite or delete a written version (trigger)
+ ✓ tests/phase-08/creative-artifacts.test.ts > insert-only for every role > anon and authenticated have no access; RLS is on
+ ✓ tests/phase-08/creative-artifacts.test.ts > insert-only for every role > xyp_creative cannot touch canonical knowledge — including the rules it consumes (42501)
+ ✓ tests/phase-08/creative-artifacts.test.ts > insert-only for every role > xyp_runtime (Knowledge/context reads) cannot write artifacts
+ ✓ tests/phase-08/creative-agents.test.ts > registry: three Creative agents replace their stubs under the same names > the creative set is exactly Songwriting, Lyrics and (F15) Composition
+ ✓ tests/phase-08/creative-agents.test.ts > registry: three Creative agents replace their stubs under the same names > x3lius-songwriting: Creative, RECORDS, LLM-backed, context + artifact tools, routable by its Scope
+ ✓ tests/phase-08/creative-agents.test.ts > registry: three Creative agents replace their stubs under the same names > x3lius-lyrics: Creative, RECORDS, LLM-backed, context + artifact tools, routable by its Scope
+ ✓ tests/phase-08/creative-agents.test.ts > registry: three Creative agents replace their stubs under the same names > x3lius-composition: Creative, RECORDS, LLM-backed, context + artifact tools, routable by its Scope
+ ✓ tests/phase-08/creative-agents.test.ts > registry: three Creative agents replace their stubs under the same names > the other seven sub-domains stay read-only Knowledge stubs; the registry validates
+ ✓ tests/phase-08/creative-agents.test.ts > registry: three Creative agents replace their stubs under the same names > write_artifact is artifact.write: granted to Creative, refused to Knowledge
+ ✓ tests/phase-08/creative-agents.test.ts > no hardcoded voice: the descriptors live in canonical knowledge, not in code > the guide’s voice claim is canonical, and no creative source file carries any of its words
+ ✓ tests/phase-08/creative-agents.test.ts > Context Engine: exact claim lookup by topic (retrieve_claims) > returns the current voice claim with its canonical row and source; nothing for an unknown namespace
+ ✓ tests/phase-08/creative-agents.test.ts > Context Engine: exact claim lookup by topic (retrieve_claims) > refuses a malformed topic prefix
+ ✓ tests/phase-08/creative-agents.test.ts > x3lius-lyrics end to end (FAKE model, real runner, real context, real artifact table) > sparse knowledge: generates, and the artifact says plainly that the voice is thin
+ ✓ tests/phase-08/creative-agents.test.ts > x3lius-lyrics end to end (FAKE model, real runner, real context, real artifact table) > a rule the gate promotes into x3lius-lyrics reaches the prompt and the artifact’s refs
+ ✓ tests/phase-08/creative-agents.test.ts > x3lius-lyrics end to end (FAKE model, real runner, real context, real artifact table) > a reply citing a rule it was not given is refused; nothing is written
+ ✓ tests/phase-08/creative-agents.test.ts > x3lius-lyrics end to end (FAKE model, real runner, real context, real artifact table) > a prose / wrong-shape reply is refused; nothing is written
+ ✓ tests/phase-08/creative-agents.test.ts > x3lius-lyrics end to end (FAKE model, real runner, real context, real artifact table) > no key: the run fails naming the variable, after logging what context it pulled; nothing is written
+ ✓ tests/phase-08/creative-agents.test.ts > x3lius-songwriting and x3lius-composition > x3lius-songwriting writes a x3lius.song-structure/v1 artifact from canonical context
+ ✓ tests/phase-08/creative-agents.test.ts > x3lius-songwriting and x3lius-composition > x3lius-composition writes a x3lius.composition/v1 artifact from canonical context
+ ✓ tests/phase-08/creative-agents.test.ts > x3lius-songwriting and x3lius-composition > songwriting refuses a hook selection outside its own candidates
+ ✓ tests/phase-08/creative-agents.test.ts > front door: pnpm ask → RECORDS → X3LIUS entrypoint → Creative agent > a lyrics request is routed to x3lius-lyrics, which generates
+
+Full suite: pnpm test → Test Files 43 passed (43), Tests 623 passed (623). pnpm typecheck → clean.
+pnpm agents:validate → validateAll(): 0 failure(s).
+
+## 2. Mutations (each applied, run, reverted)
+- 'Write aggressive, confrontational bars.' added to the system prompt → 1 red (no-hardcoded-voice scan)
+- rulesApplied ref check disabled                                      → 1 red (hallucinated ref refused)
+- canonical claims dropped from the prompt                             → 3 red (lyrics, songwriting, composition)
+- immutability trigger replaced by a no-op                             → 1 red (owner cannot rewrite a version)
+
+## 3. Live dev DB, no key: pnpm dispatch x3lius-lyrics '{"request":"Write the first verse for an X3LIUS track about the city at night"}'
+1. registry pickup
+   /home/user/xyp3rn-os-2/agents/x3lius-lyrics.agent.md
+   class=Creative domain=RECORDS tools=[retrieve_context, retrieve_claims, write_artifact, log_message] model=openrouter:anthropic/claude-opus-5
+2. validateAll(agents/): 0 failure(s)
+3. authorization
+   retrieve_context: {"allow":true,"capability":"context.read"}
+   retrieve_claims: {"allow":true,"capability":"context.read"}
+   write_artifact: {"allow":true,"capability":"artifact.write"}
+   log_message: {"allow":true,"capability":"log.write"}
+4. execution: error in 285ms — LLM runner unavailable: OPENROUTER_API_KEY is not set (agent x3lius-lyrics uses model openrouter:anthropic/claude-opus-5)
+5. agent_runs row (SELECT … WHERE id = runId):
+{
+  "id": "…",
+  "agent_name": "x3lius-lyrics",
+  "class": "Creative",
+  "domain": "RECORDS",
+  "input": {
+    "request": "Write the first verse for an X3LIUS track about the city at night"
+  },
+  "output": {
+    "logs": [
+      {
+        "at": "…",
+        "level": "info",
+        "message": "x3lius-lyrics: context pulled: canonical_prompts:ab30dc65-8670-4f5f-a4ce-a723242db6e7#x3lius.voice-reference"
+      },
+      {
+        "at": "…",
+        "level": "warn",
+        "message": "x3lius-lyrics: SPARSE canonical knowledge — x3lius-lyrics: 0 rules on the scoped context path | x3lius-vocal-dna: 0 rules on the scoped context path | voice: 1 claim(s) under x3lius.* from outside the sub-domain scope (x3lius.voice-reference) | fewer than 3 scoped rules: expect output close to generic. Promote rules tagged x3lius-lyrics or x3lius-vocal-dna through the gate to change that."
+      }
+    ]
+  },
+  "tokens_used": null,
+  "latency_ms": 285,
+  "status": "error",
+  "error_detail": "LLM runner unavailable: OPENROUTER_API_KEY is not set (agent x3lius-lyrics uses model openrouter:anthropic/claude-opus-5)",
+  "created_at": "…",
+  "completed_at": "…"
+}
+
+## 4. The exact request the model would receive (DRY RUN: real program, live dev DB, DUMMY key,
+##    a fetch that records the request and refuses to send it; no artifact written)
+run: … error DRY RUN: request captured, not sent
+POST https://openrouter.ai/api/v1/chat/completions
+model: anthropic/claude-opus-5  max_tokens: 16000  response_format: json_schema x3lius_lyrics_v1
+--- system ---
+You are the Lyrics agent of the X3LIUS Music System (sub-domain x3lius-lyrics).
+
+TASK
+Write the lyric section the brief asks for (one verse if it does not say), bar by bar: the words of each bar, its language and the rhyme tag it ends on, then the rhyme scheme and the devices used.
+
+CANONICAL RULES
+These are the only source of the artist’s voice and style. Each starts with its ref in brackets.
+[canonical_prompts:ab30dc65-8670-4f5f-a4ce-a723242db6e7#x3lius.voice-reference] x3lius.voice-reference = modern brutalism, aggressive/confrontational, bilingual Bulgarian/English, dark melodic trap (claim in phase-8-meta-prompt, phase-8-songwriting-lyrics-agents)
+
+HOW TO USE THEM
+- Voice, style, tone and language choices must come from CANONICAL RULES. Do not add traits they do not state.
+- In rulesApplied, list every rule you applied, with its ref copied exactly, and how it shaped the output.
+- In ungroundedChoices, list every creative decision no rule covers. When the rules are thin this list is long; that is expected, not a failure.
+- Reply with JSON only, matching the response schema.
+--- user ---
+BRIEF
+Write the first verse for an X3LIUS track about the city at night
+creative_artifacts rows for this run: 0
+
+## 5. Sparsity finding (the guide's "flag if too sparse" constraint)
+# The whole voice the model gets today is ONE canonical line: the guide's 4-descriptor claim
+# x3lius.voice-reference. x3lius-lyrics, x3lius-songwriting, x3lius-composition and x3lius-vocal-dna
+# hold 0 rules each. Every artifact written now will carry knowledge.sparse = true (threshold 3
+# scoped rules) and a long ungroundedChoices list. That is the honest state, not a bug to hide:
+# no fallback voice exists in code (section 1, "no hardcoded voice" scan; section 2, first mutation).
+# To change it: promote rules tagged x3lius-lyrics / x3lius-songwriting / x3lius-composition /
+# x3lius-vocal-dna through the gate (Research Intelligence → pnpm gate run/decide).
+
+## 6. Producing the live verse (keyed session)
+# 1. Add OPENROUTER_API_KEY to the environment (or switch the agent's `model:` to groq:<id> /
+#    claude-* and add that provider's key). 2. New session (SessionStart rebuilds the dev DB). 3.:
+#    pnpm dispatch x3lius-lyrics '{"request":"Write the first verse for an X3LIUS track about the city at night"}'
+#    psql "$XYP_DATABASE_URL" -c "select schema_id, body, knowledge, context_refs from creative_artifacts order by created_at desc limit 1"

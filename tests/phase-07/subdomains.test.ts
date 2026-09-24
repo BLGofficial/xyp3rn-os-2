@@ -12,8 +12,12 @@ import { REPO_ROOT } from '../helpers/db.ts';
 const registry = createAgentRegistry({ dir: join(REPO_ROOT, 'agents') });
 const system = loadMusicSystem();
 
-describe('Agent Registry: one stub agent per sub-domain', () => {
-  it.each(system.subdomains.map((s) => [s.slug]))('%s: read-only Knowledge stub under RECORDS with a handler and a scope', (slug) => {
+// Phase 8 built Songwriting, Lyrics and Composition as Creative agents under the same names
+// (tests/phase-08); every other sub-domain is still the Phase 7 stub.
+const PHASE_08 = ['x3lius-songwriting', 'x3lius-lyrics', 'x3lius-composition'];
+
+describe('Agent Registry: one agent per sub-domain', () => {
+  it.each(system.subdomains.filter((s) => !PHASE_08.includes(s.slug)).map((s) => [s.slug]))('%s: read-only Knowledge stub under RECORDS with a handler and a scope', (slug) => {
     const a = registry.get(slug);
     expect(a).toMatchObject({ name: slug, class: 'Knowledge', domain: 'RECORDS', tools: ['retrieve_context', 'log_message'], model: 'none' });
     expect(HANDLERS[slug]).toBeTypeOf('function');

@@ -3,6 +3,7 @@ import { extractiveSummarizer } from '../agents/extractive-summarizer.ts';
 import { healthCheck } from '../agents/health-check.ts';
 import type { HandlerMap } from '../orchestrator/dispatch.ts';
 import { researchOrchestrator } from '../../research-intelligence/agents/research-orchestrator.ts';
+import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { loadMusicSystem } from '../../records/x3lius/music-system.ts';
 import { subdomainStub } from '../../records/x3lius/subdomain-stub.ts';
 
@@ -16,6 +17,9 @@ export const HANDLERS: HandlerMap = {
   'extractive-summarizer': extractiveSummarizer,
   'health-check': healthCheck,
   'research-orchestrator': researchOrchestrator,
-  // Phase 7: one stub per X3LIUS sub-domain, from the checked-in manifest (not from agents/).
-  ...Object.fromEntries(loadMusicSystem().subdomains.map((s) => [s.slug, subdomainStub])),
+  // Phase 7: one stub per X3LIUS sub-domain, from the checked-in manifest (not from agents/),
+  // except those a later phase built as LLM agents (Phase 8: core/runtime/programs.ts).
+  ...Object.fromEntries(
+    loadMusicSystem().subdomains.filter((s) => !CREATIVE_SUBDOMAINS.includes(s.slug)).map((s) => [s.slug, subdomainStub]),
+  ),
 };
