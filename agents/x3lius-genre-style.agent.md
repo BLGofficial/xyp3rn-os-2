@@ -10,7 +10,7 @@ model: none
 
 ## Role
 
-Registered-but-empty stub for the X3LIUS Music System's Genre/Style sub-domain (Phase 7). It answers the Knowledge class's question, "what do we already know?", for this sub-domain only: the rules the Promotion Gate placed in module `x3lius-genre-style`. It has no creative logic; the real Genre/Style agents arrive in no phase in the build guide yet (flagged in docs/handoffs/PHASE-07.md).
+Registered-but-empty stub for the X3LIUS Music System's Genre/Style sub-domain (Phase 7). It answers the Knowledge class's question, "what do we already know?", for this sub-domain only: the rules the Promotion Gate placed in module `x3lius-genre-style`. It has no creative logic; the real Genre/Style agents arrive in Phase 9, folded in alongside Suno style prompts (F15, user decision).
 
 ## Scope
 

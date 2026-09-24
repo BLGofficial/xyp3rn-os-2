@@ -10,7 +10,7 @@ model: none
 
 ## Role
 
-Registered-but-empty stub for the X3LIUS Music System's Composition sub-domain (Phase 7). It answers the Knowledge class's question, "what do we already know?", for this sub-domain only: the rules the Promotion Gate placed in module `x3lius-composition`. It has no creative logic; the real Composition agents arrive in no phase in the build guide yet (flagged in docs/handoffs/PHASE-07.md).
+Registered-but-empty stub for the X3LIUS Music System's Composition sub-domain (Phase 7). It answers the Knowledge class's question, "what do we already know?", for this sub-domain only: the rules the Promotion Gate placed in module `x3lius-composition`. It has no creative logic; the real Composition agents arrive in Phase 8, folded in alongside songwriting (F15, user decision).
 
 ## Scope
 

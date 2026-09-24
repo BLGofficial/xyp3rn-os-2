@@ -2,7 +2,8 @@
 # Promotion Gate's first-party path: pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_party
 # Each sub-domain becomes a module with a `subdomain_of` edge to the parent. A promoted rule
 # whose candidate is tagged with a sub-domain's slug is placed in that module (Phase 7 propagation).
-# built_in: the build-guide phase that implements it; null = no phase in the guide builds it yet.
+# built_in: the build-guide phase that implements it; null = no phase in the guide builds it yet
+# (Composition and Genre/Style were null until F15, see docs/ARCHITECTURE.md).
 manifest: xyp-module-manifest/v1
 title: X3LIUS Music System — module manifest
 date: 2026-09-24
@@ -27,7 +28,7 @@ subdomains:
   - slug: x3lius-composition
     title: Composition
     description: Chords, melody and harmony decisions for X3LIUS tracks.
-    built_in: null
+    built_in: '8'  # F15 (user): folded into Phase 8 alongside songwriting
   - slug: x3lius-arrangement
     title: Arrangement
     description: Section order, instrumentation and transitions.
@@ -35,7 +36,7 @@ subdomains:
   - slug: x3lius-genre-style
     title: Genre/Style
     description: Genre and style targets, subgenres and reference tracks.
-    built_in: null
+    built_in: '9'  # F15 (user): folded into Phase 9 alongside Suno style prompts
   - slug: x3lius-suno
     title: Suno
     description: Suno prompt formulas, style prompts and negative prompts, tagged by Suno model version.

@@ -207,3 +207,16 @@ route: {"status":"routed","domain":"RECORDS","evidence":{"RESEARCH_INTELLIGENCE"
       {
         "name": "x3lius-lyrics",
         "score": 0,
+
+================================================================================
+Addendum (2026-09-24, later): F15 resolved: Composition → Phase 8, Genre/Style → Phase 9
+$ pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_party   (changed manifest)
+→ status success; modules inserted 2, reused 9 (only the two changed sub-domains get v2)
+        slug        | version |                 description_tail                 |      history       
+--------------------+---------+--------------------------------------------------+--------------------
+ x3lius-composition |       1 | s. Stub: no build-guide phase implements it yet. | first-party-ingest
+ x3lius-composition |       2 | decisions for X3LIUS tracks. Stub until Phase 8. | first-party-ingest
+ x3lius-genre-style |       1 | s. Stub: no build-guide phase implements it yet. | first-party-ingest
+ x3lius-genre-style |       2 | genres and reference tracks. Stub until Phase 9. | first-party-ingest
+(4 rows)
+

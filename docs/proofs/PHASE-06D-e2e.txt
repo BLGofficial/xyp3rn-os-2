@@ -382,3 +382,22 @@ model: Supabase/gte-small  cache: miss  generation: 33@2026-09-24 11:58:17.57196
     row:    canonical_prompts.id = f66659c6-6cd7-40bf-bf7e-74353fd7ee59
 
 # The clone was dropped afterwards. On the dev DB approval f64ddef7-fc97-405a-a0e0-a28593d40a17 is still pending.
+
+================================================================================
+Addendum (2026-09-24, later): the operator's decision on the dev DB
+# The approval above was left pending for the operator. The operator approved it in chat;
+# Claude executed the decision with the operator command, on the dev DB itself (no clone).
+
+$ pnpm gate decide f64ddef7-fc97-405a-a0e0-a28593d40a17 approve "operator:BLGofficial (approved in chat; executed by Claude session)" "…"
+→ approval: approved; gate outcome: promoted; x3lius-voice-conversion-model v1 in records-validated-rules; 9 steps; embedded 1
+             slug              | version | promoted_via |         module          | mode  |                              approver                               | outcome  | steps 
+-------------------------------+---------+--------------+-------------------------+-------+---------------------------------------------------------------------+----------+-------
+ x3lius-voice-conversion-model |       1 | gate         | records-validated-rules | human | operator:BLGofficial (approved in chat; executed by Claude session) | promoted |     9
+(1 row)
+
+$ pnpm context "Which voice conversion model does X3LIUS use?"
+
+#1  0.9586  canonical_prompts:x3lius-voice-conversion-model  [RECORDS]
+    row:    canonical_prompts.id = 2c9587f8-d5e1-491b-8e28-451ffc487448
+    source: none
+    why:    vector similarity 0.9586

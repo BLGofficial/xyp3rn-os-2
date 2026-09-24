@@ -170,11 +170,10 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - Consequence today: nothing auto-approves before Phase 12, because trials are stub-scored until the Critic exists.
 - Changing either number is a new flagged decision, never a silent edit (`knowledge/promotion-gate/decide.ts`).
 
-**F15. Two X3LIUS sub-domains have no building phase.** OPEN (decide before Phase 12 ends).
-- Phase 7 lists ten sub-domains. Phases 8–12 build Songwriting and Lyrics (8), Suno (9), Vocal DNA (10), Production, Arrangement and Mix/Master (11), and Evaluation (12).
-- No phase names Composition or Genre/Style.
-- Both are registered stubs with `built_in: null` in the manifest; their agents say so rather than claiming a phase.
-- Options: fold them into Phase 8 (songwriting) and Phase 9 (Suno style), or leave them as stubs until the user adds a phase.
+**F15. Two X3LIUS sub-domains had no building phase.** RESOLVED (user approved the first option).
+- Phase 7 lists ten sub-domains. Phases 8–12 build Songwriting and Lyrics (8), Suno (9), Vocal DNA (10), Production, Arrangement and Mix/Master (11), and Evaluation (12). No phase named Composition or Genre/Style.
+- Resolution: **Composition is built in Phase 8**, alongside songwriting (chords and melody belong with structure and toplines). **Genre/Style is built in Phase 9**, alongside Suno style prompts.
+- Recorded as `built_in: '8'` / `'9'` in `records/x3lius/music-system.manifest.yaml`. Re-admitting it through the gate appended v2 of both modules; v1 is kept as history.
 
 **F16. Global retrieval returned superseded versions.** RESOLVED (user go, before Phase 8; migration `20260924170000_global_current_versions.sql`).
 - The Phase 3 global path (`xyp_match_knowledge`) searched every embedded version, so a v1 and its v2 could both rank.

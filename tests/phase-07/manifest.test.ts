@@ -36,7 +36,14 @@ describe('module manifest normalizer', () => {
     const doc = normalizeModuleManifest([text]);
     const by = Object.fromEntries(doc.modules.map((m) => [m.slug, m.description]));
     expect(by['x3lius-suno']).toMatch(/Stub until Phase 9\.$/);
-    expect(by['x3lius-composition']).toMatch(/Stub: no build-guide phase implements it yet\.$/);
+    const unassigned = normalizeModuleManifest([text.replace(/(slug: x3lius-composition[\s\S]*?built_in: )'8'/, '$1null')]);
+    expect(unassigned.modules.find((m) => m.slug === 'x3lius-composition')!.description).toMatch(/Stub: no build-guide phase implements it yet\.$/);
+  });
+
+  it('F15 resolved (user): every sub-domain has a building phase — Composition in 8, Genre/Style in 9', () => {
+    const sys = loadMusicSystem();
+    expect(sys.subdomains.filter((s) => s.builtIn === null).map((s) => s.slug)).toEqual([]);
+    expect(Object.fromEntries(sys.subdomains.map((s) => [s.slug, s.builtIn]))).toMatchObject({ 'x3lius-composition': '8', 'x3lius-genre-style': '9' });
   });
 
   it('rejects a malformed manifest loudly (never half-normalized)', () => {
