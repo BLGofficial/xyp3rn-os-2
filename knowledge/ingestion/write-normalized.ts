@@ -6,8 +6,8 @@ import type { EntityRef, NormalizedDocument } from './types.ts';
 export type VersionDecision = { readonly action: 'reuse'; readonly id: string } | { readonly action: 'insert'; readonly version: number };
 
 /**
- * Bootstrap-window versioning: identical content reuses the latest row; changed content appends
- * latest+1. A canonical row is never updated in place (Phase 6D formalizes "current").
+ * Versioning: identical content reuses the latest row; changed content appends latest+1.
+ * A canonical row is never updated in place; the newest version of a slug is "current".
  * @param latest - newest existing row for the slug and whether its content matches, if any
  * @returns reuse the existing id, or insert at the given version
  */
@@ -50,15 +50,23 @@ export type WriteStats = {
   readonly quality_reports: number;
 };
 
+export type WriteResult = {
+  readonly stats: WriteStats;
+  /** Rows this call appended — the gate writes a knowledge_versions row for each. */
+  readonly insertedModuleIds: readonly string[];
+  readonly insertedPromptIds: readonly string[];
+};
+
 /**
- * Writes a normalized document into the canonical tables. Must run inside the ingestion
- * transaction as xyp_ingest_bootstrap — every row is marked promoted_via='bootstrap' (F1).
- * @param tx - transaction already holding the ingest advisory lock
+ * Writes a normalized document into the canonical tables. Called only by the Promotion Gate's
+ * first-party admission (admitFirstParty), inside the ingestion transaction, as xyp_promotion —
+ * every row is marked promoted_via='gate'. (Before 6D: xyp_ingest_bootstrap, 'bootstrap', F1.)
+ * @param tx - transaction already holding the canonical write lock
  * @param doc - normalizer output
  * @param ctx - source/run ids and scoring inputs
- * @returns counts recorded on the ingestion run
+ * @returns counts recorded on the ingestion run, and the ids of the rows appended
  */
-export const writeNormalized = async (tx: Queryable, doc: NormalizedDocument, ctx: WriteContext): Promise<WriteStats> => {
+export const writeNormalized = async (tx: Queryable, doc: NormalizedDocument, ctx: WriteContext): Promise<WriteResult> => {
   const stats = {
     modules: { inserted: 0, reused: 0 },
     prompts: { inserted: 0, reused: 0 },
@@ -69,6 +77,7 @@ export const writeNormalized = async (tx: Queryable, doc: NormalizedDocument, ct
   const moduleIds = new Map<string, string>();
   const promptIds = new Map<string, string>();
   const newPromptSlugs = new Set<string>();
+  const insertedModuleIds: string[] = [];
 
   for (const m of doc.modules) {
     const [latest] = await tx<{ id: string; version: number; same: boolean }[]>`
@@ -83,9 +92,10 @@ export const writeNormalized = async (tx: Queryable, doc: NormalizedDocument, ct
     }
     const [row] = await tx<{ id: string }[]>`
       insert into modules (slug, version, title, description, domain, source_id, promoted_via)
-      values (${m.slug}, ${d.version}, ${m.title}, ${m.description}, ${m.domain}, ${ctx.sourceId}, 'bootstrap')
+      values (${m.slug}, ${d.version}, ${m.title}, ${m.description}, ${m.domain}, ${ctx.sourceId}, 'gate')
       returning id`;
     moduleIds.set(m.slug, row!.id);
+    insertedModuleIds.push(row!.id);
     stats.modules.inserted++;
   }
 
@@ -107,7 +117,7 @@ export const writeNormalized = async (tx: Queryable, doc: NormalizedDocument, ct
     const [row] = await tx<{ id: string }[]>`
       insert into canonical_prompts (module_id, slug, version, title, body, structured, model_tag, source_id, promoted_via)
       values (${moduleId}, ${p.slug}, ${d.version}, ${p.title}, ${p.body}, ${tx.json(p.structured as postgres.JSONValue)},
-              ${p.modelTag}, ${ctx.sourceId}, 'bootstrap')
+              ${p.modelTag}, ${ctx.sourceId}, 'gate')
       returning id`;
     promptIds.set(p.slug, row!.id);
     newPromptSlugs.add(p.slug);
@@ -162,5 +172,5 @@ export const writeNormalized = async (tx: Queryable, doc: NormalizedDocument, ct
     await insertReport({ canonical_prompt_id: promptIds.get(p.slug)! }, p.completeness.expected, p.completeness.present);
   }
 
-  return stats;
+  return { stats, insertedModuleIds, insertedPromptIds: [...newPromptSlugs].map((slug) => promptIds.get(slug)!) };
 };

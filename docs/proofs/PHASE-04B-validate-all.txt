@@ -1,0 +1,9 @@
+# Phase 4B proof: validateAll() against the two fixtures
+$ pnpm agents:validate core/agent-registry/fixtures
+[agent-registry] REJECTED core/agent-registry/fixtures/registry-fixture-missing-class.agent.md: missing required field: class
+OK        registry-fixture-valid  class=Knowledge domain=KNOWLEDGE tools=[log_message] model=none
+
+validateAll(): 1 failure(s)
+  core/agent-registry/fixtures/registry-fixture-missing-class.agent.md
+    - missing required field: class
+(exit 1)

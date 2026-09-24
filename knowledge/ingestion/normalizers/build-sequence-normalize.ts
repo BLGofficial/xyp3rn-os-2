@@ -2,7 +2,8 @@ import type { Domain } from '../../../core/contracts/taxonomy.ts';
 import { slugify, type NormalizedDocument, type NormalizedModule, type NormalizedPrompt, type NormalizedRelation } from '../types.ts';
 import type { ParsedBuildSequence, ParsedPrompt, ParsedSection } from './build-sequence.ts';
 
-export const NORMALIZER_ID = 'xyp-build-sequence-v1';
+// v2 (Phase 6C): voice references become structured claims the Contradiction Engine can check.
+export const NORMALIZER_ID = 'xyp-build-sequence-v2';
 
 /**
  * Which domain owns each phase's knowledge, per docs/ARCHITECTURE.md. Explicit and exhaustive:
@@ -110,7 +111,16 @@ export const normalizeBuildSequence = (doc: ParsedBuildSequence): NormalizedDocu
         slug,
         title: isPhase ? `Phase ${p.key} — ${title}` : title,
         body,
-        structured: { kind, ...(isPhase ? { phase } : {}), ...rest },
+        structured: {
+          kind,
+          ...(isPhase ? { phase } : {}),
+          ...rest,
+          // Rule-shaped statements become structured claims {topic, value, model_scope}; rows
+          // without claims are reported as "uncheckable" by the Contradiction Engine, not passed.
+          ...(p.voiceReference
+            ? { claims: [{ topic: `${slugify(p.voiceReference.artist)}.voice-reference`, value: [...p.voiceReference.descriptors], model_scope: 'model-agnostic' }] }
+            : {}),
+        },
         // Build-guide rules aren't tied to a model version; Suno/vocal rules (6B+) will be.
         modelTag: null,
         tags,

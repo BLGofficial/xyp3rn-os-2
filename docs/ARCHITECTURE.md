@@ -52,7 +52,7 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
 
 **Purpose.** The system of record for what the OS knows.
 **Owns.** `sources`, `modules`, `canonical_prompts`, `prompt_variants`, `tags`, `prompt_tags`, `relations`, `ingestion_runs`, `quality_reports`, `knowledge_versions`, and the embedding columns. It also owns the Source Registry, Prompt Library, Vector Retrieval, Knowledge Graph and Versioning + Provenance. Finally it owns the **Knowledge Promotion Gate**, the only code path in the OS allowed to INSERT/UPDATE canonical knowledge (F2).
-**Never touches directly.** It accepts no canonical write from any agent or from any non-gate service. The only exception is the Phase 2 temporary bootstrap write (F1), which 6D revokes. It never writes research evidence or creative outputs. It never overwrites a canonical row in place: every change is a new `knowledge_versions` row.
+**Never touches directly.** It accepts no canonical write from any agent or from any non-gate service. The only exception was the Phase 2 temporary bootstrap write (F1), revoked in 6D; first-party documents now enter through the gate's first-party admission path. It never writes research evidence or creative outputs. It never overwrites a canonical row in place: every change is a new `knowledge_versions` row.
 
 ### RESEARCH_INTELLIGENCE — Research Intelligence
 
@@ -64,7 +64,7 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
 
 **Purpose.** The label and artist system. It has two parts:
 
-- The X3LIUS Music System: ten creative sub-domains (Phases 7–12).
+- The X3LIUS Music System: ten creative sub-domains (Phases 7–12). Built in Phase 7 as gate-written modules from `records/x3lius/music-system.manifest.yaml`, with one read-only stub agent per sub-domain. A promoted rule tagged with a sub-domain's slug lands in that module and is consumable on its scoped context path.
 - Records ops: catalog, releases, rights splits and release calendar (Phase 13).
 
 **Owns.** Creative artifacts (song structures, lyrics, Suno prompts, takes, critiques, revisions) plus `releases`, `tracks` and `rights_splits`.
@@ -84,7 +84,7 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
 
 ## System invariants
 
-1. **One canonical writer.** Only the Knowledge Promotion Gate writes `canonical_prompts`/`modules`. The one exception is the Phase 2 bootstrap window (F1), which closes in 6D.
+1. **One canonical writer.** Only the Knowledge Promotion Gate writes `canonical_prompts`/`modules`. The one exception was the Phase 2 bootstrap window (F1), closed in 6D. The gate's own role can only append, and a canonical row can't commit without its `knowledge_versions` row.
 2. **Enforced by grants, not convention.** Every "never writes" above becomes a Postgres grant that a test proves (Phases 4A, 6A, 6D, 15). Application checks are a second layer, never the only one.
 3. **History is permanent.** Canonical changes append `knowledge_versions` rows. Evidence, findings and audit rows are append-only.
 4. **Every run is logged.** Every agent execution writes exactly one `agent_runs` row, and it never stays `pending`.
@@ -113,11 +113,16 @@ Phase 0 was told to stop and flag inconsistencies in the domain tree rather than
 - **PROPOSED**: my recommendation, which stands unless overridden.
 - **OPEN**: must be decided at the phase named.
 
-**F1. Phase 2 writes canonical before the gate exists.** RESOLVED (user: temporary bootstrap exception). Implemented in Phase 2 (`20260924090000_ingest_bootstrap_role.sql`). Phase 2 writes `canonical_prompts`/`modules` through a dedicated `xyp_ingest_bootstrap` DB role, and every such row is marked `promoted_via = 'bootstrap'`. Phase 6D then:
+**F1. Phase 2 writes canonical before the gate exists.** RESOLVED (user: temporary bootstrap exception). CLOSED in 6D (`20260924150000_promotion_gate.sql`).
 
-- revokes that role's canonical grants;
-- fills in `knowledge_versions` rows for the bootstrap rows;
-- sends future ingestion output through `knowledge_candidates`.
+Phase 2 wrote `canonical_prompts`/`modules` through a dedicated `xyp_ingest_bootstrap` DB role, and every such row is marked `promoted_via = 'bootstrap'`. Phase 6D then:
+
+- revoked that role's canonical and graph grants; it keeps only `sources` and `ingestion_runs`;
+- backfilled a `knowledge_versions` row (`approval.mode = 'bootstrap'`) for every bootstrap row;
+- routed future ingestion through the gate. On the user's 6D decision this is a **first-party admission path** (`admitFirstParty`), not `knowledge_candidates`:
+  - Operator-authored documents are the authority; there is no third-party claim to verify.
+  - Anything with `origin ≠ first_party` is refused and must enter as research evidence.
+  - Each admitted row is `promoted_via = 'gate'`, carries its `knowledge_versions` row (`approval.mode = 'first-party-ingest'`), and is tied to a `promotion_runs` record.
 
 **F2. The gate's owning domain.** RESOLVED (user: Knowledge Layer). The gate lives in `knowledge/` next to Versioning + Provenance. Research Intelligence submits candidates and never holds a canonical write path. It is still built in Phase 6D as sequenced.
 
@@ -128,17 +133,17 @@ Phase 0 was told to stop and flag inconsistencies in the domain tree rather than
 - CORE `evaluation-observability`: did the system run correctly? (latency, errors, tokens)
 - X3LIUS `evaluation`: is the output good? It owns the creative rubrics (canonical rows) and hosts the Critic/Revision agents.
 
-**F5. The Phase 5 router's four targets name "X3LIUS Music System", not Records, and leave out CORE/KNOWLEDGE.** PROPOSED. Routing targets are `RESEARCH_INTELLIGENCE`, `RECORDS`, `TECH` and `GOVERNANCE`. `RECORDS` then routes on to either X3LIUS or Records ops; otherwise Phase 13 catalog and rights requests would have nowhere to go. CORE and KNOWLEDGE are infrastructure, not request destinations; "what do we know" questions go through the Context Engine.
+**F5. The Phase 5 router's four targets name "X3LIUS Music System", not Records, and leave out CORE/KNOWLEDGE.** RESOLVED (Phase 5, as proposed; `core/orchestrator/router.ts`). Routing targets are `RESEARCH_INTELLIGENCE`, `RECORDS`, `TECH` and `GOVERNANCE`. `RECORDS` then routes on to either X3LIUS or Records ops; otherwise Phase 13 catalog and rights requests would have nowhere to go. CORE and KNOWLEDGE are infrastructure, not request destinations; "what do we know" questions go through the Context Engine.
 
 **F6. Phase 16 says "Research Intelligence's 8 engines" but no phase lists them.** PROPOSED. Six components are reserved above. Five are built by 6A/6C, and `synthesis` is named only in the Phase 17 flow, so it is assigned to 6C. Validation and confidence assignment belong to the gate (Knowledge) under F2. The mismatch with "8" is harmless because the Graph View counts are live, but it is recorded here rather than padded.
 
 **F7. The grant tests can't pass if everything runs as Supabase `service_role` or as the table owner.** RESOLVED (Phase 1). Owners and superusers ignore grants, and `service_role` gets broad default grants plus BYPASSRLS. The resolution:
 
 - Tables are owned by the migration role (`postgres`), which is trusted by definition and never used by application code. The separate `xyp_owner` role proposed in Phase 0 was dropped: a non-login owner adds nothing when the owner never connects.
-- Each component connects as its own least-privilege `xyp_*` role, created in the phase that introduces the component: `xyp_ingest_bootstrap` (2), `xyp_runtime` (4A), `xyp_research` (6A), `xyp_promotion` (6D), `xyp_governance` (15), `xyp_readonly` (16).
-- `service_role` keeps full grants only until 6D revokes its canonical writes. `anon`/`authenticated` are revoked on every table from Phase 1 onward (`docs/SCHEMA.md`).
+- Each component connects as its own least-privilege `xyp_*` role, created in the phase that introduces the component: `xyp_ingest_bootstrap` (2), `xyp_embedder` (3), `xyp_runtime` (3 read path; 4A adds `agent_runs`), `xyp_research` (6A), `xyp_promotion` (6D), `xyp_governance` (15), `xyp_readonly` (16).
+- `service_role` lost INSERT/UPDATE/DELETE/TRUNCATE on `canonical_prompts`, `modules` and `knowledge_versions` in 6D; it remains the operator key and is the only role that can decide approvals (`xyp_decide_approval`). `anon`/`authenticated` are revoked on every table from Phase 1 onward (`docs/SCHEMA.md`).
 
-**F8. The human approval queue appears in three phases (6D table, 12 escalation, 15 API).** PROPOSED. There is one Governance-owned `approval_queue` table with an `item_type` column (`knowledge_candidate`, `critique_escalation`, …). The table is created in 6D, where it is first needed, and its API is built in 15.
+**F8. The human approval queue appears in three phases (6D table, 12 escalation, 15 API).** PROPOSED, table built in 6D. There is one Governance-owned `approval_queue` table with an `item_type` column (`knowledge_candidate`, `critique_escalation`, …). The table is created in 6D, where it is first needed, and its API is built in 15. Until then the operator decides with `pnpm gate decide` (user decision), which calls `xyp_decide_approval` as `service_role`. The approver name is free text until Phase 15/16 add authentication.
 
 **F9. `sources` (Knowledge) vs `research_sources` (Research Intelligence).** PROPOSED.
 
@@ -153,4 +158,24 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 
 **F12. `agent_runs` is built generic in Phase 4A and extended in 6A.** Accepted as the build guide states.
 
-**F13. The 20-specialist roster: the source names 5 and the guide extrapolates the other 15.** OPEN (confirm before 6B).
+**F13. The 20-specialist roster: the source names 5 and the guide extrapolates the other 15.** RESOLVED (user, 6B: the guide's 20 as-is).
+
+**F14. The auto-approve threshold.** DECIDED in 6D (the guide requires the value and its reasoning in the same commit, and no silent change later).
+- Rule: auto-approve only when finding confidence ≥ **0.8**, AND the latest controlled experiment is validated with the candidate variant beating control, AND every cited source was retrieved within **180 days**. Anything short of that goes to the human `approval_queue`.
+- Why 0.8: finding confidence is mean(evidence confidence × source reliability) × min(1, 0.5 + 0.25k).
+  - A single source is capped at 0.75 of its own support, so no single page, doc or studio session can auto-approve.
+  - Two independent sources need a mean support ≥ 0.8, e.g. two official changelogs (0.9) at confidence ≥ 0.89.
+  - Community (0.4) and unknown-host (0.3) evidence can never reach it.
+- Why 180 days: AI music models ship major versions every few months, so older evidence gets a human look.
+- Consequence today: nothing auto-approves before Phase 12, because trials are stub-scored until the Critic exists.
+- Changing either number is a new flagged decision, never a silent edit (`knowledge/promotion-gate/decide.ts`).
+
+**F15. Two X3LIUS sub-domains had no building phase.** RESOLVED (user approved the first option).
+- Phase 7 lists ten sub-domains. Phases 8–12 build Songwriting and Lyrics (8), Suno (9), Vocal DNA (10), Production, Arrangement and Mix/Master (11), and Evaluation (12). No phase named Composition or Genre/Style.
+- Resolution: **Composition is built in Phase 8**, alongside songwriting (chords and melody belong with structure and toplines). **Genre/Style is built in Phase 9**, alongside Suno style prompts.
+- Recorded as `built_in: '8'` / `'9'` in `records/x3lius/music-system.manifest.yaml`. Re-admitting it through the gate appended v2 of both modules; v1 is kept as history.
+
+**F16. Global retrieval returned superseded versions.** RESOLVED (user go, before Phase 8; migration `20260924170000_global_current_versions.sql`).
+- The Phase 3 global path (`xyp_match_knowledge`) searched every embedded version, so a v1 and its v2 could both rank.
+- It now applies the same current-version filter as the Phase 7 scoped path, scanning canonical prompts exactly. Sources keep their HNSW branch.
+- Proof: `tests/phase-07/propagation.test.ts` ("F16: …"), which was red before the migration.

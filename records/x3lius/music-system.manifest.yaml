@@ -1,0 +1,55 @@
+# Operator-authored module manifest (first-party). Admitted into canonical knowledge by the
+# Promotion Gate's first-party path: pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_party
+# Each sub-domain becomes a module with a `subdomain_of` edge to the parent. A promoted rule
+# whose candidate is tagged with a sub-domain's slug is placed in that module (Phase 7 propagation).
+# built_in: the build-guide phase that implements it; null = no phase in the guide builds it yet
+# (Composition and Genre/Style were null until F15, see docs/ARCHITECTURE.md).
+manifest: xyp-module-manifest/v1
+title: X3LIUS Music System — module manifest
+date: 2026-09-24
+domain: RECORDS
+module:
+  slug: x3lius-music-system
+  title: X3LIUS Music System
+  description: The X3LIUS artist's music intelligence under XYP3RN RECORDS. Owns ten sub-domains; each is a registered stub until its phase builds it.
+subdomains:
+  - slug: x3lius-songwriting
+    title: Songwriting
+    description: Song structure, hooks and toplines for X3LIUS tracks.
+    built_in: '8'
+  - slug: x3lius-lyrics
+    title: Lyrics
+    description: Lyric writing, rhyme schemes and wordplay in the X3LIUS voice.
+    built_in: '8'
+  - slug: x3lius-vocal-dna
+    title: Vocal DNA
+    description: The structured X3LIUS vocal signature (tone, register, delivery, ad-libs) and its RVC/Applio model.
+    built_in: '10'
+  - slug: x3lius-composition
+    title: Composition
+    description: Chords, melody and harmony decisions for X3LIUS tracks.
+    built_in: '8'  # F15 (user): folded into Phase 8 alongside songwriting
+  - slug: x3lius-arrangement
+    title: Arrangement
+    description: Section order, instrumentation and transitions.
+    built_in: '11'
+  - slug: x3lius-genre-style
+    title: Genre/Style
+    description: Genre and style targets, subgenres and reference tracks.
+    built_in: '9'  # F15 (user): folded into Phase 9 alongside Suno style prompts
+  - slug: x3lius-suno
+    title: Suno
+    description: Suno prompt formulas, style prompts and negative prompts, tagged by Suno model version.
+    built_in: '9'
+  - slug: x3lius-production
+    title: Production
+    description: Sound design, drums and beat production in FL Studio.
+    built_in: '11'
+  - slug: x3lius-mix-master
+    title: Mix/Master
+    description: Mix and master decisions against a rubric, from structured (TRACE-shaped) analysis.
+    built_in: '11'
+  - slug: x3lius-evaluation
+    title: Evaluation
+    description: Critique and scoring of X3LIUS outputs against canonical rubrics.
+    built_in: '12'

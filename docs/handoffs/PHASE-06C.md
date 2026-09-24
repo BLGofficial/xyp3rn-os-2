@@ -1,0 +1,30 @@
+HANDOFF — Phase 6C complete
+
+- **Built:**
+  - **Evidence Engine** (`research-intelligence/evidence/engine.ts`, the `write_evidence` tool): rejects any write missing source, model tag, confidence with its inputs, or claim, listing every problem at once.
+  - **Source Verification** (`sources/verify.ts`): URI normalization, dedup by content hash, and an explicit ordered reliability rubric (first-party / official 0.9, vendor 0.8, studio observation or independent 0.7, community 0.4, unknown 0.3), with its inputs stored on every row.
+  - **`fetch_source`** (new capability `web.read`, Research only): fetches, extracts text, and registers the research source in the same step, so evidence can only cite a page that was actually read.
+  - **Findings** (`synthesis/findings.ts`) with confidence = mean(evidence confidence × source reliability) × min(1, 0.5 + 0.25k), where k is the number of independent sources. A single source is capped at 0.75 of its support.
+  - **Contradiction Engine:** detection runs inside the DB, on every finding and candidate insert (migration `20260924140000_research_engines.sql`); resolutions go through `xyp_verifier`.
+  - **Experiment Engine** (`experiments/engine.ts`): A/B design, trials recorded by hand, stub scorer.
+  - **CLI:** `pnpm research …`.
+  - **Proof:** `docs/proofs/PHASE-06C-contradiction.txt`. 21 tests (mutation: removing the triggers turns 4 red). On the dev DB, a deliberately wrong X3LIUS voice finding is recorded against live canonical phase-8 v2, and its candidate is blocked.
+- **Key decisions:**
+  - **Structured claims (user):** a conflict is the same topic, an overlapping model scope and a different value. Different model versions never conflict, which is what lets a suno-v5 finding and a suno-v4.5 rule both stand.
+  - **Trials recorded by hand, stub scoring (user):** `scored_by = 'stub:no-evaluator-until-phase-12'` and score null, so a stub-scored experiment is never "validated".
+  - **Detection can't be bypassed:** it runs as a SECURITY DEFINER trigger. Research can't write contradictions; the verifier can resolve but not create them.
+  - **Candidates can't restate their claim:** a candidate inherits its finding's claim and model tag.
+- **Deviations from spec:**
+  - **Phase 2 change:** the normalizer is now v2 and extracts the Phase 8 "Voice reference" as a structured canonical claim, and re-ingest is a no-op only if this normalizer version already ran. A normalizer upgrade re-normalizes into new versions: phase-8 v1 → v2, the other 30 prompts and 19 modules reused.
+  - **Test chain:** the 6A test chain now carries claim fields.
+  - **Rubric correction:** the corroboration cap I first described for source reliability is applied to finding confidence instead.
+- **Open flags:**
+  - **Only 1 of 31 live canonical rows carries a structured claim;** the other 30 are reported as "uncheckable", never passed silently.
+  - **Findings don't yet come from an LLM.** Synthesis needs `ANTHROPIC_API_KEY`; the recording primitives are ready.
+  - **Findings aren't compared with other findings,** only with candidates and canonical rows, as the guide specifies. Candidate-level checks cover conflicts that reach promotion.
+  - **The vendor and community host lists are hand-edited data.**
+- **Next phase needs (6D):**
+  - **Gate order:** candidate (refuse if `knowledge_candidate_eligibility.open_contradictions > 0`) → source freshness re-check → model-tag assertion → controlled test (`experimentResult`) → evaluation → confidence → validated rule → INSERT into `canonical_prompts`/`modules` + `knowledge_versions` → propagation.
+  - **Approval routing:** a stub-scored experiment must go to the human approval queue.
+  - **Grants:** revoke canonical INSERT from `xyp_ingest_bootstrap` and `service_role` (F1), and create `xyp_promotion`.
+  - **Proof material:** the dev DB already holds a blocked candidate (`x3lius-voice-soft-pop`) to show "blocked, not promoted".

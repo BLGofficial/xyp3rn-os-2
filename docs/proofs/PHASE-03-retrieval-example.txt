@@ -1,0 +1,67 @@
+# Phase 3 worked retrieval example: `pnpm context "How do I stop research agents from writing canonical knowledge directly?"`
+# Real output against the ingested build guide (Phase 2), gte-small embeddings. Reproduce: pnpm db:setup && pnpm db:up && pnpm ingest --file XYP3RN_Agentic_OS_Build_Sequence.pdf --origin first_party && pnpm embed
+
+query: How do I stop research agents from writing canonical knowledge directly?
+model: Supabase/gte-small  cache: miss  generation: 31@2026-09-24 07:57:26.681294+00|19@2026-09-24 07:49:29.961232+00|1@2026-09-24 07:57:26.682722+00|68@2026-09-24 07:49:29.961232+00
+
+#1  0.8810  canonical_prompts:phase-6b-the-20-specialist-agents  [RESEARCH_INTELLIGENCE]
+    row:    canonical_prompts.id = 50db23e8-dff5-4050-9c1a-9d04c3bb9ad9
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8810; precedes (out) from phase-6a-schema-extension-research-orchestrator: 0.8597 x 0.7 via relations:b6bd8c19-c33b-4c24-9271-a98d18254dc8; precedes (in) from phase-6c-evidence-engine-source-verification-contradiction-engine-experiment-engine: 0.8536 x 0.7 via relations:4209ead9-359a-4f82-a1fb-70908f4173c6
+
+#2  0.8640  canonical_prompts:phase-6d-knowledge-promotion-pipeline  [RESEARCH_INTELLIGENCE]
+    row:    canonical_prompts.id = 419a7dc9-4f46-47af-8e6a-c85de11bab84
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8640; precedes (out) from phase-6c-evidence-engine-source-verification-contradiction-engine-experiment-engine: 0.8536 x 0.7 via relations:90c1a7de-9c63-4c9e-bbca-3e8fbdf8a56e
+
+#3  0.8632  canonical_prompts:phase-8-meta-prompt  [RECORDS]
+    row:    canonical_prompts.id = e8185247-bd4a-497a-9828-b469261acfcb
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8632
+
+#4  0.8597  canonical_prompts:phase-6a-schema-extension-research-orchestrator  [RESEARCH_INTELLIGENCE]
+    row:    canonical_prompts.id = 8a4ac81e-d49b-47fe-9ba7-1d239bbf2fab
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8597; precedes (in) from phase-6b-the-20-specialist-agents: 0.8810 x 0.7 via relations:b6bd8c19-c33b-4c24-9271-a98d18254dc8
+
+#5  0.8589  canonical_prompts:phase-4c-tool-registry  [CORE]
+    row:    canonical_prompts.id = e0d23be4-37ec-4171-8aaf-71366125090a
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8589
+
+#6  0.8538  canonical_prompts:phase-0-meta-prompt  [CORE]
+    row:    canonical_prompts.id = 4db8241d-7cde-450a-b349-c316ae3aae7d
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8538
+
+#7  0.8536  canonical_prompts:phase-6c-evidence-engine-source-verification-contradiction-engine-experiment-engine  [RESEARCH_INTELLIGENCE]
+    row:    canonical_prompts.id = 5393165a-9829-45f0-8e31-f41bbd87f225
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8536; precedes (out) from phase-6b-the-20-specialist-agents: 0.8810 x 0.7 via relations:4209ead9-359a-4f82-a1fb-70908f4173c6; precedes (in) from phase-6d-knowledge-promotion-pipeline: 0.8640 x 0.7 via relations:90c1a7de-9c63-4c9e-bbca-3e8fbdf8a56e
+
+#8  0.8529  canonical_prompts:phase-1-meta-prompt  [KNOWLEDGE]
+    row:    canonical_prompts.id = 0568dbc5-4d7f-45ff-93fc-0f0380bdeaea
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8529
+
+#9  0.6012  canonical_prompts:phase-4d-orchestrator-stub-single-agent-dispatch  [CORE]
+    row:    canonical_prompts.id = 8098e2c2-7590-4c08-87ca-4baa362c39ee
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    precedes (out) from phase-4c-tool-registry: 0.8589 x 0.7 via relations:0108e705-0d4c-47b5-b9db-502be56b2130
+
+#10  0.6012  canonical_prompts:phase-4b-agent-registry  [CORE]
+    row:    canonical_prompts.id = fc707f97-dd18-411f-960b-aec2b62f3252
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    precedes (in) from phase-4c-tool-registry: 0.8589 x 0.7 via relations:1298a714-46b9-43d4-a648-194065141af4
+
+#11  0.5286  modules:phase-6-ai-music-research-intelligence  [RESEARCH_INTELLIGENCE]
+    row:    modules.id = 6038af5b-15e7-461d-bdbc-ecb1aa030386
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    module_of (out) from phase-6b-the-20-specialist-agents: 0.8810 x 0.6 via fk:canonical_prompts.module_id; module_of (out) from phase-6d-knowledge-promotion-pipeline: 0.8640 x 0.6 via fk:canonical_prompts.module_id; module_of (out) from phase-6a-schema-extension-research-orchestrator: 0.8597 x 0.6 via fk:canonical_prompts.module_id; module_of (out) from phase-6c-evidence-engine-source-verification-contradiction-engine-experiment-engine: 0.8536 x 0.6 via fk:canonical_prompts.module_id
+
+#12  0.5179  modules:phase-8-songwriting-lyrics-agents  [RECORDS]
+    row:    modules.id = 7c943605-0886-416d-a811-7672a40dbca0
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    module_of (out) from phase-8-meta-prompt: 0.8632 x 0.6 via fk:canonical_prompts.module_id
+
+diagnostics: {"vectorHits":8,"edgesConsidered":21,"skippedPredicates":[],"skippedEntityTypes":[]}

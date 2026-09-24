@@ -1,0 +1,21 @@
+HANDOFF — Phase 4C complete
+
+- **Built:**
+  - `core/tool-registry/capabilities.ts`: 12 capabilities, and which classes hold each one, enforced in code.
+  - `core/tool-registry/registry.ts`: `defineTool`, and `createToolRegistry(tools)` → `get`, `list`, `authorize(agentClass, toolName)`.
+  - The first real tool, `core/tool-registry/tools/log-message.ts` (capability `log.write`): it appends to the run log, which becomes `agent_runs.output.logs` in 4D.
+  - 124 tests, deny cases first:
+    - Research → `write_canonical` is denied with zero tools registered ("tool not registered").
+    - Any unregistered name is denied for all 8 classes.
+    - A registered `canonical.write` tool is denied for every class.
+    - All 96 class × capability pairs match the matrix.
+    - The docs matrix equals the code matrix.
+- **Key decisions:**
+  - Authorization is decided on a tool's single declared capability, never on its name.
+  - `canonical.write`, `approval.decide` and `audit.write` have empty class lists, so a tool carrying one of them can never be reached by an agent.
+  - The prose matrix and the code matrix are kept in sync by a test (mutation check: granting Research `canonical.write` in code turns 2 tests red).
+- **Deviations from spec:** none.
+- **Open flags:** the domain-specific capabilities (Records catalog and rights) are still undefined until Phase 13, where F10 (hybrid-class agents) is decided.
+- **Next phase needs:**
+  - 4D calls `tools.authorize(agent.class, tool)` for every tool the agent's frontmatter lists, before execution, and again on every invocation through a scoped `useTool`. Handlers never see the registry.
+  - `ToolContext` is `{ runId, agentName, log }`.

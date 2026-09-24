@@ -62,6 +62,21 @@ Example: `xyp_research` (INSERT-only on evidence/findings, no UPDATE/DELETE)
 `<role without xyp_ prefix>_<command>`, one policy per role per command. Policies are only ever granted to named `xyp_*` roles, never to `anon`, `authenticated` or `public`.
 Example: `ingest_bootstrap_select` on `sources` (`for select to xyp_ingest_bootstrap`)
 
+### Workflow specs
+
+`<domain-dir>/workflows/<kebab-name>.workflow.yaml`. The `name` inside must be kebab-case. Step ids are lowercase (`[a-z][a-z0-9_-]*`).
+Example: `core/workflows/retrieve-and-summarize.workflow.yaml` with steps `retrieve` → `summarize`
+
+### Relation predicates
+
+`lower_snake` verb phrase, subject → object (`relations_predicate_check`). Context Engine weights live in `PREDICATE_WEIGHTS`; unweighted predicates are skipped and reported in diagnostics.
+Example: `subdomain_of` (module → parent module, Phase 7); `derived_from` (entity → source)
+
+### Module manifests
+
+`<domain-dir>/<area>/<kebab-name>.manifest.yaml`, first line of data `manifest: xyp-module-manifest/v1`. The manifest is admitted through the gate (`pnpm ingest --origin first_party`). A sub-domain's module slug is prefixed with its parent's owner and is also its stub agent's name and the candidate tag that places a rule in it.
+Example: `records/x3lius/music-system.manifest.yaml` → module `x3lius-suno`, agent `agents/x3lius-suno.agent.md`, tag `x3lius-suno`
+
 ### Tools
 
 `snake_case` `<verb>_<object>`. Each tool declares exactly one capability.

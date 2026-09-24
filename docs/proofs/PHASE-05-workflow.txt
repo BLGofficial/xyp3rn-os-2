@@ -1,0 +1,141 @@
+# Phase 5 proof: routing + one real 2-step workflow (retrieve context -> summarize) over the ingested build guide
+
+$ pnpm route "Research the best current method for controlling dark baritone vocals in Suno."
+request: Research the best current method for controlling dark baritone vocals in Suno.
+route:   routed → RESEARCH_INTELLIGENCE (margin 3)
+scores:  {"RESEARCH_INTELLIGENCE":6,"RECORDS":3,"TECH":0,"GOVERNANCE":0}
+matched: {"RESEARCH_INTELLIGENCE":["research","best current method"],"RECORDS":["vocal","suno"],"TECH":[],"GOVERNANCE":[]}
+action:  hold — no entrypoint registered for RESEARCH_INTELLIGENCE yet (built in Phase 6A)
+
+$ pnpm route "Check the rights on this track"
+request: Check the rights on this track
+route:   ambiguous
+scores:  {"RESEARCH_INTELLIGENCE":0,"RECORDS":2,"TECH":0,"GOVERNANCE":3}
+matched: {"RESEARCH_INTELLIGENCE":[],"RECORDS":["track"],"TECH":[],"GOVERNANCE":["rights"]}
+action:  clarify — ambiguous between GOVERNANCE and RECORDS (margin 1); say which
+
+$ pnpm workflow core/workflows/retrieve-and-summarize.workflow.yaml '{"query":"Who is allowed to write canonical knowledge?"}'
+spec: retrieve-and-summarize (core/workflows/retrieve-and-summarize.workflow.yaml, sha256 834562897539…) steps: retrieve=context-retriever → summarize=extractive-summarizer
+status: success
+output:
+{
+  "method": "extractive",
+  "query": "Who is allowed to write canonical knowledge?",
+  "bullets": [
+    {
+      "text": "Every promotion writes a knowledge_versions row — never overwrite a canonical row in place.",
+      "cite": {
+        "table": "canonical_prompts",
+        "id": "419a7dc9-4f46-47af-8e6a-c85de11bab84",
+        "slug": "phase-6d-knowledge-promotion-pipeline",
+        "score": 0.8657808863839174
+      },
+      "matchedTerms": [
+        "canonical",
+        "knowledge",
+        "write"
+      ]
+    },
+    {
+      "text": "No mock canonical rules — these agents must actually query Phase 3/7, even if the knowledge base is thin right now.",
+      "cite": {
+        "table": "canonical_prompts",
+        "id": "e8185247-bd4a-497a-9828-b469261acfcb",
+        "slug": "phase-8-meta-prompt",
+        "score": 0.8468243388429025
+      },
+      "matchedTerms": [
+        "canonical",
+        "knowledge"
+      ]
+    },
+    {
+      "text": "a Research-class agent must never be able to request a tool that writes canonical_prompts).",
+      "cite": {
+        "table": "canonical_prompts",
+        "id": "e0d23be4-37ec-4171-8aaf-71366125090a",
+        "slug": "phase-4c-tool-registry",
+        "score": 0.8445671982089045
+      },
+      "matchedTerms": [
+        "canonical",
+        "write"
+      ]
+    },
+    {
+      "text": "Version it through knowledge_versions like any other canonical write, so a vocal-direction change is traceable.",
+      "cite": {
+        "table": "canonical_prompts",
+        "id": "2b3c9a2b-1b16-486f-8dc3-a3a0ff290294",
+        "slug": "phase-10-meta-prompt",
+        "score": 0.8404711865255448
+      },
+      "matchedTerms": [
+        "canonical",
+        "knowledge",
+        "write"
+      ]
+    },
+    {
+      "text": "Refuses (write into the \"refuses\" section): promoting anything to canonical knowledge directly, and asserting a claim with no research_sources row backing it.",
+      "cite": {
+        "table": "canonical_prompts",
+        "id": "50db23e8-dff5-4050-9c1a-9d04c3bb9ad9",
+        "slug": "phase-6b-the-20-specialist-agents",
+        "score": 0.8336931616389779
+      },
+      "matchedTerms": [
+        "canonical",
+        "knowledge",
+        "write"
+      ]
+    }
+  ],
+  "itemsConsidered": 12,
+  "note": "Deterministic extractive summary: sentences quoted verbatim from cited rows, no LLM. Replaced by an LLM summarizer once ANTHROPIC_API_KEY is configured."
+}
+workflow_runs row:
+{
+  "id": "a2525beb-8a07-43ae-ab8d-2fea0efe4077",
+  "workflow_name": "retrieve-and-summarize",
+  "status": "success",
+  "failed_step": null,
+  "skipped_steps": [],
+  "created_at": "2026-09-24T08:18:23.184Z",
+  "completed_at": "2026-09-24T08:18:23.486Z"
+}
+agent_runs rows (one per step):
+[
+  {
+    "id": "76892409-3f05-4942-8d3d-9477d6edaf29",
+    "step_id": "retrieve",
+    "agent_name": "context-retriever",
+    "class": "Knowledge",
+    "status": "success",
+    "latency_ms": 285,
+    "tokens_used": 0,
+    "logs": [
+      {
+        "at": "2026-09-24T08:18:23.474Z",
+        "level": "info",
+        "message": "retrieved 12 item(s), cache miss"
+      }
+    ]
+  },
+  {
+    "id": "d481dd93-ae0b-41da-b2d5-2968ca8ca8bf",
+    "step_id": "summarize",
+    "agent_name": "extractive-summarizer",
+    "class": "Knowledge",
+    "status": "success",
+    "latency_ms": 4,
+    "tokens_used": 0,
+    "logs": [
+      {
+        "at": "2026-09-24T08:18:23.483Z",
+        "level": "info",
+        "message": "extractive summary: 5 cited sentence(s) from 12 item(s)"
+      }
+    ]
+  }
+]

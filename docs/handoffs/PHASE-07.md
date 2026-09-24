@@ -1,0 +1,38 @@
+HANDOFF — Phase 7 complete
+
+- **Built:**
+  - **X3LIUS Music System module** under RECORDS: a parent module plus the guide's ten sub-domains, written as canonical modules by the Promotion Gate.
+    - Source: `records/x3lius/music-system.manifest.yaml`, a first-party manifest read by the new `xyp-module-manifest-v1` normalizer.
+    - The rows are versioned with history. Each sub-domain has a `subdomain_of` edge to the parent.
+    - Re-ingesting an unchanged manifest is a no-op.
+    - `.yaml`/`.md`/`.txt` files are now ingestible.
+  - **Propagation wiring:**
+    - A promoted rule whose candidate is tagged with a sub-domain's slug (for example `x3lius-suno`) is placed by the gate in that module.
+    - The Context Engine gained `scope: { modules }` (migration `20260924160000_subdomain_scope.sql`). A scoped query returns current versions only, stays exact, and never expands out of scope.
+    - `retrieve_context` accepts the same scope.
+  - **Registry and routing:**
+    - Ten read-only stub agents (`agents/x3lius-*.agent.md`: Knowledge class, `retrieve_context` + `log_message`) share the `subdomain-stub` handler, which returns scoped context and says which phase builds it.
+    - RECORDS requests now go to the `x3lius-music-system` entrypoint (`pnpm ask`), which selects sub-domains by scope keywords. With no match it asks for clarification rather than picking a default.
+  - **Proof** (`docs/proofs/PHASE-07-x3lius.txt`):
+    - 569/569 tests pass.
+    - A FIXTURE Suno rule was promoted through the real gate, embedded, and returned by the Suno scope, the stub agent and `pnpm ask`. It was invisible to the Lyrics scope, and its v2 replaced v1.
+    - 3 mutations caught.
+    - On the dev DB: 11 gate-written modules; `pnpm ask "Write a Suno style prompt…"` → `x3lius-suno` (empty context, since no Suno rule is promoted there yet).
+- **Key decisions (user):**
+  - The sub-domains are gate-written modules, not file-only.
+  - Propagation is tag → module: one sub-domain per rule, and a candidate tagged with two is refused before it reaches the approval queue.
+  - The fixture rule is marked synthetic and exists only in a throwaway test DB.
+  - Each sub-domain has its own stub agent.
+- **Deviations from spec:**
+  - **Generic keyword selection moved to core:** `parseScope`/`selectByScope` now live in `core/orchestrator/scope-select.ts`, so RECORDS doesn't import research code. Research re-exports its old names, so its behavior is unchanged.
+  - **Sub-domain agent naming:** each agent's name equals its module slug, which is also the placement tag. One name is the whole join, with no mapping table.
+- **Open flags:**
+  - **F15:** Composition and Genre/Style have no building phase in the guide (`built_in: null`). *(Resolved after this handoff: Composition → Phase 8, Genre/Style → Phase 9.)*
+  - **F16:** the Phase 3 global path still returns superseded versions; the scoped path doesn't. *(Resolved after this handoff.)*
+  - **The pending dev-DB candidate** (Phase 10 RVC/Applio claim) is tagged `x3lius`/`vocal-dna`, not `x3lius-vocal-dna`, so approving it lands it in `records-validated-rules`. Candidates are immutable, so to get it into Vocal DNA you'd re-propose it with the sub-domain tag. *(Approved by the operator after this handoff; promoted into `records-validated-rules`.)*
+  - **Rules promoted in 6D stay where they were written:** they aren't moved to sub-domains after the fact. A move means a new version.
+- **Next phase needs (8):**
+  - **Songwriting, Lyrics and (F15) Composition agents:** replace the `x3lius-songwriting`, `x3lius-lyrics` and `x3lius-composition` stubs with real Creative-class agents of the same names, so the routing, scope and registry entries carry over. This needs `ANTHROPIC_API_KEY` in a new session.
+  - **Style rules:** read them through `retrieve_context` with `scope.modules` set to the sub-domain (plus `x3lius-vocal-dna` for voice), never hardcoded; this is what the guide requires ("pulls style rules from canonical_prompts via Context Engine").
+  - **Rules on the context path:** tag candidates `x3lius-songwriting` or `x3lius-lyrics` so they land there.
+  - **Resolve F16 first** so the global path can't serve a superseded rule. *(Done after this handoff: migration `20260924170000_global_current_versions.sql`.)* Decide F15 as well.

@@ -1,0 +1,52 @@
+# Phase 4E proof: health-check through the full real path (registry → validate → authorize → execute → agent_runs)
+$ pnpm dispatch health-check '{"ping":"xyp3rn","from":"phase-04e"}'
+1. registry pickup
+   /home/user/xyp3rn-os-2/agents/health-check.agent.md
+   class=Execution domain=CORE tools=[log_message] model=none
+2. validateAll(agents/): 0 failure(s)
+3. authorization
+   log_message: {"allow":true,"capability":"log.write"}
+4. execution: success in 23ms
+5. agent_runs row (SELECT … WHERE id = runId):
+{
+  "id": "1d92726f-17c7-401a-a55e-5192a853e79d",
+  "agent_name": "health-check",
+  "class": "Execution",
+  "domain": "CORE",
+  "input": {
+    "from": "phase-04e",
+    "ping": "xyp3rn"
+  },
+  "output": {
+    "logs": [
+      {
+        "at": "2026-09-24T08:09:10.571Z",
+        "level": "info",
+        "message": "health-check: echoing input"
+      }
+    ],
+    "result": {
+      "echo": {
+        "from": "phase-04e",
+        "ping": "xyp3rn"
+      },
+      "timestamp": "2026-09-24T08:09:10.571Z"
+    }
+  },
+  "tokens_used": 0,
+  "latency_ms": 23,
+  "status": "success",
+  "error_detail": null,
+  "created_at": "2026-09-24T08:09:10.566Z",
+  "completed_at": "2026-09-24T08:09:10.573Z"
+}
+
+$ psql -c "select id, agent_name, class, domain, status, tokens_used, latency_ms, output->'result'->>'timestamp' as echoed_at, completed_at - created_at as took from agent_runs where id = '1d92726f-17c7-401a-a55e-5192a853e79d'"
+                  id                  |  agent_name  |   class   | domain | status  | tokens_used | latency_ms |        echoed_at         |      took       
+--------------------------------------+--------------+-----------+--------+---------+-------------+------------+--------------------------+-----------------
+ 1d92726f-17c7-401a-a55e-5192a853e79d | health-check | Execution | CORE   | success |           0 |         23 | 2026-09-24T08:09:10.571Z | 00:00:00.006666
+(1 row)
+
+$ psql -c "update agent_runs set output = '{}' where id = '1d92726f-17c7-401a-a55e-5192a853e79d'"   # sealed
+ERROR:  agent_runs 1d92726f-17c7-401a-a55e-5192a853e79d is sealed (status success)
+CONTEXT:  PL/pgSQL function public.xyp_agent_runs_seal() line 4 at RAISE

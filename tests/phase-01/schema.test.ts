@@ -41,10 +41,10 @@ const expectEach = async (tx: Tx, stmts: readonly Stmt[], code: string) => {
 };
 
 describe('tables', () => {
-  it('creates exactly the nine canonical base tables in public', async () => {
+  it('creates the nine canonical base tables in public (later phases add their own)', async () => {
     const rows = await db.sql<{ t: string }[]>`
       select tablename as t from pg_tables where schemaname = 'public' order by 1`;
-    expect(rows.map((r) => r.t)).toEqual([...TABLES]);
+    expect(rows.map((r) => r.t)).toEqual(expect.arrayContaining([...TABLES]));
   });
 });
 
@@ -63,13 +63,14 @@ describe('foreign keys (catalog)', () => {
     ['quality_reports', 'source_id', 'sources', 'r'],
   ];
 
-  it('declares exactly the expected FK set with the expected on-delete action', async () => {
+  it('declares exactly the expected FK set on the Phase 1 tables, with the expected on-delete action', async () => {
     const rows = await db.sql<{ tbl: string; col: string; ref: string; del: string }[]>`
       select c.conrelid::regclass::text as tbl, a.attname as col,
              c.confrelid::regclass::text as ref, c.confdeltype as del
       from pg_constraint c
       join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any (c.conkey)
       where c.contype = 'f' and c.connamespace = 'public'::regnamespace
+        and c.conrelid::regclass::text = any(${[...TABLES]})
       order by 1, 2`;
     expect(rows.map((r) => [r.tbl, r.col, r.ref, r.del])).toEqual(EXPECTED);
   });
@@ -180,10 +181,11 @@ describe('enums', () => {
 describe('updated_at triggers', () => {
   const MUTABLE = ['canonical_prompts', 'ingestion_runs', 'modules', 'prompt_variants', 'sources', 'tags'];
 
-  it('exist on exactly the mutable tables', async () => {
+  it('exist on exactly the mutable Phase 1 tables', async () => {
     const rows = await db.sql<{ t: string }[]>`
       select event_object_table as t from information_schema.triggers
       where trigger_schema = 'public' and trigger_name like 'trg_%_updated_at' and event_manipulation = 'UPDATE'
+        and event_object_table = any(${[...TABLES]})
       order by 1`;
     expect(rows.map((r) => r.t)).toEqual(MUTABLE);
   });

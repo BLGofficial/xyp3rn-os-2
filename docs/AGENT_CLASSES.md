@@ -14,11 +14,13 @@ Status: Phase 0 contract. The class ids are defined once in `core/contracts/taxo
 ## Capability matrix
 
 `Y` = the class may be granted a tool with this capability. `—` = never.
+The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04c` fails if the two tables drift apart.
 
 | Capability | What it permits | Research | Knowledge | Planning | Creative | Critic | Revision | Execution | Governance |
 |---|---|---|---|---|---|---|---|---|---|
 | `context.read` | Query the Context Engine (canonical + sources, read-only) | Y | Y | Y | Y | Y | Y | Y | Y |
 | `log.write` | Emit a log message attached to the current run | Y | Y | Y | Y | Y | Y | Y | Y |
+| `web.read` | Fetch an external URL and register it as a research source (Phase 6C) | Y | — | — | — | — | — | — | — |
 | `research.write` | INSERT `research_evidence` / `research_sources` / `research_findings` | Y | — | — | — | — | — | — | — |
 | `candidate.propose` | INSERT `knowledge_candidates` with status `proposed` | Y | — | — | — | — | — | — | — |
 | `plan.write` | Write plans, workflow drafts, `rd_backlog` proposals | — | — | Y | — | — | — | — | — |

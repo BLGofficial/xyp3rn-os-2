@@ -65,7 +65,7 @@ describe('ingestion of the real build guide', () => {
     const result = await ingestSource(db.sql, { kind: 'file', path: PDF_PATH, origin: 'first_party' }, { asOf: AS_OF });
     expect(result.status).toBe('success');
     expect(result.stats).toMatchObject({
-      normalizer: 'xyp-build-sequence-v1',
+      normalizer: 'xyp-build-sequence-v2',
       pages: 22,
       modules: { inserted: 19, reused: 0 },
       prompts: { inserted: 31, reused: 0 },
@@ -77,11 +77,12 @@ describe('ingestion of the real build guide', () => {
 
     expect(await count(db.sql, 'modules')).toBe(19);
     expect(await count(db.sql, 'canonical_prompts')).toBe(31);
-    // F1: every canonical row is marked bootstrap and traces to the source
+    // Since 6D (F1 closed): every canonical row is written by the gate's first-party admission
+    // and still traces to the source.
     expect(
-      await db.sql`select 1 from canonical_prompts where promoted_via <> 'bootstrap' or source_id is null`,
+      await db.sql`select 1 from canonical_prompts where promoted_via <> 'gate' or source_id is null`,
     ).toHaveLength(0);
-    expect(await db.sql`select 1 from modules where promoted_via <> 'bootstrap' or source_id is null`).toHaveLength(0);
+    expect(await db.sql`select 1 from modules where promoted_via <> 'gate' or source_id is null`).toHaveLength(0);
     expect(await db.sql`select 1 from relations_dangling`).toHaveLength(0);
 
     const [run] = await db.sql<{ status: string; completed_at: Date | null }[]>`
@@ -114,6 +115,22 @@ describe('ingestion of the real build guide', () => {
     expect(result.status).toBe('noop');
     expect(await fingerprint(db.sql)).toEqual(before);
     expect(await count(db.sql, 'ingestion_runs')).toBe(runsBefore + 1);
+  });
+
+  it('a normalizer upgrade re-normalizes the same bytes: versions only what changed, never overwrites', async () => {
+    // Simulate history: the last successful run was made by an older normalizer version.
+    await db.sql`update ingestion_runs set stats = jsonb_set(stats, '{normalizer}', '"xyp-build-sequence-v0"') where status = 'success'`;
+    await db.sql`update canonical_prompts set structured = structured - 'claims' where slug = 'phase-8-meta-prompt'`;
+    const result = await ingestSource(db.sql, { kind: 'file', path: PDF_PATH, origin: 'first_party' }, { asOf: AS_OF });
+    expect(result.status).toBe('success');
+    expect(result.stats).toMatchObject({ renormalized: true, prompts: { inserted: 1, reused: 30 }, modules: { inserted: 0, reused: 19 } });
+    const versions = await db.sql<{ version: number; has_claims: boolean }[]>`
+      select version, structured ? 'claims' as has_claims from canonical_prompts where slug = 'phase-8-meta-prompt' order by version`;
+    expect(versions).toEqual([
+      { version: 1, has_claims: false },
+      { version: 2, has_claims: true },
+    ]);
+    expect(await count(db.sql, 'sources')).toBe(1);
   });
 
   it('the same bytes fetched by URL are the same source (content-addressed) → noop', async () => {

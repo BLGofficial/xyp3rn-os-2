@@ -1,0 +1,403 @@
+Phase 6D — Knowledge Promotion Gate: live proof on the dev database (2026-09-24)
+Produced with the repo's own commands against the local Supabase-emulating Postgres 16.
+================================================================================
+
+$ pnpm db:up
+applied: 20260924150000
+
+# F1 backfill: every pre-gate canonical row now has a knowledge_versions row
+  canonical_table  | promoted_via |   mode    | count 
+-------------------+--------------+-----------+-------
+ canonical_prompts | bootstrap    | bootstrap |    32
+ modules           | bootstrap    | bootstrap |    19
+(2 rows)
+
+ bootstrap_modules | bootstrap_prompts 
+-------------------+-------------------
+                19 |                32
+(1 row)
+
+
+
+# Grant enforcement on the live DB: every role attempts to overwrite phase-8 and to insert a canonical row
+xyp_research          UPDATE: ERROR:  permission denied for table canonical_prompts 
+                      INSERT: ERROR:  permission denied for table modules 
+xyp_ingest_bootstrap  UPDATE: ERROR:  permission denied for table canonical_prompts 
+                      INSERT: ERROR:  permission denied for table modules 
+xyp_runtime           UPDATE: ERROR:  permission denied for table canonical_prompts 
+                      INSERT: ERROR:  permission denied for table modules 
+xyp_verifier          UPDATE: ERROR:  permission denied for table canonical_prompts 
+                      INSERT: ERROR:  permission denied for table modules 
+xyp_embedder          UPDATE: ERROR:  permission denied for table canonical_prompts 
+                      INSERT: ERROR:  permission denied for table modules 
+service_role          UPDATE: ERROR:  permission denied for table canonical_prompts 
+                      INSERT: ERROR:  permission denied for table modules 
+anon                  UPDATE: ERROR:  permission denied for table canonical_prompts 
+                      INSERT: ERROR:  permission denied for table modules 
+authenticated         UPDATE: ERROR:  permission denied for table canonical_prompts 
+                      INSERT: ERROR:  permission denied for table modules 
+xyp_promotion         UPDATE: ERROR:  permission denied for table canonical_prompts 
+                      INSERT: (allowed — rolled back below)
+
+$ pnpm ingest --file XYP3RN_Agentic_OS_Build_Sequence.pdf --origin first_party   (same bytes + normalizer → noop)
+{
+  "runId": "559aa875-9169-4a92-9976-e8639beea8e7",
+  "status": "noop",
+  "sourceId": "e0d7012b-14a3-4894-9765-eb6c3fe3e3b1",
+  "stats": {
+    "reason": "checksum already normalized by this normalizer",
+    "checksum": "10f0c63694babc350074b55489f78f522646b87b97f23b7f8e179da2f06d5ea6",
+    "normalizer": "xyp-build-sequence-v2"
+  }
+}
+
+$ pnpm ingest --file XYP3RN_Agentic_OS_Build_Sequence.pdf --origin third_party
+{
+  "runId": "3dc90ba6-5e85-4805-ab36-593725b0dd45",
+  "status": "error",
+  "sourceId": null,
+  "stats": {},
+  "error": "first-party admission requires origin first_party; third-party material goes through Research Intelligence"
+}
+
+# Fixed during this proof: the INSERT probe above ran in autocommit, so xyp_promotion's direct
+# insert COMMITTED a 'direct-write' module with no history. The row was deleted as superuser and
+# the migration now carries a deferred constraint trigger. Re-probed after re-applying it:
+# xyp_promotion itself: a canonical row committed without its knowledge_versions row
+ERROR:  modules.5fd92fb7-afa5-457a-a653-6d72cb5e98cf (direct-write, v1) committed without a knowledge_versions row
+HINT:  canonical knowledge is written only through the Promotion Gate (knowledge/promotion-gate)
+CONTEXT:  PL/pgSQL function public.xyp_canonical_requires_history() line 5 at RAISE
+direct-write rows after the attempt: 0
+
+# One real candidate: a first-party claim quoted from the ingested build guide (Phase 10 stack note)
+$ pnpm research open …
+{
+  "researchRunId": "a8d3b1d4-90dd-4758-9fbc-fa484d36cf2c"
+}
+
+$ pnpm research cite '{"researchRunId":"a8d3b1d4-90dd-4758-9fbc-fa484d36cf2c","sourceId":"e0d7012b-14a3-4894-9765-eb6c3fe3e3b1","excerpt":"RVC/Applio voice model already exists for X3LIUS per your audio pipeline","claim":"Build guide, Phase 10 stack note: the X3LIUS audio pipeline already has an RVC/Applio voice model.","model_tag":"model-agnostic","confidence":0.9,"confidence_inputs":{"basis":"stated directly in the operator-authored build guide","quote":"RVC/Applio voice model already exists for X3LIUS per your audio pipeline"},"claim_topic":"x3lius.voice-conversion-model","claim_value":"rvc-applio"}'
+{
+  "researchSourceId": "191a37c6-8502-4433-bbe8-0f36a9721f4a",
+  "reliability": 0.9,
+  "citedIn": [
+    "phase-10-meta-prompt"
+  ],
+  "evidenceId": "c16e1892-ba38-4a85-8fbf-5e3d372efb89"
+}
+
+$ pnpm research finding '{"researchRunId":"a8d3b1d4-90dd-4758-9fbc-fa484d36cf2c","claim":"X3LIUS voice conversion runs on the existing RVC/Applio voice model.","claim_topic":"x3lius.voice-conversion-model","claim_value":"rvc-applio","model_tag":"model-agnostic","evidenceIds":["c16e1892-ba38-4a85-8fbf-5e3d372efb89"]}'
+{
+  "findingId": "37644e6c-da2c-4128-ad7e-a06acc286a55",
+  "confidence": 0.6075,
+  "confidenceInputs": {
+    "formula": "mean(confidence × reliability) × min(1, 0.5 + 0.25k)",
+    "support": [
+      0.81
+    ],
+    "mean_support": 0.81,
+    "independent_sources": 1,
+    "corroboration_factor": 0.75
+  },
+  "contradictions": [],
+  "coverage": {
+    "canonicalRowsWithClaims": 1,
+    "canonicalRowsUncheckable": 30
+  }
+}
+
+$ pnpm research candidate '{"findingId":"37644e6c-da2c-4128-ad7e-a06acc286a55","proposed_kind":"canonical_prompt","target_slug":"x3lius-voice-conversion-model","title":"X3LIUS voice conversion model","body":"X3LIUS voice conversion runs on the existing RVC/Applio voice model (build guide, Phase 10 stack note). Phase 10 formalizes it as data; it is not a new model.","domain":"RECORDS","tags":["x3lius","vocal-dna"]}'
+{
+  "candidateId": "eacf693c-f97a-48b1-a204-d2541e5bddaa"
+}
+
+$ pnpm gate run eacf693c-f97a-48b1-a204-d2541e5bddaa
+{
+  "outcome": "pending_approval",
+  "steps": [
+    {
+      "step": "candidate",
+      "passed": true,
+      "reason": "x3lius-voice-conversion-model (proposed): no open contradictions",
+      "contradictions": []
+    },
+    {
+      "step": "source-verification",
+      "passed": true,
+      "reason": "1 source(s), reliability 0.9–0.9, oldest retrieved 0 day(s) ago (limit 180)",
+      "sources": [
+        {
+          "id": "191a37c6-8502-4433-bbe8-0f36a9721f4a",
+          "kind": "ingested",
+          "reliability": 0.9,
+          "age_days": 0
+        }
+      ]
+    },
+    {
+      "step": "model-version-tagging",
+      "passed": true,
+      "reason": "tagged model-agnostic; finding and 1 evidence row(s) agree",
+      "model_tag": "model-agnostic"
+    },
+    {
+      "step": "controlled-test",
+      "passed": false,
+      "reason": "no experiment designed for this candidate",
+      "experiment_id": null,
+      "scored_by": []
+    },
+    {
+      "step": "evaluation",
+      "passed": false,
+      "reason": "nothing to evaluate: controlled test not validated",
+      "means": null
+    },
+    {
+      "step": "confidence-assignment",
+      "passed": false,
+      "reason": "finding confidence 0.608 (auto-approve threshold 0.8)",
+      "confidence": 0.608,
+      "confidence_inputs": {
+        "formula": "mean(confidence × reliability) × min(1, 0.5 + 0.25k)",
+        "support": [
+          0.81
+        ],
+        "mean_support": 0.81,
+        "independent_sources": 1,
+        "corroboration_factor": 0.75
+      }
+    },
+    {
+      "step": "validated-rule",
+      "passed": false,
+      "reason": "routed to human approval: experiment not validated; confidence 0.608 below 0.8",
+      "approval_id": "f64ddef7-fc97-405a-a0e0-a28593d40a17"
+    }
+  ],
+  "reasons": [
+    "experiment not validated",
+    "confidence 0.608 below 0.8"
+  ],
+  "promotionRunId": "685504bc-c9c9-4009-bc07-5f7a0388dcd9",
+  "approvalId": "f64ddef7-fc97-405a-a0e0-a28593d40a17"
+}
+
+# The 6C contradiction-proof candidate (deliberately wrong X3LIUS voice) meets the gate
+
+$ pnpm gate run 65f000cf-0067-4321-87fe-bf0e5454fb2b
+{
+  "outcome": "blocked",
+  "steps": [
+    {
+      "step": "candidate",
+      "passed": false,
+      "reason": "1 open contradiction(s) block entry",
+      "contradictions": [
+        "cd97dda7-b296-451b-8313-68ccd3fa3c9d"
+      ]
+    }
+  ],
+  "reasons": [
+    "open contradiction"
+  ],
+  "promotionRunId": "f2e35144-f849-4d17-8c0c-d8d65d59dcbc"
+}
+
+$ pnpm gate queue
+[
+  {
+    "approval_id": "f64ddef7-fc97-405a-a0e0-a28593d40a17",
+    "item_type": "knowledge_candidate",
+    "item_id": "eacf693c-f97a-48b1-a204-d2541e5bddaa",
+    "requested_at": "2026-09-24T11:57:56.351Z",
+    "gate_reasons": [
+      "experiment not validated",
+      "confidence 0.608 below 0.8"
+    ],
+    "target_slug": "x3lius-voice-conversion-model",
+    "confidence": 0.608
+  }
+]
+
+# Approval leg on a throwaway clone of the dev DB (xyp_proof_06d). On the dev DB the item stays pending: the decision is the operator's.
+
+$ XYP_DATABASE_URL=…/xyp_proof_06d pnpm gate decide f64ddef7-fc97-405a-a0e0-a28593d40a17 approve "proof:claude-session" "…"
+{
+  "approval": "approved",
+  "gate": {
+    "outcome": "promoted",
+    "steps": [
+      {
+        "step": "candidate",
+        "passed": true,
+        "reason": "x3lius-voice-conversion-model (pending_approval): no open contradictions",
+        "contradictions": []
+      },
+      {
+        "step": "source-verification",
+        "passed": true,
+        "reason": "1 source(s), reliability 0.9–0.9, oldest retrieved 0 day(s) ago (limit 180)",
+        "sources": [
+          {
+            "id": "191a37c6-8502-4433-bbe8-0f36a9721f4a",
+            "kind": "ingested",
+            "reliability": 0.9,
+            "age_days": 0
+          }
+        ]
+      },
+      {
+        "step": "model-version-tagging",
+        "passed": true,
+        "reason": "tagged model-agnostic; finding and 1 evidence row(s) agree",
+        "model_tag": "model-agnostic"
+      },
+      {
+        "step": "controlled-test",
+        "passed": false,
+        "reason": "no experiment designed for this candidate",
+        "experiment_id": null,
+        "scored_by": []
+      },
+      {
+        "step": "evaluation",
+        "passed": false,
+        "reason": "nothing to evaluate: controlled test not validated",
+        "means": null
+      },
+      {
+        "step": "confidence-assignment",
+        "passed": false,
+        "reason": "finding confidence 0.608 (auto-approve threshold 0.8)",
+        "confidence": 0.608,
+        "confidence_inputs": {
+          "formula": "mean(confidence × reliability) × min(1, 0.5 + 0.25k)",
+          "support": [
+            0.81
+          ],
+          "mean_support": 0.81,
+          "independent_sources": 1,
+          "corroboration_factor": 0.75
+        }
+      },
+      {
+        "step": "validated-rule",
+        "passed": true,
+        "reason": "operator proof:claude-session approved over [experiment not validated; confidence 0.608 below 0.8]: Proof run on a clone: the claim is quoted verbatim from the operator-authored build guide.",
+        "approval_id": "f64ddef7-fc97-405a-a0e0-a28593d40a17"
+      },
+      {
+        "step": "canonical-write",
+        "passed": true,
+        "reason": "appended x3lius-voice-conversion-model v1 (+ module records-validated-rules v1) with knowledge_versions history",
+        "canonical_prompt_id": "590ee37b-517c-4d75-ba0c-737ceb1835be",
+        "version": 1,
+        "module_ids_created": [
+          "817f4900-7617-496c-a516-a8325b603cef"
+        ]
+      },
+      {
+        "step": "propagation",
+        "passed": true,
+        "reason": "regression enqueued (retrieval, contradiction-guard); Context Engine generation changes with this write; embedding pending (pnpm embed); skill wiring is Phase 7",
+        "regression": [
+          "retrieval",
+          "contradiction-guard"
+        ]
+      }
+    ],
+    "reasons": [
+      "experiment not validated",
+      "confidence 0.608 below 0.8"
+    ],
+    "promotionRunId": "8f9a3c23-dba3-47f8-95ec-ad072d0732a5",
+    "approvalId": "f64ddef7-fc97-405a-a0e0-a28593d40a17",
+    "canonicalPromptId": "590ee37b-517c-4d75-ba0c-737ceb1835be",
+    "version": 1,
+    "embedded": {
+      "model": "Supabase/gte-small",
+      "canonical_prompts": {
+        "embedded": 1,
+        "skipped": 32,
+        "truncated": 0
+      },
+      "sources": {
+        "embedded": 0,
+        "skipped": 1,
+        "truncated": 0
+      }
+    }
+  }
+}
+
+# Canonical row, history row, run record, regression queue (clone)
+             slug              | version | promoted_via |   model_tag    |                                                claims                                                | embedded 
+-------------------------------+---------+--------------+----------------+------------------------------------------------------------------------------------------------------+----------
+ x3lius-voice-conversion-model |       1 | gate         | model-agnostic | [{"topic": "x3lius.voice-conversion-model", "value": "rvc-applio", "model_scope": "model-agnostic"}] | t
+(1 row)
+
+  canonical_table  | version | promoted_via | mode  |       approver       | has_candidate | outcome  
+-------------------+---------+--------------+-------+----------------------+---------------+----------
+ canonical_prompts |       1 | gate         | human | proof:claude-session | t             | promoted
+ modules           |       1 | gate         | human | proof:claude-session | t             | promoted
+(2 rows)
+
+ outcome  | steps |        kind         | status  
+----------+-------+---------------------+---------
+ promoted |     9 | contradiction-guard | pending
+ promoted |     9 | retrieval           | pending
+(2 rows)
+
+  status  
+----------
+ promoted
+(1 row)
+
+
+$ pnpm context "Which voice conversion model does X3LIUS use?"   (clone — the promoted rule is retrievable)
+query: Which voice conversion model does X3LIUS use?
+model: Supabase/gte-small  cache: miss  generation: 33@2026-09-24 11:58:17.571966+00|20@2026-09-24 11:58:17.178868+00|1@2026-09-24 07:57:26.682722+00|69@2026-09-24 11:35:58.115007+00
+
+#1  0.9586  canonical_prompts:x3lius-voice-conversion-model  [RECORDS]
+    row:    canonical_prompts.id = 590ee37b-517c-4d75-ba0c-737ceb1835be
+    source: none
+    why:    vector similarity 0.9586
+
+#2  0.8548  canonical_prompts:phase-10-meta-prompt  [RECORDS]
+    row:    canonical_prompts.id = 2b3c9a2b-1b16-486f-8dc3-a3a0ff290294
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8548
+
+#3  0.8431  sources:e0d7012b-14a3-4894-9765-eb6c3fe3e3b1  [-]
+    row:    sources.id = e0d7012b-14a3-4894-9765-eb6c3fe3e3b1
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8431; derived_from (out) from phase-10-meta-prompt: 0.8548 x 0.5 via relations:b5464bfa-30b0-4210-821e-e82c1dbc263c; derived_from (out) from phase-7-meta-prompt: 0.8377 x 0.5 via relations:0275a37d-ce69-4bec-bef2-952da3384e4c; derived_from (out) from phase-17-meta-prompt: 0.8048 x 0.5 via relations:f26cb7fb-c29f-4e3a-ac31-3cddae6b2328; derived_from (out) from phase-13-meta-prompt: 0.7998 x 0.5 via relations:262a552e-26e2-45ed-9f29-8f7bd49710cc; derived_from (out) from phase-8-meta-prompt: 0.7966 x 0.5 via relations:f82f2597-6691-4f92-8946-79d0e88fd7ab; derived_from (out) from phase-8-meta-prompt: 0.7966 x 0.5 via relations:f393f7e0-dedc-47f2-95ce-a5265910c7ec
+
+#4  0.8377  canonical_prompts:phase-7-meta-prompt  [RECORDS]
+    row:    canonical_prompts.id = 5c416dac-a335-41ef-9fc8-3d6cabec6c78
+    source: XYP3RN_Agentic_OS_Build_Sequence.pdf (e0d7012b-14a3-4894-9765-eb6c3fe3e3b1)
+    why:    vector similarity 0.8377
+
+#5  0.8048  canonical_prompts:phase-17-meta-prompt  [CORE]
+    row:    canonical_prompts.id = f66659c6-6cd7-40bf-bf7e-74353fd7ee59
+
+# The clone was dropped afterwards. On the dev DB approval f64ddef7-fc97-405a-a0e0-a28593d40a17 is still pending.
+
+================================================================================
+Addendum (2026-09-24, later): the operator's decision on the dev DB
+# The approval above was left pending for the operator. The operator approved it in chat;
+# Claude executed the decision with the operator command, on the dev DB itself (no clone).
+
+$ pnpm gate decide f64ddef7-fc97-405a-a0e0-a28593d40a17 approve "operator:BLGofficial (approved in chat; executed by Claude session)" "…"
+→ approval: approved; gate outcome: promoted; x3lius-voice-conversion-model v1 in records-validated-rules; 9 steps; embedded 1
+             slug              | version | promoted_via |         module          | mode  |                              approver                               | outcome  | steps 
+-------------------------------+---------+--------------+-------------------------+-------+---------------------------------------------------------------------+----------+-------
+ x3lius-voice-conversion-model |       1 | gate         | records-validated-rules | human | operator:BLGofficial (approved in chat; executed by Claude session) | promoted |     9
+(1 row)
+
+$ pnpm context "Which voice conversion model does X3LIUS use?"
+
+#1  0.9586  canonical_prompts:x3lius-voice-conversion-model  [RECORDS]
+    row:    canonical_prompts.id = 2c9587f8-d5e1-491b-8e28-451ffc487448
+    source: none
+    why:    vector similarity 0.9586

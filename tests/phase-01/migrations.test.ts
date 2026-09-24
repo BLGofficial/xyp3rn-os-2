@@ -98,13 +98,15 @@ describe('up / down', () => {
   it('is idempotent and reversible, round-tripping to an identical schema', async () => {
     const migrations = plan();
 
-    expect(await migrateUp(db.sql, migrations)).toHaveLength(migrations.length);
-    const first = await snapshot(db.sql);
-    expect(first.columns.length).toBeGreaterThan(0);
+    // The Phase 1 pair alone (canonical base + commented stub) must create no research table.
+    await migrateUp(db.sql, migrations.slice(0, 2));
     for (const t of RESEARCH_TABLES) {
       const [r] = await db.sql<{ reg: string | null }[]>`select to_regclass(${`public.${t}`})::text as reg`;
-      expect(r!.reg, `${t} must not exist before Phase 6`).toBeNull();
+      expect(r!.reg, `${t} must not exist after the Phase 1 stub`).toBeNull();
     }
+    expect(await migrateUp(db.sql, migrations)).toHaveLength(migrations.length - 2);
+    const first = await snapshot(db.sql);
+    expect(first.columns.length).toBeGreaterThan(0);
 
     // Idempotent: re-running every up file raw (bypassing the tracker) changes nothing.
     for (const m of migrations) await db.sql.unsafe(readFileSync(m.upPath, 'utf8'));
