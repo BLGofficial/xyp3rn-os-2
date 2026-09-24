@@ -8,7 +8,7 @@ import { parseModelRef, PROVIDERS } from '../../core/llm/providers.ts';
 import { createLlmRunner } from '../../core/llm/runner.ts';
 import { dispatch, type DispatchDeps } from '../../core/orchestrator/dispatch.ts';
 import { parseScope } from '../../core/orchestrator/scope-select.ts';
-import { HANDLERS } from '../../core/runtime/handlers.ts';
+import { BUILT_SUBDOMAINS, HANDLERS } from '../../core/runtime/handlers.ts';
 import { LLM_PROGRAMS } from '../../core/runtime/programs.ts';
 import { createRuntimeTools } from '../../core/runtime/tools.ts';
 import { ingestSource } from '../../knowledge/ingestion/ingest.ts';
@@ -190,8 +190,8 @@ describe('registry: three Creative agents replace their stubs under the same nam
   });
 
   it('every sub-domain no phase has built yet stays a read-only Knowledge stub; the registry validates', () => {
-    const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !CREATIVE_SUBDOMAINS.includes(s));
-    expect(stubs.length + CREATIVE_SUBDOMAINS.length).toBe(10);
+    const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !BUILT_SUBDOMAINS.includes(s));
+    expect(stubs.length + BUILT_SUBDOMAINS.length).toBe(10);
     for (const s of stubs) expect(registry.get(s)).toMatchObject({ class: 'Knowledge', model: 'none' });
     expect(registry.validateAll()).toEqual([]);
   });

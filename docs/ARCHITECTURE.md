@@ -237,3 +237,19 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
   - On a hit, that one section is asked for once more, with the words named. Still mixed means the run fails, naming the section.
   - Every creative prompt also asks for one alphabet per word.
 - Switching script between words is untouched: which languages a line uses is canonical knowledge.
+
+**F23. Vocal DNA is one canonical row with many readers.** DECIDED (user, Phase 10).
+- The X3LIUS vocal signature is operator-authored first-party data in `records/x3lius/vocal-dna.yaml` (`xyp-vocal-dna/v1`).
+  - It holds tone, register, delivery and ad-libs as lists of descriptors, plus the RVC/Applio model and the settings actually used.
+  - It is admitted through the gate's first-party path into the manifest's `x3lius-vocal-dna` module, never redeclared. A change is a re-ingest and becomes a new version in `knowledge_versions`.
+- Its claims are the interface. `x3lius.vocal.{tone,register,delivery,adlibs}` are model-agnostic; `x3lius.vocal.rvc` is scoped `rvc`.
+- Readers:
+  - Every creative agent gets the attributes (the Suno formula included), through the claims and the row's module.
+  - The RVC step (`x3lius-rvc-post`) and the Vocal DNA agent read through one reader (`records/x3lius/vocal-dna/read.ts`). It requires exactly one row with all five claims.
+  - Nobody keeps a copy, so a new version reaches every reader at once.
+- Tool scoping, which extends F20:
+  - A creative agent admits only model-agnostic knowledge by default.
+  - The Suno formula admits model-agnostic knowledge plus its own `suno-<v>`.
+  - So knowledge scoped to one tool (Suno versions, the RVC settings) reaches only the agents that target it.
+- The ingestion writer lets a document place its prompts in a module another document owns, using that module's current version.
+- No value is defaulted: an RVC setting the file doesn't state is listed as `unset`, and the local tool's defaults apply.

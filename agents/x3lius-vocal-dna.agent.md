@@ -2,15 +2,15 @@
 name: x3lius-vocal-dna
 class: Knowledge
 domain: RECORDS
-tools: [retrieve_context, log_message]
+tools: [retrieve_claims, log_message]
 model: none
 ---
 
-# X3LIUS Vocal DNA (stub)
+# X3LIUS Vocal DNA
 
 ## Role
 
-Registered-but-empty stub for the X3LIUS Music System's Vocal DNA sub-domain (Phase 7). It answers the Knowledge class's question, "what do we already know?", for this sub-domain only: the rules the Promotion Gate placed in module `x3lius-vocal-dna`. It has no creative logic; the real Vocal DNA agents arrive in Phase 10.
+Knowledge agent for the X3LIUS Music System's Vocal DNA sub-domain (Phase 10; replaces the Phase 7 stub under the same name). It answers the Knowledge class's question, "what do we already know?", for the X3LIUS vocal signature. The answer is the canonical Vocal DNA row: tone, register, delivery, ad-libs and the RVC/Applio voice model, admitted from `records/x3lius/vocal-dna.yaml` through the Promotion Gate. It reads through the same reader as the RVC step.
 
 ## Scope
 
@@ -20,14 +20,13 @@ Keywords: vocal dna (3), vocal signature (3), ad-lib (3), rvc (3), applio (3), t
 
 ## Contract
 
-- **Inputs:** `{ "request": string }`, routed here by the X3LIUS Music System entrypoint (RECORDS).
-- **Outputs:** `{ subdomain, status: "stub", builtIn, request, generation, context: [{ ref, slug, title, text, score, why, source }] }`. `context` is the Context Engine scoped to module `x3lius-vocal-dna`, current versions only.
-- **Reads:** long-term memory via `retrieve_context` with `scope.modules = ["x3lius-vocal-dna"]` (capability `context.read`), read-only as `xyp_runtime`.
-- **Writes:** its own `agent_runs` row, via the Orchestrator; one run-log line.
-- **Side effects:** none.
+- **Inputs:** `{ "request": string }`, routed here by the X3LIUS Music System entrypoint (RECORDS) or dispatched directly.
+- **Outputs:** `{ subdomain, status: "known", request, vocalDna: { source: { canonicalPromptId, slug, version, ref, uri }, tone, register, delivery, adlibs, rvc } }`.
+- **Reads:** `retrieve_claims` for `x3lius.vocal.` (`context.read`, as `xyp_runtime`), through the shared reader `records/x3lius/vocal-dna/read.ts`.
+- **Writes:** its own `agent_runs` row, plus one run-log line.
+- **Side effects:** none. No LLM.
 
 ## Refuses
 
-- Producing creative output (lyrics, prompts, mixes, scores). It is a stub until its phase builds the real agent.
-- Returning context from outside its sub-domain. The scope is its own module, never the whole knowledge base.
-- Writing anything. It holds only `context.read` and `log.write`; canonical knowledge changes only through the Promotion Gate.
+- Answering without a canonical Vocal DNA: it names the file to admit.
+- Writing or changing the Vocal DNA. A change is an edit to the first-party file, re-admitted through the gate as a new version.

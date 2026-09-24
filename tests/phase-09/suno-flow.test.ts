@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAgentRegistry } from '../../core/agent-registry/registry.ts';
 import { createLlmRunner } from '../../core/llm/runner.ts';
 import { dispatch, type DispatchDeps } from '../../core/orchestrator/dispatch.ts';
-import { HANDLERS } from '../../core/runtime/handlers.ts';
+import { BUILT_SUBDOMAINS, HANDLERS } from '../../core/runtime/handlers.ts';
 import { LLM_PROGRAMS } from '../../core/runtime/programs.ts';
 import { createRuntimeTools } from '../../core/runtime/tools.ts';
 import { loadWorkflow, runWorkflow } from '../../core/workflow-engine/engine.ts';
@@ -21,6 +21,7 @@ import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { loadMusicSystem, MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/music-system.ts';
 import { sectionLabels } from '../../records/x3lius/creative/lyrics.ts';
 import { renderLyrics, SONG_TO_SUNO_WORKFLOW } from '../../records/x3lius/suno/formula.ts';
+import { subdomainStub } from '../../records/x3lius/subdomain-stub.ts';
 import { STUB_SCORER } from '../../records/x3lius/suno/score-hook.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 import { FAKE_KEYS, FAKE_USAGE, fakeBody, fakeModel } from '../helpers/fake-llm.ts';
@@ -149,9 +150,9 @@ describe('registry: Phase 9 agents', () => {
   });
 
   it('every sub-domain not built yet is still a read-only stub; the registry validates', () => {
-    const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !CREATIVE_SUBDOMAINS.includes(s));
-    expect(stubs.sort()).toEqual(['x3lius-arrangement', 'x3lius-evaluation', 'x3lius-mix-master', 'x3lius-production', 'x3lius-vocal-dna']);
-    for (const s of stubs) expect(registry.get(s)).toMatchObject({ class: 'Knowledge', model: 'none' });
+    const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !BUILT_SUBDOMAINS.includes(s));
+    expect(stubs.sort()).toEqual(['x3lius-arrangement', 'x3lius-evaluation', 'x3lius-mix-master', 'x3lius-production']);
+    for (const s of stubs) expect(HANDLERS[s]).toBe(subdomainStub);
     expect(registry.validateAll()).toEqual([]);
   });
 });
@@ -242,7 +243,7 @@ describe('the Suno Prompt-Formula agent (x3lius-suno)', () => {
     // Rules and claims tagged for another Suno version never reach a v4.5 prompt.
     expect(model45.calls[0]!.system).not.toContain(SUNO_RULE);
     expect(model45.calls[0]!.system).not.toContain('suno.limit.style-chars');
-    expect((out(v45) as unknown as { knowledge: { reasons: string[] } }).knowledge.reasons.join('\n')).toMatch(/excluded 3 canonical entries scoped to another Suno version/);
+    expect((out(v45) as unknown as { knowledge: { reasons: string[] } }).knowledge.reasons.join('\n')).toMatch(/excluded 3 canonical entries scoped to another model or tool/);
   });
 });
 

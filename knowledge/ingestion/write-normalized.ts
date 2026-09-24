@@ -100,6 +100,12 @@ export const writeNormalized = async (tx: Queryable, doc: NormalizedDocument, ct
   }
 
   for (const p of doc.prompts) {
+    // A document may place its prompts in a module another document owns (Phase 10: the Vocal DNA
+    // file fills the manifest's x3lius-vocal-dna module without redeclaring it): its current version.
+    if (!moduleIds.has(p.moduleSlug)) {
+      const [current] = await tx<{ id: string }[]>`select id from modules where slug = ${p.moduleSlug} order by version desc limit 1`;
+      if (current) moduleIds.set(p.moduleSlug, current.id);
+    }
     const moduleId = moduleIds.get(p.moduleSlug);
     if (!moduleId) throw new Error(`prompt ${p.slug} references unknown module ${p.moduleSlug}`);
     const [latest] = await tx<{ id: string; version: number; same: boolean }[]>`

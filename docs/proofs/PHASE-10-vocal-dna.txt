@@ -1,0 +1,89 @@
+Phase 10 — Vocal / Artist DNA: proof (2026-09-24)
+Produced with the repo's own commands against the local Supabase-emulating Postgres 16.
+================================================================================
+
+## 0. Status of the guide's deliverables
+# - Schema/data for the Vocal DNA entry: the schema is built (xyp-vocal-dna/v1, section 3). The DATA is not:
+#   the real values (tone, register, delivery, ad-libs, RVC/Applio model and settings) are the operator's, and
+#   the user chose to provide them (no invented values). Until records/x3lius/vocal-dna.yaml exists and is
+#   admitted, the dev DB has no Vocal DNA row (section 4).
+# - Proof both consumers read the same row: tests/phase-10 (section 1), on a [FIXTURE] file admitted into a
+#   throwaway DB only — the formula's prompt cites canonical_prompts:<id>#x3lius.vocal.*, the RVC job spec names
+#   the same id and version, and after a v2 admission both move to v2 together.
+# - 5-bullet handoff for Phase 11: docs/handoffs/PHASE-10.md.
+
+## 1. Tests (tests/phase-10; [FIXTURE] Vocal DNA in a throwaway DB; FAKE model for the formula call)
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > is selected for a Vocal DNA file and only for one 1ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > yields one prompt in the Vocal DNA module, claims per attribute, RVC settings scoped to rvc 4ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses a missing attribute, loudly (never half-normalized) 2ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses an empty list, loudly (never half-normalized) 2ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses a non-string descriptor, loudly (never half-normalized) 1ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses an unknown field, loudly (never half-normalized) 1ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses an unknown RVC setting, loudly (never half-normalized) 2ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses an unknown RVC engine, loudly (never half-normalized) 1ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses no RVC model, loudly (never half-normalized) 1ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses an index rate above 1, loudly (never half-normalized) 2ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses a fractional pitch, loudly (never half-normalized) 3ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses a protect value above 0.5, loudly (never half-normalized) 1ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses a bad date, loudly (never half-normalized) 1ms
+ ✓ tests/phase-10/vocal-dna.test.ts > Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row > refuses a module that is not a slug, loudly (never half-normalized) 1ms
+ ✓ tests/phase-10/vocal-dna.test.ts > the Suno formula and the RVC step read the same canonical row > before any Vocal DNA is admitted, the RVC step refuses and says how to admit it 8ms
+ ✓ tests/phase-10/vocal-dna.test.ts > the Suno formula and the RVC step read the same canonical row > only first-party origin is admitted; third-party material goes through Research Intelligence 6ms
+ ✓ tests/phase-10/vocal-dna.test.ts > the Suno formula and the RVC step read the same canonical row > admission writes one versioned row in the manifest’s Vocal DNA module, with its knowledge_versions entry 46ms
+ ✓ tests/phase-10/vocal-dna.test.ts > the Suno formula and the RVC step read the same canonical row > x3lius-rvc-post (no LLM) outputs the Applio job spec from that row, naming its id and version 11ms
+ ✓ tests/phase-10/vocal-dna.test.ts > the Suno formula and the RVC step read the same canonical row > the Suno formula gets the vocal signature from the same row, and not the RVC settings 91ms
+ ✓ tests/phase-10/vocal-dna.test.ts > the Suno formula and the RVC step read the same canonical row > other creative agents get the vocal signature too, and never the RVC settings 31ms
+ ✓ tests/phase-10/vocal-dna.test.ts > the Suno formula and the RVC step read the same canonical row > x3lius-vocal-dna is no longer a stub: it answers with the same row 10ms
+ ✓ tests/phase-10/vocal-dna.test.ts > the Suno formula and the RVC step read the same canonical row > a vocal-direction change is a new version, and both readers move to it together (no copy to drift) 110ms
+ ✓ tests/phase-10/vocal-dna.test.ts > the Suno formula and the RVC step read the same canonical row > a document may only reference a module that already exists 8ms
+ ✓ tests/phase-10/vocal-dna.test.ts > readVocalDna: one source of truth or nothing > refuses Vocal DNA claims that come from two canonical rows 1ms
+ ✓ tests/phase-10/vocal-dna.test.ts > readVocalDna: one source of truth or nothing > refuses a row missing an attribute 0ms
+ ✓ tests/phase-10/vocal-dna.test.ts > registry: Phase 10 agents > x3lius-rvc-post is a deterministic Execution agent under RECORDS that only reads claims 0ms
+ ✓ tests/phase-10/vocal-dna.test.ts > registry: Phase 10 agents > x3lius-vocal-dna is a built Knowledge agent (Phase 10), no longer the Phase 7 stub 14ms
+# Full suite: 744/744 (48 files); pnpm typecheck clean. Earlier-phase tests updated: the Phase 7/8/9 registry
+# checks now count Vocal DNA as built (BUILT_SUBDOMAINS), and the Phase 7 x3lius-* invariant allows
+# x3lius-rvc-post as a member of the Vocal DNA sub-domain; the Phase 9 exclusion reason reads "scoped to another
+# model or tool".
+
+## 2. Mutations (each applied, run against tests/phase-10, reverted) — 7/7 caught
+# M1 reader accepts claims from two rows            → 1 failed
+# M2 formula admits entries scoped to other tools   → 1 failed
+# M3 creative agents admit tool-scoped entries      → 1 failed
+# M4 writer can't reference an existing module      → 6 failed
+# M5 RVC step fills a default setting               → 1 failed
+# M6 RVC settings leak into the rule text           → 2 failed
+# M7 RVC claim not scoped to rvc                    → 3 failed
+
+## 3. The entry: records/x3lius/vocal-dna.yaml (xyp-vocal-dna/v1), admitted with
+#    pnpm ingest --file records/x3lius/vocal-dna.yaml --origin first_party   (then embed, as for any source)
+# vocal_dna: xyp-vocal-dna/v1
+# artist: X3LIUS
+# date: YYYY-MM-DD
+# module: x3lius-vocal-dna            # the manifest's module; referenced, never redeclared
+# tone: [descriptor, …]               # each a non-empty list of strings
+# register: [descriptor, …]
+# delivery: [descriptor, …]
+# adlibs: [descriptor, …]
+# rvc:
+#   engine: applio | rvc              # required
+#   model: <voice model file/name>    # required
+#   index: <index file>               # optional
+#   pitch: <-24..24, whole semitones> # optional
+#   index_rate: <0..1>                # optional
+#   protect: <0..0.5>                 # optional
+#   f0_method: <e.g. rmvpe>           # optional
+#   rms_mix_rate: <0..1>              # optional
+# → one canonical_prompts row (slug x3lius-vocal-dna, model_tag model-agnostic), structured.claims:
+#   x3lius.vocal.tone | .register | .delivery | .adlibs  (model-agnostic)   x3lius.vocal.rvc (scope rvc)
+#   Rule text (what retrieval returns): the four attributes only; the RVC settings live in their own claim.
+
+## 4. Dev DB, today (no Vocal DNA admitted):
+# pnpm dispatch x3lius-rvc-post '{}'
+1. registry pickup
+   /home/user/xyp3rn-os-2/agents/x3lius-rvc-post.agent.md
+   class=Execution domain=RECORDS tools=[retrieve_claims, log_message] model=none
+2. validateAll(agents/): 0 failure(s)
+3. authorization
+   retrieve_claims: {"allow":true,"capability":"context.read"}
+   log_message: {"allow":true,"capability":"log.write"}
+4. execution: error in 28ms — no canonical Vocal DNA: admit records/x3lius/vocal-dna.yaml (pnpm ingest --file records/x3lius/vocal-dna.yaml --origin first_party)

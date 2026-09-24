@@ -3,7 +3,7 @@ import {
   GENRE_STYLE_SCHEMA_ID, LYRICS_SCHEMA_ID, LYRICS_V1_SCHEMA_ID, SONG_STRUCTURE_SCHEMA_ID, SUNO_PROMPT_LLM_SCHEMA, SUNO_PROMPT_LLM_SCHEMA_ID,
   SUNO_PROMPT_SCHEMA, SUNO_PROMPT_SCHEMA_ID,
 } from '../creative/schemas.ts';
-import { CLAIM_NAMESPACE, VOICE_MODULE, type ContextEntry, type CreativeSpec, type Prepared } from '../creative/types.ts';
+import { CLAIM_NAMESPACE, scopeOf, VOICE_MODULE, type ContextEntry, type CreativeSpec, type Prepared } from '../creative/types.ts';
 
 /**
  * Phase 9 Suno Prompt-Formula (agent x3lius-suno, Creative). Hybrid by user decision:
@@ -43,8 +43,11 @@ const sectionsOf = (a: { readonly schemaId: string; readonly body: unknown }): r
 export const renderLyrics = (artifacts: readonly { readonly schemaId: string; readonly body: unknown }[]): string =>
   artifacts.flatMap(sectionsOf).map((s) => `[${s.label.trim() || s.kind}]\n${s.bars.map((x) => x.text).join('\n')}`).join('\n\n');
 
-/** A `suno-<version>` tag applies only to that version; anything else (model-agnostic, other tools) applies. */
-const appliesTo = (tag: string | null, sunoModel: string): boolean => !tag?.startsWith('suno-') || tag === `suno-${sunoModel}`;
+/**
+ * Model-agnostic entries apply to every Suno version, `suno-<version>` only to that version, and
+ * anything scoped to another tool (e.g. the Vocal DNA's `rvc` settings, Phase 10) never.
+ */
+const appliesTo = (tag: string | null, sunoModel: string): boolean => tag === null || tag === 'model-agnostic' || tag === `suno-${sunoModel}`;
 
 const prepare: CreativeSpec['prepare'] = async (ctx, input) => {
   const sunoModel = typeof input.sunoModel === 'string' ? input.sunoModel.toLowerCase() : '';
@@ -76,7 +79,7 @@ const prepare: CreativeSpec['prepare'] = async (ctx, input) => {
   };
 };
 
-const admit = (e: ContextEntry, p: Prepared): boolean => appliesTo(e.kind === 'rule' ? e.modelTag : e.modelScope, (p.state as SunoState).sunoModel);
+const admit = (e: ContextEntry, p: Prepared): boolean => appliesTo(scopeOf(e), (p.state as SunoState).sunoModel);
 
 const finalize: CreativeSpec['finalize'] = (reply, p, entries) => {
   const s = p.state as SunoState;
@@ -109,7 +112,7 @@ export const SUNO_FORMULA_SPEC: CreativeSpec = {
   claimNamespaces: [CLAIM_NAMESPACE, 'suno.'],
   prepare,
   admit,
-  exclusionReason: 'scoped to another Suno version',
+  exclusionReason: 'scoped to another model or tool',
   finalize,
   // What suno-submitter sends. The lyrics are checked here too, so an older artifact can't pass one on.
   sunoTextPaths: [/^\$\.(title|style|lyrics)$/, /^\$\.excludeStyles\[\d+\]$/],

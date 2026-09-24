@@ -7,7 +7,7 @@ import {
   COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, GENRE_STYLE_SCHEMA, GENRE_STYLE_SCHEMA_ID, SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
 } from './schemas.ts';
 import { mixedScriptWords, type MixedScriptWord } from './script-check.ts';
-import { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE, type ContextEntry, type CreativeSpec, type ModelCall, type Prepared } from './types.ts';
+import { CLAIM_NAMESPACE, isModelAgnostic, MIN_SCOPED_RULES, VOICE_MODULE, type ContextEntry, type CreativeSpec, type ModelCall, type Prepared } from './types.ts';
 
 export { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE } from './types.ts';
 
@@ -134,7 +134,7 @@ const knowledgeReport = (slug: string, modules: readonly string[], perModule: Re
       voice.length > 0
         ? `voice: ${voice.length} claim(s) under ${CLAIM_NAMESPACE}* from outside the sub-domain scope (${topics.join(', ')})`
         : `voice: no canonical claim under ${CLAIM_NAMESPACE}*`,
-      ...(excluded > 0 ? [`excluded ${excluded} canonical ${excluded === 1 ? 'entry' : 'entries'} ${spec.exclusionReason ?? 'that do not apply to this run'}`] : []),
+      ...(excluded > 0 ? [`excluded ${excluded} canonical ${excluded === 1 ? 'entry' : 'entries'} ${spec.exclusionReason ?? (spec.admit ? 'that do not apply to this run' : 'scoped to a specific model or tool')}`] : []),
       ...(sparse
         ? [`fewer than ${MIN_SCOPED_RULES} scoped rules: expect output close to generic. Promote rules tagged ${modules.filter((m) => m !== slug).length > 0 ? `${slug} or ${modules.filter((m) => m !== slug).join(' / ')}` : slug} through the gate to change that.`]
         : []),
@@ -183,7 +183,7 @@ const creativeProgram = (slug: string): LlmProgram => {
       }
     }
 
-    const kept = pulled.filter((p) => spec.admit?.(p.entry, prepared) ?? true);
+    const kept = pulled.filter((p) => (spec.admit ? spec.admit(p.entry, prepared) : isModelAgnostic(p.entry)));
     const entries = kept.map((p) => p.entry);
     const perModule = Object.fromEntries(modules.map((m) => [m, kept.filter((p) => p.module === m).length]));
     const knowledge = knowledgeReport(slug, modules, perModule, entries, pulled.length - kept.length, spec);
