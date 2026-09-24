@@ -13,6 +13,7 @@ export const CAPABILITIES = [
   'candidate.propose',
   'plan.write',
   'artifact.write',
+  'artifact.read',
   'critique.write',
   'external.execute',
   'governance.flag',
@@ -34,6 +35,9 @@ export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass
   'candidate.propose': ['Research'],
   'plan.write': ['Planning'],
   'artifact.write': ['Creative', 'Revision'],
+  // Phase 9: read a creative artifact version by id (the formula reads Phase 8 artifacts; the
+  // Critic, Revision and the submitter read the version they act on; Governance audits).
+  'artifact.read': ['Creative', 'Critic', 'Revision', 'Execution', 'Governance'],
   'critique.write': ['Critic'],
   'external.execute': ['Execution'],
   'governance.flag': ['Governance'],

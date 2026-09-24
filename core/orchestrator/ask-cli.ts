@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { createAgentRegistry } from '../agent-registry/registry.ts';
 import { connect } from '../db/client.ts';
 import { HANDLERS } from '../runtime/handlers.ts';
+import { createRuntimeLlmRunner } from '../runtime/programs.ts';
 import { createRuntimeTools } from '../runtime/tools.ts';
 import { loadWorkflow, runWorkflow } from '../workflow-engine/engine.ts';
 import { runResearch } from '../../research-intelligence/entrypoint.ts';
@@ -29,7 +30,7 @@ if (plan.action === 'hold' || plan.action === 'clarify') {
 const sql = connect(undefined, { max: 3 });
 try {
   const registry = createAgentRegistry({ dir: join(import.meta.dirname, '..', '..', 'agents') });
-  const deps = { sql, registry, tools: createRuntimeTools({ sql }), handlers: HANDLERS };
+  const deps = { sql, registry, tools: createRuntimeTools({ sql }), handlers: HANDLERS, llmRunner: createRuntimeLlmRunner() };
   if (plan.action === 'run-service' && plan.service === 'run-research') {
     const r = await runResearch(deps, { question: request, projectSlug });
     console.log(JSON.stringify(r, null, 2));

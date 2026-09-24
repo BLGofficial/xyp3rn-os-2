@@ -1,4 +1,5 @@
 import { stringify as toYaml } from 'yaml';
+import { LLM_TIMEOUT_MS } from '../../core/llm/runner.ts';
 import { compileWorkflow, runWorkflow, type EngineDeps } from '../../core/workflow-engine/engine.ts';
 import type { Selection } from '../../core/orchestrator/scope-select.ts';
 import { MUSIC_SYSTEM_SERVICE, selectSubdomains } from './music-system.ts';
@@ -43,7 +44,8 @@ export const runMusicSystem = async (
     output: Object.fromEntries(selected.map((name) => [name, { $from: `steps.${name}.output` }])),
   };
   const wf = compileWorkflow(toYaml(spec), deps.registry, `generated:${MUSIC_SYSTEM_SERVICE}`);
-  const r = await runWorkflow(deps, wf, { request: input.request }, options.log ? { log: options.log } : {});
+  // Phase 8: Songwriting/Lyrics/Composition steps are LLM calls; the stubs finish well inside it.
+  const r = await runWorkflow(deps, wf, { request: input.request }, { timeoutMs: LLM_TIMEOUT_MS, ...(options.log ? { log: options.log } : {}) });
   return r.status === 'error'
     ? { status: 'error', selected, selection, workflowRunId: r.workflowRunId, outputs: {}, reason: `sub-domain step ${r.failedStep} failed: ${r.error}` }
     : { status: 'success', selected, selection, workflowRunId: r.workflowRunId, outputs: r.output as Record<string, unknown> };

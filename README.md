@@ -27,6 +27,9 @@ pnpm route "your request"       # domain routing decision with evidence
 pnpm ask "your request"         # front door: route → plan → run the domain entrypoint (research, X3LIUS sub-domains)
 pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_party   # Phase 7: X3LIUS module + 10 sub-domains via the gate
 pnpm research <cmd> '<json>'    # 6C engines by hand: observation, cite, finding, candidate, eligibility, resolve, experiment:*
+pnpm dispatch x3lius-lyrics '{"request":"..."}'   # Phase 8 Creative agent (also x3lius-songwriting, x3lius-composition); needs the key for its model's provider
+pnpm workflow records/x3lius/song-to-suno.workflow.yaml '{"request":"...","sunoModel":"v5"}'   # Phase 9: brief → Suno-ready prompt artifact
+pnpm dispatch suno-submitter '{"submit":{"formulaArtifactId":"<id>","adapter":"manual"}}'       # Phase 9: submit (manual | sunoapi); then {"capture":{...}}
 pnpm gate run <candidateId>     # 6D Promotion Gate: the nine-step state machine, the only canonical writer
 pnpm gate queue                 # pending human approvals with the gate's reasons
 pnpm gate decide <approvalId> approve|reject "<approver>" "<reason>"   # operator decision, then re-run the gate
@@ -45,4 +48,15 @@ Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 - [x] Phase 3: Retrieval / context engine
 - [x] Phase 4: Agent runtime + registry (4A–4E)
 - [x] Phase 5: Workflow / orchestration engine
-- [ ] Phase 6: AI Music Research Intelligence (6A–6D)
+- [x] Phase 6: AI Music Research Intelligence (6A–6D; the 20 specialists still need an LLM program to run)
+- [x] Phase 7: X3LIUS Music Intelligence (module + ten sub-domains, scoped context path)
+- [x] Phase 8: Songwriting + Lyrics agents, plus Composition (F15). Built; the live-verse proof is pending a provider key ([handoff](docs/handoffs/PHASE-08.md))
+- [x] Phase 9: Suno Generation System, plus Genre/Style (F15). Built; the live prompt-assembly proof is pending a provider key ([handoff](docs/handoffs/PHASE-09.md))
+- [ ] Phase 10: Vocal / Artist DNA
+- [ ] Phase 11: Production / Mix / Master
+- [ ] Phase 12: Critic + Revision System
+- [ ] Phase 13: XYP3RN Records
+- [ ] Phase 14: XYP3RN Tech
+- [ ] Phase 15: Legal / Governance
+- [ ] Phase 16: UI / Observability / Graph View / Command Center (16A–16D)
+- [ ] Phase 17: End-to-End Validation

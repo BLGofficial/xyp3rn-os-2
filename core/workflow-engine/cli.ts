@@ -1,7 +1,9 @@
 import { join } from 'node:path';
 import { createAgentRegistry } from '../agent-registry/registry.ts';
 import { connect } from '../db/client.ts';
+import { LLM_TIMEOUT_MS } from '../llm/runner.ts';
 import { HANDLERS } from '../runtime/handlers.ts';
+import { createRuntimeLlmRunner } from '../runtime/programs.ts';
 import { createRuntimeTools } from '../runtime/tools.ts';
 import { loadWorkflow, runWorkflow } from './engine.ts';
 
@@ -20,7 +22,10 @@ console.log(`spec: ${wf.name} (${wf.path}, sha256 ${wf.sha256.slice(0, 12)}…) 
 
 const sql = connect(undefined, { max: 3 });
 try {
-  const run = await runWorkflow({ sql, registry, tools: createRuntimeTools({ sql }), handlers: HANDLERS }, wf, JSON.parse(rawInput));
+  // A workflow with any LLM-backed step gets the LLM per-step timeout (dispatch's 30s default is for deterministic steps).
+  const llmSteps = wf.steps.some((s) => registry.get(s.agent)?.model !== 'none');
+  const run = await runWorkflow({ sql, registry, tools: createRuntimeTools({ sql }), handlers: HANDLERS, llmRunner: createRuntimeLlmRunner() }, wf, JSON.parse(rawInput),
+    llmSteps ? { timeoutMs: LLM_TIMEOUT_MS } : {});
   console.log(`status: ${run.status}${run.failedStep ? ` (failed at ${run.failedStep}: ${run.error})` : ''}`);
   console.log(`output:\n${JSON.stringify(run.output ?? null, null, 2)}`);
   const [w] = await sql`select id, workflow_name, status, failed_step, skipped_steps, created_at, completed_at from workflow_runs where id = ${run.workflowRunId}`;

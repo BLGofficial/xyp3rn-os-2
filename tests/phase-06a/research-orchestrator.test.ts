@@ -10,8 +10,8 @@ import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 
 // Phase 6A proof: the Research Orchestrator activates only relevant specialists and the runtime
 // dispatches exactly those through the Workflow Engine, every run linked to the research_run.
-// Specialists are LLM agents; with no ANTHROPIC_API_KEY they must fail loudly — and the
-// research run must record that, not pretend.
+// Specialists are LLM agents; with no LLM runner (Phase 8: nor a program for them) they must fail
+// loudly — and the research run must record that, not pretend.
 
 const specialist = (name: string, sentence: string, keywords: string) => `---
 name: ${name}
@@ -66,7 +66,7 @@ describe('runResearch', () => {
     // Selection order = score desc (vocal 5, suno 3); that is also the dispatch order.
     expect(r.selected).toEqual(['test-vocal-specialist', 'test-suno-specialist']);
     expect(r.status).toBe('error');
-    expect(r.error).toMatch(/LLM runner unavailable: ANTHROPIC_API_KEY is not set/);
+    expect(r.error).toMatch(/LLM runner unavailable: no LLM runner configured/);
 
     const [run] = await db.sql<{ status: string; selected_specialists: string[]; workflow_run_id: string | null; selection: { notSelected: { name: string }[] } }[]>`
       select status::text, selected_specialists, workflow_run_id, selection from research_runs where id = ${r.researchRunId}`;

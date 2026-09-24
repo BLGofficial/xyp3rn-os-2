@@ -1,6 +1,6 @@
 # Schema
 
-Status: through Phase 7 (X3LIUS module-scoped retrieval) + F16 (current versions on the global path). The ERD shows the Phase 1 canonical base; later phases are described in their sections below. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
+Status: through Phase 9 (Suno submissions, takes, stub scoring) + F16 (current versions on the global path). The ERD shows the Phase 1 canonical base; later phases are described in their sections below. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
 
 ## ERD
 
@@ -255,6 +255,46 @@ Migration `20260924160000_subdomain_scope.sql`:
 ## F16 (pre-Phase 8): current versions on the global path
 
 Migration `20260924170000_global_current_versions.sql` redefines `xyp_match_knowledge`. Canonical prompts are searched over current versions only, as an exact scan of a MATERIALIZED set, the same as the scoped path. Sources are unversioned and are unchanged, still using HNSW. Exact cosine over a few thousand 384-dim rows takes milliseconds. Revisit with pgvector ≥ 0.8 iterative scans if the corpus grows large.
+
+## Phase 8 additions: `creative_artifacts`, `xyp_creative`, claim reads
+
+Migration `20260924180000_creative_artifacts.sql`.
+
+- **`creative_artifacts`:** the Creative class's only output (capability `artifact.write`, tool `write_artifact`). One row is one version of a structured artifact:
+  - `schema_id`: versioned, e.g. `x3lius.lyrics/v1`;
+  - `body`: schema-validated JSON;
+  - `context_refs`: the canonical refs sent to the model;
+  - `knowledge`: the sparsity report;
+  - `model`: the frontmatter ref;
+  - `agent_run_id` (FK), `brief`.
+- **Versioning is derived, not trusted:**
+  - A `before insert` trigger sets `lineage_id`/`version` from `parent_id`: v1 starts its own lineage, and a child is its parent's version + 1.
+  - A child must keep its parent's `schema_id` (23514).
+  - `unique (lineage_id, version)` makes history linear: a second child of the same parent is refused (23505).
+- **Immutable for every role:**
+  - A `before update or delete` trigger raises 55000, even for the table owner.
+  - `xyp_creative` holds only `INSERT`/`SELECT`.
+  - `service_role` holds only `SELECT`.
+  - `anon`/`authenticated` hold nothing, and RLS is on.
+- **`xyp_creative`:** a new component role. It writes artifacts and cannot touch canonical tables or `knowledge_candidates` (42501, `tests/phase-08/creative-artifacts.test.ts`).
+- **Claim reads:** `xyp_runtime` gains `SELECT` on the `canonical_claims` view (6C, current versions only), so the Context Engine can look claims up by topic (`readClaims`, tool `retrieve_claims`, capability `context.read`).
+
+## Phase 9 additions: the Suno trail, `xyp_execution`, `artifact.read`
+
+Migration `20260924190000_suno_generation.sql`.
+
+- **`suno_submissions`:** one row per accepted submission:
+  - `formula_artifact_id` (FK to a `x3lius.suno-prompt/v1` artifact);
+  - `agent_run_id`;
+  - `adapter` (`manual` | `sunoapi`), and `provider_task_id` is null exactly when manual;
+  - `suno_model`;
+  - `prompt`: the exact `{title, style, excludeStyles, lyrics}` sent, copied from the artifact;
+  - `provider_response`.
+- **`suno_takes`:** takes per submission: an `https` `audio_url`, unique per submission (re-capture is a no-op), plus `provider_take_id`, `title`, `duration_seconds > 0` and `metadata`.
+- **`take_scores`:** the scoring hook. `check (is_stub = (score is null))`: a stub row marks where the Phase 12 Critic plugs in and never carries a number; a real score always does.
+- **Append-only:** all three refuse UPDATE/DELETE for every role, owner included (55000).
+- **`xyp_execution`:** a new role. It may INSERT/SELECT the three tables and SELECT `creative_artifacts` (to read the artifact it submits). It cannot write artifacts or canonical knowledge (42501).
+- **`artifact.read`:** a new capability for Creative, Critic, Revision, Execution and Governance. `xyp_runtime` gains SELECT on `creative_artifacts` for the `read_artifact` tool.
 
 ## Adding a table (checklist, every phase)
 

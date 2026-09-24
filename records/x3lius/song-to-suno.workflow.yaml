@@ -1,0 +1,32 @@
+name: x3lius-song-to-suno
+description: >-
+  Phase 9 end to end: from one brief to a Suno-ready prompt. Songwriting, Lyrics and Genre/Style
+  each write a versioned artifact from canonical rules; the Suno Prompt-Formula reads those
+  artifacts by id and writes the x3lius.suno-prompt/v1 artifact. Submitting it is a separate,
+  explicit Execution step (suno-submitter), never part of generation.
+input:
+  required: [request, sunoModel]
+output: { $from: steps.formula.output }
+steps:
+  - id: structure
+    agent: x3lius-songwriting
+    input:
+      request: { $from: input.request }
+  - id: lyrics
+    agent: x3lius-lyrics
+    input:
+      request: { $from: input.request }
+  - id: genre
+    agent: x3lius-genre-style
+    input:
+      request: { $from: input.request }
+  - id: formula
+    agent: x3lius-suno
+    dependsOn: [structure, lyrics, genre]
+    input:
+      request: { $from: input.request }
+      sunoModel: { $from: input.sunoModel }
+      lyricsArtifactIds:
+        - { $from: steps.lyrics.output.artifact.id }
+      structureArtifactId: { $from: steps.structure.output.artifact.id }
+      genreStyleArtifactId: { $from: steps.genre.output.artifact.id }

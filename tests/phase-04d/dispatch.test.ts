@@ -125,7 +125,7 @@ describe('registry / executor failures are logged, never thrown past the caller'
     ['ghost-agent', /^agent not in registry: ghost-agent$/],
     ['classless', /^agent failed registry validation: .*classless\.agent\.md: missing required field: class$/],
     ['no-handler', /^no handler registered for deterministic agent no-handler$/],
-    ['llm-agent', /^LLM runner unavailable: ANTHROPIC_API_KEY is not set \(agent llm-agent uses model claude-sonnet-5\)$/],
+    ['llm-agent', /^LLM runner unavailable: no LLM runner configured \(agent llm-agent uses model claude-sonnet-5\)$/],
     ['thrower', /^handler exploded$/],
   ])('%s → error row with a specific reason', async (name, reason) => {
     const r = await dispatch(deps(), name, {});

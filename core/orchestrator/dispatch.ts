@@ -35,7 +35,7 @@ export type AgentContext = {
 export type AgentHandler = (ctx: AgentContext, input: unknown) => Promise<{ readonly output: unknown; readonly tokensUsed?: number }>;
 /** Deterministic (`model: none`) agents, keyed by agent name. Checked in, typechecked. */
 export type HandlerMap = Readonly<Record<string, AgentHandler>>;
-/** Executes any LLM-backed agent from its definition. Absent until ANTHROPIC_API_KEY exists. */
+/** Executes any LLM-backed agent from its definition (Phase 8: core/llm/runner.ts, provider keys read per call). */
 export type LlmRunner = AgentHandler;
 
 export type DispatchDeps = {
@@ -111,7 +111,7 @@ export const dispatch = async (
       throw new Error(
         agent.model === 'none'
           ? `no handler registered for deterministic agent ${agent.name}`
-          : `LLM runner unavailable: ANTHROPIC_API_KEY is not set (agent ${agent.name} uses model ${agent.model})`,
+          : `LLM runner unavailable: no LLM runner configured (agent ${agent.name} uses model ${agent.model})`,
       );
     }
 

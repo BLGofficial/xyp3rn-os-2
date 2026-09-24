@@ -24,6 +24,8 @@ export type ContextItem = {
   /** Full row text (prompt body, module description, source title) for downstream agents. */
   readonly text: string;
   readonly domain: Domain | null;
+  /** canonical_prompts.model_tag (e.g. `suno-v5`), so a caller can keep rules to its model version (Phase 9); null elsewhere. */
+  readonly modelTag: string | null;
   readonly score: number;
   readonly reasons: readonly Reason[];
   /** Human-readable form of `reasons`. */
@@ -55,8 +57,25 @@ export type ContextBundle = {
   };
 };
 
+/** One current canonical claim (`canonical_prompts.structured.claims[]`), with the row it lives in. */
+export type ClaimItem = {
+  readonly ref: EntityRef;
+  readonly slug: string;
+  readonly version: number;
+  readonly title: string;
+  readonly module: string;
+  readonly topic: string;
+  readonly value: unknown;
+  readonly modelScope: string;
+  readonly source: { readonly id: string; readonly uri: string } | null;
+};
+
+export type ClaimBundle = { readonly topicPrefix: string; readonly items: readonly ClaimItem[] };
+
 export type ContextEngine = {
   readonly retrieve: (query: string, options?: { readonly limits?: RankLimits; readonly scope?: ContextScope }) => Promise<ContextBundle>;
+  /** Exact lookup of current claims by topic prefix (Phase 8); no vectors involved. */
+  readonly claims: (topicPrefix: string) => Promise<ClaimBundle>;
 };
 
 const RELATION_TABLES: Readonly<Record<string, ContextTable>> = {
@@ -160,22 +179,22 @@ export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine
 
       // Hydrate every ranked ref from its own table — an unresolvable ref is a bug, not a gap.
       const ids = (t: ContextTable) => ranked.items.filter((i) => i.ref.table === t).map((i) => i.ref.id);
-      const rows = new Map<string, { slug: string | null; title: string; text: string; domain: Domain | null; source_id: string | null; source_uri: string | null }>();
-      for (const r of await tx<{ id: string; slug: string; title: string; body: string; domain: Domain; source_id: string | null; uri: string | null }[]>`
-        select cp.id, cp.slug, cp.title, cp.body, m.domain, cp.source_id, s.uri
+      const rows = new Map<string, { slug: string | null; title: string; text: string; domain: Domain | null; model_tag: string | null; source_id: string | null; source_uri: string | null }>();
+      for (const r of await tx<{ id: string; slug: string; title: string; body: string; domain: Domain; model_tag: string | null; source_id: string | null; uri: string | null }[]>`
+        select cp.id, cp.slug, cp.title, cp.body, m.domain, cp.model_tag, cp.source_id, s.uri
         from canonical_prompts cp join modules m on m.id = cp.module_id left join sources s on s.id = cp.source_id
         where cp.id = any(${ids('canonical_prompts')}::uuid[])`) {
-        rows.set(`canonical_prompts:${r.id}`, { slug: r.slug, title: r.title, text: r.body, domain: r.domain, source_id: r.source_id, source_uri: r.uri });
+        rows.set(`canonical_prompts:${r.id}`, { slug: r.slug, title: r.title, text: r.body, domain: r.domain, model_tag: r.model_tag, source_id: r.source_id, source_uri: r.uri });
       }
       for (const r of await tx<{ id: string; slug: string; title: string; description: string | null; domain: Domain; source_id: string | null; uri: string | null }[]>`
         select m.id, m.slug, m.title, m.description, m.domain, m.source_id, s.uri
         from modules m left join sources s on s.id = m.source_id
         where m.id = any(${ids('modules')}::uuid[])`) {
-        rows.set(`modules:${r.id}`, { slug: r.slug, title: r.title, text: r.description ?? '', domain: r.domain, source_id: r.source_id, source_uri: r.uri });
+        rows.set(`modules:${r.id}`, { slug: r.slug, title: r.title, text: r.description ?? '', domain: r.domain, model_tag: null, source_id: r.source_id, source_uri: r.uri });
       }
       for (const r of await tx<{ id: string; title: string; uri: string }[]>`
         select id, title, uri from sources where id = any(${ids('sources')}::uuid[])`) {
-        rows.set(`sources:${r.id}`, { slug: null, title: r.title, text: r.title, domain: null, source_id: r.id, source_uri: r.uri });
+        rows.set(`sources:${r.id}`, { slug: null, title: r.title, text: r.title, domain: null, model_tag: null, source_id: r.id, source_uri: r.uri });
       }
 
       const slugOf = (ref: EntityRef) => {
@@ -192,6 +211,7 @@ export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine
           snippet: row.text.length > SNIPPET_CHARS ? `${row.text.slice(0, SNIPPET_CHARS)}…` : row.text,
           text: row.text,
           domain: row.domain,
+          modelTag: row.model_tag,
           score: it.score,
           reasons: it.reasons,
           why: it.reasons.map((r) => describe(r, slugOf)).join('; '),
@@ -218,5 +238,37 @@ export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine
     return { ...bundle, cache: 'miss' };
   };
 
-  return { retrieve };
+  return { retrieve, claims: (topicPrefix) => readClaims(sql, topicPrefix) };
+};
+
+const TOPIC_PREFIX = /^[a-z0-9]+([.-][a-z0-9]+)*\.?$/;
+
+/**
+ * Current canonical claims whose topic starts with a prefix — the exact path to structured
+ * knowledge (e.g. `x3lius.` → the guide's `x3lius.voice-reference`). Vector ranking over whole
+ * rows can miss a claim for an on-topic query (Phase 3's known weak sharpness); a topic can't.
+ * Reads the `canonical_claims` view (current versions only) as xyp_runtime, read-only.
+ * @param sql - pool allowed to SET ROLE xyp_runtime
+ * @param topicPrefix - e.g. `x3lius.`; lowercase dotted/kebab segments
+ * @returns claims ordered by topic, then slug
+ * @throws Error on a malformed prefix
+ */
+export const readClaims = async (sql: Sql, topicPrefix: string): Promise<ClaimBundle> => {
+  if (!TOPIC_PREFIX.test(topicPrefix)) throw new Error(`claims: topic prefix must be lowercase dotted segments like "x3lius.", got ${JSON.stringify(topicPrefix)}`);
+  const rows = await asRuntime(sql, (tx) => tx<{ id: string; slug: string; version: number; title: string; module: string; topic: string; value: unknown; model_scope: string; source_id: string | null; uri: string | null }[]>`
+    select cc.canonical_prompt_id as id, cc.slug, cc.version, cp.title, m.slug as module, cc.topic, cc.value, cc.model_scope, cp.source_id, s.uri
+    from canonical_claims cc
+    join canonical_prompts cp on cp.id = cc.canonical_prompt_id
+    join modules m on m.id = cp.module_id
+    left join sources s on s.id = cp.source_id
+    where starts_with(cc.topic, ${topicPrefix})
+    order by cc.topic, cc.slug`);
+  return {
+    topicPrefix,
+    items: rows.map((r) => ({
+      ref: { table: 'canonical_prompts', id: r.id },
+      slug: r.slug, version: r.version, title: r.title, module: r.module, topic: r.topic, value: r.value, modelScope: r.model_scope,
+      source: r.source_id && r.uri ? { id: r.source_id, uri: r.uri } : null,
+    })),
+  };
 };

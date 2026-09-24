@@ -1,0 +1,58 @@
+HANDOFF — Phase 8 built; live-verse proof pending a provider key
+
+- **Built:**
+  - **Three Creative agents** replace their Phase 7 stubs under the same names, so routing, scope and registry entries carry over:
+    - `x3lius-songwriting`: theme, section structure, hook candidates and selection.
+    - `x3lius-lyrics`: a verse bar by bar, with language, rhyme tag, rhyme scheme and devices.
+    - `x3lius-composition`: key, tempo, progressions and melody (F15).
+    - All three share one program (`records/x3lius/creative/program.ts`), with one spec per sub-domain.
+  - **Canonical rules in, never hardcoded.** Each run reads:
+    - the Context Engine scoped to its own module, then to `x3lius-vocal-dna` (current versions only);
+    - the artist's claims by exact topic (`retrieve_claims`, prefix `x3lius.`), which today returns the guide's `x3lius.voice-reference`.
+    - Every rule reaches the model with its ref. The reply must cite only refs it was given.
+    - A test scans the agent sources for the voice's own words, taken from the DB.
+  - **Structured output:**
+    - Three versioned JSON schemas (`x3lius.song-structure/v1`, `x3lius.lyrics/v1`, `x3lius.composition/v1`), each ending in `rulesApplied` + `ungroundedChoices`.
+    - Each reply is validated three ways: the schema, the refs it cites, and semantic checks (e.g. the hook index is within its candidates).
+    - Written to the new **`creative_artifacts`** table (migration `20260924180000`):
+      - insert-only;
+      - lineage and version derived by the DB;
+      - no UPDATE/DELETE, even for the owner;
+      - written by a new `xyp_creative` role through the `write_artifact` tool (`artifact.write`).
+  - **Sparsity flag:** each artifact carries `knowledge: { sparse, threshold: 3, scopedRules, perModule, voiceClaims, reasons }`, and the run logs a warn line. It generates anyway (user decision), and never falls back to a voice.
+  - **Provider-agnostic LLM runner** (`core/llm/`, user decision):
+    - Native Anthropic through `@anthropic-ai/sdk`, plus OpenAI-compatible chat completions for Groq and OpenRouter.
+    - Frontmatter `model` is `<provider>:<model>`, or a bare `claude-*` for Anthropic. Keys (`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`) are read at call time.
+    - The runner is wired into `pnpm dispatch`, `pnpm ask` and `pnpm workflow`.
+  - **Proof** (`docs/proofs/PHASE-08-creative.txt`):
+    - Tests: 623/623 pass (55 new in `tests/phase-08`).
+    - 4 mutations caught.
+    - Live dev-DB run: context pulled → sparse flagged → stopped at the missing key.
+    - The exact outgoing prompt is captured with a dummy key and never sent.
+- **Key decisions (user):**
+  - Artifacts get their own table (not `agent_runs.output`).
+  - Sparse knowledge means generate plus a hard flag.
+  - The runner is provider-agnostic and all of it is built now, with the live proof deferred.
+  - Tests were written first.
+  - Default model `openrouter:anthropic/claude-opus-5`: I chose it (Claude quality for Bulgarian without an Anthropic key; the id was checked against OpenRouter's public catalog). One line per agent file changes it.
+- **Deviations from spec:**
+  - **No live verse.** The guide's "one real generated verse" needs a key this container doesn't have.
+  - **New `retrieve_claims`** (Context Engine `claims()`, `context.read`, reads `canonical_claims` as `xyp_runtime`). Vector search for "X3LIUS voice reference" did not return the guide's voice claim at all (Phase 3's known weak sharpness), so the claim is looked up by topic instead.
+  - **Earlier-phase edits:**
+    - The dispatch message for a missing runner is now `no LLM runner configured` (4D/6A test regexes updated).
+    - The Phase 7 registry test now expects 7 stubs, not 10.
+    - `runMusicSystem` passes `LLM_TIMEOUT_MS` (180s).
+    - `pnpm dispatch` uses it for LLM agents.
+- **Open flags:**
+  - **The live verse and the first real artifact are outstanding.** Add `OPENROUTER_API_KEY` (or change `model:` and add that provider's key), open a new session, then run the command in the proof's §6.
+  - **The voice is one line.** All four relevant modules hold 0 rules. Every artifact will be `sparse: true` until rules tagged `x3lius-lyrics`/`-songwriting`/`-composition`/`-vocal-dna` are promoted through the gate.
+  - **The runner is unverified against live providers.** Request and response shapes are proven against fakes only. Groq `json_schema` support varies by model; the runner validates replies itself either way.
+  - **No retries** (the Phase 4D decision is kept; the SDK's `maxRetries` is 0). OpenRouter free-tier 429s will fail the run.
+  - **Research specialists (6B) now fail with `no LLM program registered`** rather than a missing-key error. A generic tool-loop runner is still unbuilt.
+  - **`MIN_SCOPED_RULES = 3`** is a judgement call, not a measured threshold. Revisit it once Phase 12 scores exist.
+- **Next phase needs (9):**
+  - **The Suno Prompt-Formula agent** (Creative) should read Phase 8 artifacts from `creative_artifacts` by id (lyrics + song-structure), not from prose. Reuse `records/x3lius/creative/program.ts` (scoped rules + claims → ref-cited JSON → `write_artifact`) with scope `x3lius-suno` + `x3lius-genre-style` (F15: Genre/Style is built in Phase 9).
+  - **Suno rules are empty today** (`x3lius-suno`: 0 rules). The formula must come from rules promoted with tag `x3lius-suno`; the knowledge report will flag it `sparse` until they exist. Tag them with the Suno model version (`model_tag`).
+  - **The Suno Execution agent** (Execution class) needs a new `external.execute` tool, and its full prompt text must land in `agent_runs.input`/`output` (the Governance audit trail). It is side-effecting, so decide idempotency before any retry. `DispatchDeps.llmRunner` is not needed for it unless it calls a model.
+  - **The scoring hook** should link each take to its source artifact (`creative_artifacts.id`, lineage + version). Revision in Phase 12 appends versions through the same table (`parent_id`), never an update.
+  - **Keys:** Phase 9's live proof needs the same provider key as Phase 8's verse, plus Suno access. Do both proofs in one keyed session.

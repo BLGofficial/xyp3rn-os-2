@@ -1,0 +1,54 @@
+HANDOFF — Phase 9 built; live prompt-assembly proof pending a provider key
+
+- **Built:**
+  - **Suno Prompt-Formula agent** `x3lius-suno` (Creative, replaces its stub). It is hybrid (user decision):
+    - The model writes the title, style text and styles to exclude, citing canonical rules.
+    - Code renders the lyrics field verbatim from the Phase 8 lyrics artifact(s), which it reads by id (`read_artifact`, new capability `artifact.read`), and records the source artifact versions.
+    - It reads the rules scoped to `x3lius-suno` + `x3lius-genre-style` + `x3lius-vocal-dna`, plus `x3lius.*` and `suno.*` claims.
+    - Rules and claims tagged `suno-<v>` for another Suno version are kept out of the prompt, and counted in `knowledge.reasons`.
+    - A length limit is enforced only when a canonical claim `suno.limit.<field>-chars` states it; exceeding it is an error, never a truncation.
+    - The artifact is `x3lius.suno-prompt/v1`; the model's part is validated separately against `x3lius.suno-prompt-llm/v1`, which rejects a reply carrying lyrics.
+  - **Genre/Style** `x3lius-genre-style` (Creative, F15, replaces its stub). It writes `x3lius.genre-style/v1` (genre, subgenres, tempo range, mood, sound palette, reference *descriptors* with no artist names, what to avoid), which the formula consumes.
+  - **One workflow from brief to prompt:** `records/x3lius/song-to-suno.workflow.yaml` runs songwriting + lyrics + genre/style → formula, passing artifact ids between steps.
+  - **Suno Execution agent** `suno-submitter` (Execution, deterministic). It is pluggable (user decision):
+    - `manual`: the prompt is recorded and the operator registers takes.
+    - `sunoapi`: the sunoapi.org reseller; Suno has no official public API.
+    - It submits the artifact's own prompt, never the caller's, and logs the **full prompt text to `agent_runs` before the external call**, so the audit trail holds even on rejection.
+  - **Scoring hook:** every captured take gets one STUB `take_scores` row (`scorer: stub:phase-12-critic`, `is_stub`, **no score**: the table refuses a stub with a number).
+  - **Migration `20260924190000`:**
+    - `suno_submissions`, `suno_takes`, `take_scores`: insert-only for every role (trigger), written by the new `xyp_execution` role, which cannot write artifacts or canonical knowledge.
+    - `xyp_runtime` and `xyp_execution` gain SELECT on `creative_artifacts`.
+  - **Context Engine:** each item now carries `modelTag` (additive).
+  - **Proof** (`docs/proofs/PHASE-09-suno.txt`):
+    - Tests: 679/679 (49 new).
+    - 5 mutations caught.
+    - Live dev-DB workflow run: stops at the missing key after the first step pulls context and flags sparse.
+    - A FAKE-model shape capture on a throwaway DB.
+- **Key decisions (user):**
+  - Submission is pluggable (manual + reseller).
+  - Genre/Style is its own Creative agent + artifact.
+  - The formula is hybrid.
+  - New insert-only tables for the trail.
+  - Tests were written first.
+- **Deviations from spec:**
+  - **No live prompt assembly:** the formula and its inputs need the LLM key.
+  - **"Two agent files" became three**, plus the Genre/Style agent (F15).
+  - **Earlier-phase edits:**
+    - Phase 7's stub-agent propagation proof now runs on `x3lius-mix-master` (Suno isn't a stub any more), with its own FIXTURE rule.
+    - Phase 7 and 8 registry tests count the stubs that remain instead of a fixed number.
+    - The Phase 8 program was generalized (per-spec modules, claim namespaces, a separate model schema, prepare/admit/finalize). Phase 8 behaviour is unchanged and its tests pass untouched in substance.
+- **Open flags:**
+  - **The live assembly and the first real take are outstanding.** They need a provider key (and Suno access for a take): add the key in a new session, then follow §5 of the proof.
+  - **`sunoapi` is unverified:**
+    - Field names follow the vendor docs, which disagree on casing; capture accepts both `audio_url` and `audioUrl`.
+    - `callBackUrl` is required by the vendor: set `SUNO_CALLBACK_URL` (the adapter polls regardless).
+    - The reseller is an unofficial resale of Suno access.
+  - **Knowledge is still empty for Suno:** `x3lius-suno`, `x3lius-genre-style` and `x3lius-vocal-dna` hold 0 rules, so every formula is `sparse`. The formula follows promoted rules; there are none yet.
+  - **No retries and no idempotency keys** for submissions (the Phase 4D decision is kept). A re-run `submit` creates a second submission; re-captured takes are deduplicated per submission and URL.
+  - **Research specialists (6B) still have no LLM program.**
+- **Next phase needs (10):**
+  - **Vocal DNA must be one canonical row read by both consumers.** The formula already reads `x3lius-vocal-dna` on its scoped path and `x3lius.*` claims. Make the vocal signature a gate-written `canonical_prompts` row in module `x3lius-vocal-dna`, with its structure in `structured.claims` (e.g. `x3lius.vocal.tone`, `.register`, `.delivery`, `.adlibs`), so the formula consumes it with no code change.
+  - **Write it through the gate, not by hand.** Either a first-party manifest normalizer (like the Phase 7 module manifest) or a research candidate tagged `x3lius-vocal-dna`. It gets `knowledge_versions` history, and a vocal-direction change is a v2.
+  - **The RVC post-processing consumer** should read the same row through `retrieve_claims`/`retrieve_context`, never a copy. Phase 10's proof is both consumers returning the same `canonical_prompts.id` and version. Mind `modelTag`: give it `model-agnostic` (or a tag both readers accept), or the formula's Suno-version filter will drop it.
+  - **The Phase 6D pending claim** ("RVC/Applio voice model already exists for X3LIUS") lived on an earlier, ephemeral dev DB and went to `records-validated-rules`. Re-propose it tagged `x3lius-vocal-dna` if Phase 10 builds on it.
+  - **Keys:** the Phase 8 verse, the Phase 9 assembly and Phase 10's proof of both consumers can all run in one keyed session. The RVC consumer can be deterministic (no key) if it only reads the row.
