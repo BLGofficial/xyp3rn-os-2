@@ -17,7 +17,8 @@
     "db:seed:proof": "node supabase/seed/run-fk-proof.ts",
     "ingest": "node knowledge/ingestion/cli.ts",
     "embed": "node knowledge/vector-retrieval/cli.ts",
-    "context": "node core/context-engine/cli.ts"
+    "context": "node core/context-engine/cli.ts",
+    "agents:validate": "node core/agent-registry/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

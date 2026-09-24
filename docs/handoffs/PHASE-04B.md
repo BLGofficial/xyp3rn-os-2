@@ -1,0 +1,21 @@
+HANDOFF — Phase 4B complete
+
+- **Built:**
+  - `core/agent-registry/parse-agent-file.ts`: a pure parser and validator (path + contents in, result out).
+  - `core/agent-registry/registry.ts`: `loadAgents(dir)` and `createAgentRegistry({dir, log})` → `list()`, `get(name)`, `validateAll()`, `refresh()`, `snapshot()`.
+  - `pnpm agents:validate [dir]`.
+  - Two fixtures, written before the parser: a valid one and one missing `class`.
+  - 18 tests. Proof: `docs/proofs/PHASE-04B-validate-all.txt` — the broken fixture is rejected with `missing required field: class`, and `agents/` validates clean with the template skipped.
+- **Key decisions:**
+  - **Refresh:** manual `refresh()` only (run once at creation). No file watcher, so the registry can't change in the middle of a dispatch.
+  - **Loud rejection:** one stderr line per failing file with path and reason; the log sink is injectable for tests.
+  - **Every failure reported:** `validateAll()` re-reads the disk and returns every failing file, and every error within each file.
+  - **Rejected:** unknown keys, a `name` that isn't kebab-case or doesn't match the filename, tool names that aren't snake_case, and missing or empty `## Role`/`## Contract`/`## Refuses` sections.
+  - **Templates:** `_`-prefixed files are listed as skipped, never silently ignored.
+- **Deviations from spec:**
+  - Added `snapshot()` so tools can show skipped templates without a second refresh.
+  - Fixtures live in `core/agent-registry/fixtures/`, not `agents/`, so they never pollute the real registry. They say in their own text that they are fixtures.
+- **Open flags:** tool names are only checked for shape here. Whether a tool exists and is allowed for the agent's class is 4C/4D's job at dispatch.
+- **Next phase needs:**
+  - `AgentDefinition` (`name`, `class`, `domain`, `tools`, `model`, `role`, `contract`, `refuses`, `path`).
+  - `docs/AGENT_CLASSES.md`'s capability matrix is the source 4C's tool authorization must match exactly.
