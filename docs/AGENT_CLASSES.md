@@ -14,6 +14,7 @@ Status: Phase 0 contract. The class ids are defined once in `core/contracts/taxo
 ## Capability matrix
 
 `Y` = the class may be granted a tool with this capability. `—` = never.
+The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04c` fails if the two tables drift apart.
 
 | Capability | What it permits | Research | Knowledge | Planning | Creative | Critic | Revision | Execution | Governance |
 |---|---|---|---|---|---|---|---|---|---|
