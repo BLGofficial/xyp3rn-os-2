@@ -18,7 +18,7 @@ HANDOFF — Phase 11 built and proven on fixtures; the real rubric values are ou
     - Arrangement (`x3lius.arrangement/v1`) optionally follows a song structure: its ids, in order, with kind and bars copied from it.
     - Production (`x3lius.production/v1`) covers drums, sound design and the FL Studio layout (channels → mixer tracks, with effect chains). It reads Production + Arrangement + Vocal DNA and optionally an arrangement. Both record their upstream in `sources`.
   - **Proof** (`docs/proofs/PHASE-11-production-mix.txt`):
-    - 54 new tests; full suite 797/798. The one failure is the Phase 3 ranking check, which also failed on `main` before this phase.
+    - 54 new tests; full suite 797/798. The one failure is the Phase 3 ranking check, which also failed on `main` before this phase. PR #7 fixes it.
     - 8/8 mutations caught.
     - A sample report is included.
 - **Key decisions (user):**
@@ -41,7 +41,10 @@ HANDOFF — Phase 11 built and proven on fixtures; the real rubric values are ou
   - **Not live-run:** Arrangement and Production have not been run against a live model (no `OPENROUTER_API_KEY`; the free quota ran out on 2026-09-24). Their wiring is proven on the FAKE model.
   - **Dev DB not set up:** on this Windows checkout every migration is still pending.
   - **A research bound on a metric the file already states** leaves two current rows, and the report is refused until the operator drops the metric from the file (a re-ingest).
-  - **The Phase 3 ranking assertion** (`adds 1-hop graph neighbours…`) fails on this machine's embeddings. It is unrelated to Phase 11 and still to investigate.
+  - **The Phase 3 ranking assertion** (`adds 1-hop graph neighbours…`) fails on this machine's embeddings. It is unrelated to Phase 11. It is investigated and fixed in PR #7, which changes only the test.
+    - The ranking works as designed. The `phase-4-agent-runtime-registry` module is found, but the limit of 4 graph-only items cuts it.
+    - Here, direct hits #7 and #8 are off-topic, and their `precedes` neighbours (0.8486 × 0.7) outscore the module (0.9188 × 0.6).
+    - The fixed test checks one-hop reachability with that limit raised.
 - **Next phase needs (12):**
   - **Critic inputs are ready:**
     - every creative artifact carries `rulesApplied` refs;
