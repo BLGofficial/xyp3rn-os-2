@@ -1,0 +1,26 @@
+# Phase 6B proof: 20 specialists, mechanical no-overlap checks, Phase 17 selection
+$ pnpm vitest run tests/phase-06b
+Tests  65 passed (65)
+
+# Live front door with the real roster. Selection is correct (exactly the 5 source-named specialists);
+# the first specialist is then denied at authorization because fetch_source / write_evidence are 6C tools:
+route: {"status":"routed","domain":"RESEARCH_INTELLIGENCE","evidence":{"RESEARCH_INTELLIGENCE":["best current method","research"],"RECORDS":["suno","vocal"],"TECH":[],"GOVERNANCE":[]}}
+[workflow] research-specialists FAILED at step ai-vocal-systems-researcher: tool authorization denied: fetch_source: tool not registered: fetch_source; write_evidence: tool not registered: write_evidence (run 68bfbb08-5d68-42ba-8b2d-0a48b4a8bf48; not run: evaluation-researcher, artist-identity-researcher, prompt-engineering-researcher, suno-researcher)
+{
+  "researchRunId": "22324bba-3fa8-4439-8fc2-6bc35230774a",
+  "status": "error",
+  "selected": [
+    "ai-vocal-systems-researcher",
+    "evaluation-researcher",
+    "artist-identity-researcher",
+    "prompt-engineering-researcher",
+    "suno-researcher"
+  ],
+  "workflowRunId": "68bfbb08-5d68-42ba-8b2d-0a48b4a8bf48",
+  "error": "specialist step ai-vocal-systems-researcher failed: tool authorization denied: fetch_source: tool not registered: fetch_source; write_evidence: tool not registered: write_evidence"
+}
+                                                                                                                                                                                                            selected                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ [{"name": "ai-vocal-systems-researcher", "score": 5, "matched": ["baritone", "vocal"]}, {"name": "evaluation-researcher", "score": 5, "matched": ["best", "best current method"]}, {"name": "artist-identity-researcher", "score": 3, "matched": ["dark baritone"]}, {"name": "prompt-engineering-researcher", "score": 3, "matched": ["controlling", "method"]}, {"name": "suno-researcher", "score": 3, "matched": ["suno"]}]
+(1 row)
+
