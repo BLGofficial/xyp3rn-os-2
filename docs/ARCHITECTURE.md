@@ -152,7 +152,11 @@ Phase 2 wrote `canonical_prompts`/`modules` through a dedicated `xyp_ingest_boot
 
 A `research_sources` row may carry a nullable FK to `sources.id` when the cited document is already ingested. They are different tables with different writers, not duplicates.
 
-**F10. "Hybrid" agents vs a single-valued `class`.** OPEN (decide in Phases 11 and 13). Phase 11 has "Creative+Execution" and Phase 13 has "Knowledge/Execution" agents, but `class` holds exactly one value. Recommendation: split each hybrid into two single-class agents chained by a Phase 5 workflow. The alternative is a multi-class field, which weakens class-level authorization.
+**F10. "Hybrid" agents vs a single-valued `class`.** RESOLVED for Phase 11 (user: the recommendation); Phase 13 still to decide. Phase 11 has "Creative+Execution" and Phase 13 has "Knowledge/Execution" agents, but `class` holds exactly one value. Recommendation: split each hybrid into two single-class agents chained by a Phase 5 workflow. The alternative is a multi-class field, which weakens class-level authorization.
+- Phase 11 ships single-class agents and no hybrid:
+  - `x3lius-arrangement` and `x3lius-production` are Creative, LLM-backed, on the shared creative program;
+  - `x3lius-mix-master` is Creative and deterministic (`model: none`). It checks a TRACE analysis against the canonical rubric and writes a report artifact, with no LLM.
+- The guide's Execution half (taking TRACE output from the real plugin) is Phase 14's TRACE integration. Phase 11 defines the contract it will implement (F24).
 
 **F11. Phase 16 says "Knowledge Layer's 6" satellites.** PROPOSED. Under F2 the gate is a seventh Knowledge component, and the counts are live.
 
@@ -253,3 +257,17 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
   - So knowledge scoped to one tool (Suno versions, the RVC settings) reaches only the agents that target it.
 - The ingestion writer lets a document place its prompts in a module another document owns, using that module's current version.
 - No value is defaulted: an RVC setting the file doesn't state is listed as `unset`, and the local tool's defaults apply.
+
+**F24. The TRACE contract and the mix/master rubric.** DECIDED (user, Phase 11).
+- **`trace.analysis/v1`** is the one TRACE boundary contract. It lives in `tech/trace/analysis.ts` (TECH owns it). Mix/Master reads it now and Phase 14 implements it. It is never edited in place; a change is `trace.analysis/v2`.
+  - It covers one render at the `mix` or `master` stage. The shape was defined from the guide's list (user: no TRACE export exists yet):
+    - loudness per BS.1770/R128 (integrated, short-term max, momentary max, range, true peak);
+    - tonal balance over seven fixed bands (dB relative to the full band);
+    - stereo correlation and width, for the full band and per band;
+    - crest factor.
+  - Strict validation: shape, then ranges. It flattens into 29 metric ids (e.g. `loudness.integrated-lufs`, `stereo.sub.width-pct`).
+- **The rubric is canonical claims, never constants in code.**
+  - Each claim is `x3lius.<stage>.<metric>` = `{ min?, max? }`, scoped `trace`, so it never reaches a lyrics, Suno or production prompt.
+  - Operator values come from `records/x3lius/mix-rubric.yaml` (`xyp-mix-rubric/v1`, user decision), admitted through the gate's first-party path as one versioned row in `x3lius-mix-master`. Admission refuses `REQUIRED` placeholders.
+  - Research candidates can bound a metric too, one claim each on their own slug. A metric stated by two current rows is refused as two sources of truth.
+- **The report.** Each check names its claim ref and version, so the Phase 12 Critic can trace a mix note to the rule in force. A metric no claim bounds is `unset`, never defaulted (the F23 pattern).

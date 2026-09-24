@@ -1,0 +1,24 @@
+# X3LIUS mix/master rubric: operator-authored first-party data (Phase 11, ARCHITECTURE F24). One canonical
+# row in the x3lius-mix-master module; x3lius-mix-master checks every trace.analysis/v1 against it.
+# Admit (then embed):
+#   pnpm ingest --file records/x3lius/mix-rubric.yaml --origin first_party
+# A change here + re-admission = a new version in knowledge_versions.
+#
+# Keys are trace.analysis/v1 metric ids (tech/trace/analysis.ts, TRACE_METRICS). Each bound is min, max or both,
+# in the metric's unit. A metric not listed is reported as "unset", never checked against a default.
+# Admission refuses REQUIRED: replace each one with your value, or delete the line.
+mix_rubric: xyp-mix-rubric/v1
+artist: X3LIUS
+date: 2026-09-24
+module: x3lius-mix-master
+master:
+  loudness.integrated-lufs: { min: REQUIRED, max: REQUIRED }   # LUFS
+  loudness.true-peak-dbtp: { max: REQUIRED }                   # dBTP ceiling
+  loudness.range-lu: { min: REQUIRED }                         # LU
+  dynamics.crest-factor-db: { min: REQUIRED }                  # dB
+  stereo.correlation: { min: REQUIRED }                        # -1..1
+  stereo.sub.width-pct: { max: REQUIRED }                      # %, 0 = mono sub
+  tonal.sub-db: { min: REQUIRED, max: REQUIRED }               # dB relative to full band
+mix:
+  loudness.true-peak-dbtp: { max: REQUIRED }                   # headroom left for mastering, dBTP
+  stereo.sub.width-pct: { max: REQUIRED }                      # %

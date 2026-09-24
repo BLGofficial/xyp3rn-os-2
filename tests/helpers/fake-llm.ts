@@ -39,6 +39,20 @@ export const fakeBody = (schema: Json, cited: readonly string[], user = ''): Jso
     });
     return { sections: [section('v1', 'verse'), section('c1', 'chorus')], instrumental: [], ...common };
   }
+  if ('flStudio' in props) {
+    return {
+      tempoBpm: 140,
+      drums: [{ element: '[FAKE] 808', sound: '[FAKE]', pattern: '[FAKE]' }],
+      soundDesign: [{ element: '[FAKE] lead', source: '[FAKE]', processing: ['[FAKE] eq'] }],
+      flStudio: { channels: [{ name: '[FAKE] 808', generator: '[FAKE] sampler', mixerTrack: 1 }], mixerTracks: [{ track: 1, name: '[FAKE] 808 bus', effects: ['[FAKE] eq'] }] },
+      ...common,
+    };
+  }
+  if ('sections' in props && !('hook' in props)) {
+    // Arrangement (x3lius.arrangement-llm/v1): covers the fake structure below (v1 verse, c1 chorus) in order.
+    const section = (sectionId: string, kind: string, bars: number, energy: number) => ({ sectionId, kind, bars, energy, elements: [{ element: '[FAKE] 808', role: '[FAKE]' }], transitionIn: '[FAKE]' });
+    return { sections: [section('v1', 'verse', 16, 4), section('c1', 'chorus', 8, 8)], ...common };
+  }
   if ('sections' in props) {
     return {
       title: '[FAKE] Title', theme: { statement: '[FAKE] theme', perspective: 'first person' },

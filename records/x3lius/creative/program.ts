@@ -3,6 +3,7 @@ import type { LlmProgram } from '../../../core/llm/runner.ts';
 import { loadMusicSystem } from '../music-system.ts';
 import { SUNO_FORMULA_SPEC } from '../suno/formula.ts';
 import { LYRICS_SPEC } from './lyrics.ts';
+import { ARRANGEMENT_SPEC, PRODUCTION_SPEC } from './production.ts';
 import {
   COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, GENRE_STYLE_SCHEMA, GENRE_STYLE_SCHEMA_ID, SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
 } from './schemas.ts';
@@ -13,7 +14,7 @@ export { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE } from './types.ts';
 
 /**
  * X3LIUS Creative agents: Songwriting, Lyrics, Composition (Phase 8), Genre/Style and the Suno
- * Prompt-Formula (Phase 9). One program, one spec per sub-domain.
+ * Prompt-Formula (Phase 9), Arrangement and Production (Phase 11). One program, one spec per sub-domain.
  *
  * Every run: derive the brief → pull canonical rules from the spec's modules (scoped Context
  * Engine, current versions only) plus canonical claims (exact topic lookup) → drop entries that
@@ -59,6 +60,8 @@ const SPECS: Readonly<Record<string, CreativeSpec>> = {
     },
   },
   'x3lius-suno': SUNO_FORMULA_SPEC,
+  'x3lius-arrangement': ARRANGEMENT_SPEC,
+  'x3lius-production': PRODUCTION_SPEC,
 };
 
 export const CREATIVE_SUBDOMAINS: readonly string[] = Object.keys(SPECS);

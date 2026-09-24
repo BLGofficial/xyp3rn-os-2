@@ -10,6 +10,15 @@ export type JsonSchema =
   | { readonly type: 'string'; readonly enum?: readonly string[]; readonly description?: string }
   | { readonly type: 'integer' | 'number' | 'boolean'; readonly description?: string };
 
+/** Builders for the subset. `obj` requires every property and allows no others. */
+export const str = (description?: string): JsonSchema => (description ? { type: 'string', description } : { type: 'string' });
+export const int = (description: string): JsonSchema => ({ type: 'integer', description });
+export const num = (description: string): JsonSchema => ({ type: 'number', description });
+export const arr = (items: JsonSchema, description?: string): JsonSchema => (description ? { type: 'array', items, description } : { type: 'array', items });
+export const obj = (properties: Record<string, JsonSchema>, description?: string): JsonSchema => ({
+  type: 'object', properties, required: Object.keys(properties), additionalProperties: false, ...(description ? { description } : {}),
+});
+
 const typeOk = (schema: JsonSchema, v: unknown): boolean => {
   switch (schema.type) {
     case 'object': return v !== null && typeof v === 'object' && !Array.isArray(v);

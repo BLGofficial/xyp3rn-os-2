@@ -27,8 +27,8 @@ import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 
 const FIXTURE_SLUG = 'fixture-phase-07-suno-rule';
 const QUERY = 'How should the Suno style prompt order vocal descriptors?';
-const MIX_FIXTURE_SLUG = 'fixture-phase-07-mix-rule';
-const MIX_QUERY = 'Master the new X3LIUS track to -9 LUFS';
+const STUB_FIXTURE_SLUG = 'fixture-phase-07-evaluation-rule';
+const STUB_QUERY = 'Evaluate the new X3LIUS take and score it';
 
 let db: TestDb;
 let embedder: Embedder;
@@ -137,27 +137,27 @@ describe('propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-d
     expect(lyrics.items.map((i) => i.slug)).not.toContain(FIXTURE_SLUG);
   });
 
-  // Phase 9 turned x3lius-suno into a Creative agent (tests/phase-09), so the stub-agent half of this
-  // proof runs on a sub-domain that is still a stub: Mix/Master (built in Phase 11), with its own
-  // FIXTURE rule promoted the same way.
+  // Phase 9 turned x3lius-suno into a Creative agent (tests/phase-09) and Phase 11 did the same to
+  // Mix/Master, so the stub-agent half of this proof runs on the sub-domain that is still a stub:
+  // Evaluation (built in Phase 12), with its own FIXTURE rule promoted the same way.
   it('through the Agent Registry: a stub sub-domain returns its promoted rule as consumable context and says it is a stub', async () => {
-    const r0 = await approveAndPromote(await fixtureCandidate('Master X3LIUS masters to the loudness target first.', ['x3lius-mix-master'], MIX_FIXTURE_SLUG, 'fixture.mix-loudness-first'));
+    const r0 = await approveAndPromote(await fixtureCandidate('Score X3LIUS takes against the hook rubric first.', ['x3lius-evaluation'], STUB_FIXTURE_SLUG, 'fixture.evaluation-hook-first'));
     expect(r0.outcome).toBe('promoted');
     await embedPending(db.sql, embedder);
-    const r = await dispatch(deps(), 'x3lius-mix-master', { request: MIX_QUERY });
+    const r = await dispatch(deps(), 'x3lius-evaluation', { request: STUB_QUERY });
     expect(r.status, r.error).toBe('success');
     const out = r.output as { subdomain: string; status: string; builtIn: string | null; context: { slug: string }[] };
-    expect(out).toMatchObject({ subdomain: 'x3lius-mix-master', status: 'stub', builtIn: '11' });
-    expect(out.context.map((i) => i.slug)).toContain(MIX_FIXTURE_SLUG);
+    expect(out).toMatchObject({ subdomain: 'x3lius-evaluation', status: 'stub', builtIn: '12' });
+    expect(out.context.map((i) => i.slug)).toContain(STUB_FIXTURE_SLUG);
     expect(out.context.map((i) => i.slug)).not.toContain(FIXTURE_SLUG);
   });
 
-  it('end to end from a raw request: route → RECORDS → X3LIUS entrypoint → x3lius-mix-master', async () => {
-    expect(planRequest(MIX_QUERY, ENTRYPOINTS)).toMatchObject({ action: 'run-service', service: 'x3lius-music-system' });
-    const r = await runMusicSystem(deps(), { request: MIX_QUERY });
-    expect(r).toMatchObject({ status: 'success', selected: ['x3lius-mix-master'] });
-    const out = r.outputs['x3lius-mix-master'] as { context: { slug: string }[] };
-    expect(out.context.map((i) => i.slug)).toContain(MIX_FIXTURE_SLUG);
+  it('end to end from a raw request: route → RECORDS → X3LIUS entrypoint → x3lius-evaluation', async () => {
+    expect(planRequest(STUB_QUERY, ENTRYPOINTS)).toMatchObject({ action: 'run-service', service: 'x3lius-music-system' });
+    const r = await runMusicSystem(deps(), { request: STUB_QUERY });
+    expect(r).toMatchObject({ status: 'success', selected: ['x3lius-evaluation'] });
+    const out = r.outputs['x3lius-evaluation'] as { context: { slug: string }[] };
+    expect(out.context.map((i) => i.slug)).toContain(STUB_FIXTURE_SLUG);
   });
 
   it('only the current version is consumable: v2 replaces v1 on the scoped path', async () => {
