@@ -137,6 +137,10 @@ describe('Vocal DNA normalizer (xyp-vocal-dna/v1): structured, strict, one row',
     ['a protect value above 0.5', (t: string) => t.replace('index_rate: 0.75', 'index_rate: 0.75\n  protect: 0.6'), /rvc\.protect must be a number from 0 to 0\.5/],
     ['a bad date', (t: string) => t.replace('date: 2026-09-24', 'date: soon'), /date must be YYYY-MM-DD/],
     ['a module that is not a slug', (t: string) => t.replace('module: x3lius-vocal-dna', 'module: Vocal DNA'), /module "Vocal DNA" is not a kebab-case slug/],
+    // A template's fill-in marker is not data (seen: the operator's first file had model: REQUIRED).
+    ['a placeholder RVC model', (t: string) => t.replace("model: '[FIXTURE]-voice.pth'", 'model: REQUIRED          # give the .pth name'), /rvc\.model is a placeholder \("REQUIRED"\): give the real value/],
+    ['a placeholder RVC index', (t: string) => t.replace('  pitch: -2', '  index: TODO\n  pitch: -2'), /rvc\.index is a placeholder \("TODO"\)/],
+    ['a placeholder descriptor', (t: string) => t.replace("  - '[FIXTURE] register'", "  - '<fill in>'"), /register\[0\] is a placeholder \("<fill in>"\)/],
   ])('refuses %s, loudly (never half-normalized)', (_, edit, error) => {
     expect(() => normalizeVocalDna([edit(fixture())])).toThrow(error);
   });

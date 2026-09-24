@@ -55,8 +55,14 @@ const fail = (message: string): never => {
   throw new Error(`vocal DNA: ${message}`);
 };
 
-const text = (v: unknown, what: string): string =>
-  typeof v === 'string' && v.trim() !== '' ? v.trim() : fail(`${what} must be a non-empty string`);
+// A template's fill-in marker, not a value (the operator's first file carried model: REQUIRED).
+const PLACEHOLDER = /^(required|todo|tbd|fixme|changeme|<[^>]*>)$/i;
+
+const text = (v: unknown, what: string): string => {
+  if (typeof v !== 'string' || v.trim() === '') return fail(`${what} must be a non-empty string`);
+  if (PLACEHOLDER.test(v.trim())) return fail(`${what} is a placeholder ("${v.trim()}"): give the real value`);
+  return v.trim();
+};
 
 const descriptors = (v: unknown, what: string): string[] => {
   if (!Array.isArray(v) || v.length === 0) return fail(`${what} must be a non-empty list of descriptors`);

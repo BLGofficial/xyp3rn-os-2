@@ -33,7 +33,7 @@ HANDOFF — Phase 10 built and proven on a fixture; the real Vocal DNA values ar
     - The Phase 9 exclusion reason now reads "scoped to another model or tool".
 - **Open flags:**
   - **To finish Phase 10:**
-    1. Write `records/x3lius/vocal-dna.yaml` with the real values.
+    1. Give `rvc.model` its real `.pth` name in `records/x3lius/vocal-dna.yaml`, and `rvc.index` its `.index` name (or remove that line). Every other value is the operator's and validates (proof §5). Until then, admission refuses the `REQUIRED` placeholder.
     2. Run `pnpm ingest --file records/x3lius/vocal-dna.yaml --origin first_party`, then embed.
     3. Re-run `pnpm dispatch x3lius-rvc-post '{}'` and the song-to-suno workflow. Both should cite the same row.
   - The 6D claim "RVC/Applio voice model already exists" is not re-proposed. The operator-authored file now states that model as data, which is what the phase asked for.

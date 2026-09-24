@@ -87,3 +87,25 @@ Produced with the repo's own commands against the local Supabase-emulating Postg
    retrieve_claims: {"allow":true,"capability":"context.read"}
    log_message: {"allow":true,"capability":"log.write"}
 4. execution: error in 28ms — no canonical Vocal DNA: admit records/x3lius/vocal-dna.yaml (pnpm ingest --file records/x3lius/vocal-dna.yaml --origin first_party)
+
+## 5. The operator's file (2026-09-24, later): records/x3lius/vocal-dna.yaml
+# The user supplied the values: tone, register, delivery, ad-libs, and the Applio settings (pitch 0, index_rate
+# 0.75, protect 0.33, f0_method rmvpe, rms_mix_rate 0.25). rvc.model and rvc.index were left as REQUIRED
+# ("not in loaded context; give the .pth name").
+# Two fixes before it could be read, neither changing a value:
+#  - YAML syntax: three descriptors contain "word: text" (read as key-value pairs), one also bare quotes; those
+#    three lines are now quoted, their text unchanged;
+#  - the normalizer would have admitted "REQUIRED" as the model name: placeholders (REQUIRED, TODO, TBD, FIXME,
+#    CHANGEME, <…>) are now refused, test-first (3 new tests; 747/747).
+# Validation with stand-in names in memory only (never written) passes every other field:
+#   as-is: vocal DNA: rvc.model is a placeholder ("REQUIRED"): give the real value
+#   with stand-ins: x3lius-vocal-dna in x3lius-vocal-dna | claims: x3lius.vocal.tone(model-agnostic) x3lius.vocal.register(model-agnostic) x3lius.vocal.delivery(model-agnostic) x3lius.vocal.adlibs(model-agnostic) x3lius.vocal.rvc(rvc)
+#   X3LIUS vocal signature.
+#   Tone: dark, cold, slightly gritty baritone; low-mid weight, dense body; restrained top end, dulled brightness; light rasp on stressed syllables.
+#   Register: low-to-mid chest voice, speaking-range rap; stays in chest; no head voice on verses; hooks lift only slightly, melodic-trap half-sung; typical pitch area: baritone, roughly A2-E4.
+#   Delivery: controlled, deliberate flow, behind-the-beat in verses; hard consonant attack, clipped line endings; triplet and double-time switches on drill sections; Bulgarian/English code-switching on bar boundaries, not mid-phrase; dynamics: near-monotone menace in verses, raised intensity on hooks.
+#   Ad-libs: low, short, doubled ad-libs placed at line ends; whispered/breathy echo of the last word; sparse; confrontational shouts only on drops; typical: "yeah", "grr", clipped one-word echoes.
+# Dev-DB admission as the file stands: refused, nothing written (canonical_prompts x3lius-vocal-dna: 0 rows).
+#   pnpm ingest --file records/x3lius/vocal-dna.yaml --origin first_party
+#   → "error": "vocal DNA: rvc.model is a placeholder (\"REQUIRED\"): give the real value"
+# Outstanding: the .pth name (and the .index file name, or remove that line if there is none).
