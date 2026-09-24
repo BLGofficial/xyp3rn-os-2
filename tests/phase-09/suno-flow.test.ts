@@ -21,7 +21,6 @@ import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { loadMusicSystem, MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/music-system.ts';
 import { sectionLabels } from '../../records/x3lius/creative/lyrics.ts';
 import { renderLyrics, SONG_TO_SUNO_WORKFLOW } from '../../records/x3lius/suno/formula.ts';
-import { subdomainStub } from '../../records/x3lius/subdomain-stub.ts';
 import { STUB_SCORER } from '../../records/x3lius/suno/score-hook.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 import { FAKE_KEYS, FAKE_USAGE, fakeBody, fakeModel } from '../helpers/fake-llm.ts';
@@ -149,11 +148,8 @@ describe('registry: Phase 9 agents', () => {
     expect(tools.authorize('Knowledge', 'read_artifact')).toMatchObject({ allow: false });
   });
 
-  it('every sub-domain not built yet is still a read-only stub; the registry validates', () => {
-    const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !BUILT_SUBDOMAINS.includes(s));
-    // Phase 11 built Arrangement, Production and Mix/Master (tests/phase-11); Evaluation is Phase 12's.
-    expect(stubs.sort()).toEqual(['x3lius-evaluation']);
-    for (const s of stubs) expect(HANDLERS[s]).toBe(subdomainStub);
+  it('every sub-domain is built: no stub remains (Phase 12 built Evaluation, the last); the registry validates', () => {
+    expect(loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !BUILT_SUBDOMAINS.includes(s))).toEqual([]);
     expect(registry.validateAll()).toEqual([]);
   });
 });

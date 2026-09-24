@@ -17,6 +17,7 @@ import { registerResearchSource } from '../../research-intelligence/sources/veri
 import { proposeCandidate, recordFinding } from '../../research-intelligence/synthesis/findings.ts';
 import { runMusicSystem } from '../../records/x3lius/entrypoint.ts';
 import { MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/music-system.ts';
+import { subdomainStub } from '../../records/x3lius/subdomain-stub.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 
 // Phase 7 proof (task 2): a rule promoted by the 6D gate and tagged for a sub-domain becomes
@@ -36,6 +37,20 @@ let engine: ContextEngine;
 let researchRunId: string;
 const registry = createAgentRegistry({ dir: join(REPO_ROOT, 'agents') });
 const deps = () => ({ sql: db.sql, registry, tools: createRuntimeTools({ sql: db.sql }), handlers: HANDLERS });
+// Phase 12 built Evaluation, the last stub sub-domain. The stub handler stays the fallback for any
+// sub-domain a future manifest adds, so these proofs run on a registry double that presents
+// x3lius-evaluation as a Knowledge stub, with the stub handler bound to it.
+const stubDeps = () => ({
+  ...deps(),
+  registry: {
+    ...registry,
+    get: (name: string) => {
+      const a = registry.get(name);
+      return a && name === 'x3lius-evaluation' ? { ...a, class: 'Knowledge' as const, tools: ['retrieve_context', 'log_message'], model: 'none' } : a;
+    },
+  },
+  handlers: { ...HANDLERS, 'x3lius-evaluation': subdomainStub },
+});
 
 /** A synthetic candidate, marked FIXTURE end to end, promoted through the real gate path. */
 const fixtureCandidate = async (note: string, tags: readonly string[], slug = FIXTURE_SLUG, topic = 'fixture.suno-vocal-descriptor-position') => {
@@ -137,14 +152,14 @@ describe('propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-d
     expect(lyrics.items.map((i) => i.slug)).not.toContain(FIXTURE_SLUG);
   });
 
-  // Phase 9 turned x3lius-suno into a Creative agent (tests/phase-09) and Phase 11 did the same to
-  // Mix/Master, so the stub-agent half of this proof runs on the sub-domain that is still a stub:
-  // Evaluation (built in Phase 12), with its own FIXTURE rule promoted the same way.
+  // Phase 9 turned x3lius-suno into a Creative agent (tests/phase-09), Phase 11 did the same to
+  // Mix/Master, and Phase 12 built Evaluation, the last stub. The stub-agent half of this proof runs on
+  // a registry double that presents Evaluation as a stub (stubDeps), with its own FIXTURE rule promoted the same way.
   it('through the Agent Registry: a stub sub-domain returns its promoted rule as consumable context and says it is a stub', async () => {
     const r0 = await approveAndPromote(await fixtureCandidate('Score X3LIUS takes against the hook rubric first.', ['x3lius-evaluation'], STUB_FIXTURE_SLUG, 'fixture.evaluation-hook-first'));
     expect(r0.outcome).toBe('promoted');
     await embedPending(db.sql, embedder);
-    const r = await dispatch(deps(), 'x3lius-evaluation', { request: STUB_QUERY });
+    const r = await dispatch(stubDeps(), 'x3lius-evaluation', { request: STUB_QUERY });
     expect(r.status, r.error).toBe('success');
     const out = r.output as { subdomain: string; status: string; builtIn: string | null; context: { slug: string }[] };
     expect(out).toMatchObject({ subdomain: 'x3lius-evaluation', status: 'stub', builtIn: '12' });
@@ -154,7 +169,7 @@ describe('propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-d
 
   it('end to end from a raw request: route → RECORDS → X3LIUS entrypoint → x3lius-evaluation', async () => {
     expect(planRequest(STUB_QUERY, ENTRYPOINTS)).toMatchObject({ action: 'run-service', service: 'x3lius-music-system' });
-    const r = await runMusicSystem(deps(), { request: STUB_QUERY });
+    const r = await runMusicSystem(stubDeps(), { request: STUB_QUERY });
     expect(r).toMatchObject({ status: 'success', selected: ['x3lius-evaluation'] });
     const out = r.outputs['x3lius-evaluation'] as { context: { slug: string }[] };
     expect(out.context.map((i) => i.slug)).toContain(STUB_FIXTURE_SLUG);
