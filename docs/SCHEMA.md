@@ -1,6 +1,6 @@
 # Schema
 
-Status: through Phase 6D (Knowledge Promotion Gate). The ERD shows the Phase 1 canonical base; later phases are described in their sections below. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
+Status: through Phase 7 (X3LIUS module-scoped retrieval). The ERD shows the Phase 1 canonical base; later phases are described in their sections below. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
 
 ## ERD
 
@@ -237,6 +237,20 @@ Migration `20260924150000_promotion_gate.sql`:
 - **`regression_queue`** lists the checks a promotion owes (`retrieval`, `contradiction-guard`). It is consumed by the Phase 13 regression runner.
 - **Deferred FKs:** `knowledge_versions.promotion_run_id` and `regression_queue.promotion_run_id` are deferred, so the run record is written last with the ids it produced.
 - **Rollback:** refuses while first-party gate versions exist, because history is permanent.
+
+## Phase 7 additions: module-scoped retrieval
+
+Migration `20260924160000_subdomain_scope.sql`:
+
+- **`xyp_match_knowledge_in_modules(query, limit, module_slugs[])`** backs the Context Engine's `scope: { modules }` option, which is a sub-domain's context path.
+  - It searches only canonical prompts whose module slug is in the scope, across every version of the module.
+  - Only the current version of each canonical slug is searched.
+  - The scoped set is a MATERIALIZED CTE, so the scan is exact: a filtered HNSW scan can silently drop rows.
+  - EXECUTE is held by `xyp_runtime` and `service_role`.
+- **No new tables.** The X3LIUS Music System is data:
+  - 11 gate-written `modules` rows (the parent plus ten sub-domains), admitted from `records/x3lius/music-system.manifest.yaml` by the `xyp-module-manifest-v1` normalizer.
+  - `relations` edges `subdomain_of` (sub-domain → parent) and `derived_from` (module → manifest source).
+- **Placement:** the gate places a promoted rule in a sub-domain module when a candidate tag equals the slug of a module that has a `subdomain_of` edge. More than one such tag is refused before queueing.
 
 ## Adding a table (checklist, every phase)
 

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { extname, isAbsolute, relative, resolve } from 'node:path';
 import { isPdf } from '../ingestion/extract-pdf.ts';
 import { slugify } from '../ingestion/types.ts';
 import type { SourceKind, SourceOrigin } from '../quality/rubric.ts';
@@ -51,6 +51,14 @@ const displayPath = (path: string): string => {
 const sniffMime = (bytes: Uint8Array, declared: string | null): string =>
   isPdf(bytes) ? 'application/pdf' : (declared?.split(';')[0]?.trim() || 'application/octet-stream');
 
+/** Text formats a local file may be ingested as (Phase 7: module manifests). Anything else stays unsupported. */
+const FILE_TEXT_TYPES: Readonly<Record<string, string>> = {
+  '.md': 'text/markdown',
+  '.txt': 'text/plain',
+  '.yaml': 'application/yaml',
+  '.yml': 'application/yaml',
+};
+
 /**
  * Reads the source's bytes and computes its checksum. Performs I/O only — no DB writes.
  * @param input - file path, URL, or manual text
@@ -65,7 +73,7 @@ export const acquireSource = async (input: SourceInput): Promise<AcquiredSource>
       origin: input.origin,
       uri: displayPath(input.path),
       bytes,
-      mimeType: sniffMime(bytes, null),
+      mimeType: sniffMime(bytes, FILE_TEXT_TYPES[extname(input.path).toLowerCase()] ?? null),
       checksum: sha256Hex(bytes),
       fallbackTitle: displayPath(input.path),
     };

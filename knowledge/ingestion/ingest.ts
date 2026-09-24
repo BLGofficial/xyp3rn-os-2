@@ -27,7 +27,7 @@ const asIngestRole = <T>(sql: Sql, fn: (tx: postgres.TransactionSql) => Promise<
 
 const toPages = async (src: AcquiredSource): Promise<string[]> => {
   if (src.mimeType === 'application/pdf') return extractPdfPages(src.bytes);
-  if (src.mimeType.startsWith('text/')) return [new TextDecoder().decode(src.bytes)];
+  if (src.mimeType.startsWith('text/') || src.mimeType === 'application/yaml') return [new TextDecoder().decode(src.bytes)];
   throw new Error(`unsupported mime type ${src.mimeType} for ${src.uri}`);
 };
 

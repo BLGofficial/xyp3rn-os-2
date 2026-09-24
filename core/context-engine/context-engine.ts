@@ -32,8 +32,17 @@ export type ContextItem = {
   readonly source: { readonly id: string; readonly uri: string } | null;
 };
 
+/**
+ * Restricts retrieval to modules (by slug, every version of the module): only their current
+ * canonical prompts are searched, and graph expansion stays inside the scope (module_of only).
+ * This is a sub-domain's context path (Phase 7).
+ */
+export type ContextScope = { readonly modules: readonly string[] };
+
 export type ContextBundle = {
   readonly query: string;
+  /** The scope the bundle was retrieved under; null = the whole knowledge base. */
+  readonly scope: ContextScope | null;
   readonly model: string;
   readonly generation: string;
   readonly cache: 'hit' | 'miss';
@@ -47,7 +56,7 @@ export type ContextBundle = {
 };
 
 export type ContextEngine = {
-  readonly retrieve: (query: string, options?: { readonly limits?: RankLimits }) => Promise<ContextBundle>;
+  readonly retrieve: (query: string, options?: { readonly limits?: RankLimits; readonly scope?: ContextScope }) => Promise<ContextBundle>;
 };
 
 const RELATION_TABLES: Readonly<Record<string, ContextTable>> = {
@@ -85,27 +94,37 @@ const describe = (r: Reason, slugOf: (ref: EntityRef) => string): string =>
  * Creates the Context Engine: query → ranked, fully traceable context bundle.
  * @param sql - pool allowed to SET ROLE xyp_runtime
  * @param embedder - the same model the stored vectors were made with
- * @returns retrieve(query, { limits })
+ * @returns retrieve(query, { limits, scope })
  */
 export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine => {
   const cache = createLruCache<Omit<ContextBundle, 'cache'>>({ maxEntries: CACHE_MAX_ENTRIES, ttlMs: CACHE_TTL_MS });
 
   const retrieve: ContextEngine['retrieve'] = async (query, options = {}) => {
     const limits = options.limits ?? DEFAULT_LIMITS;
+    const scope = options.scope ? { modules: [...new Set(options.scope.modules)].sort() } : null;
+    if (scope && (scope.modules.length === 0 || scope.modules.some((m) => !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(m)))) {
+      throw new Error('context scope: modules must be a non-empty list of module slugs');
+    }
     const generation = await asRuntime(sql, generationOf);
-    const key = createHash('sha256').update(JSON.stringify({ query, limits, generation, model: embedder.model })).digest('hex');
+    const key = createHash('sha256').update(JSON.stringify({ query, limits, scope, generation, model: embedder.model })).digest('hex');
     const cached = cache.get(key);
     if (cached) return { ...cached, cache: 'hit' };
 
     const [queryVec] = await embedder.embed([query]);
     const bundle = await asRuntime(sql, async (tx) => {
-      const hits = await tx<{ entity_table: ContextTable; entity_id: string; similarity: number }[]>`
-        select entity_table, entity_id, similarity
-        from xyp_match_knowledge(${toVectorLiteral(queryVec!.vector)}::extensions.vector, ${limits.direct})`;
+      const vec = toVectorLiteral(queryVec!.vector);
+      const hits = scope
+        ? await tx<{ entity_table: ContextTable; entity_id: string; similarity: number }[]>`
+            select entity_table, entity_id, similarity
+            from xyp_match_knowledge_in_modules(${vec}::extensions.vector, ${limits.direct}, ${scope.modules}::text[])`
+        : await tx<{ entity_table: ContextTable; entity_id: string; similarity: number }[]>`
+            select entity_table, entity_id, similarity
+            from xyp_match_knowledge(${vec}::extensions.vector, ${limits.direct})`;
       const hitRefs = hits.map((h) => ({ ref: { table: h.entity_table, id: h.entity_id }, similarity: Number(h.similarity) }));
 
       // 1-hop: every relations edge touching a hit (either end), plus each prompt hit's module FK.
-      const relKeys = hitRefs.map((h) => `${Object.keys(RELATION_TABLES).find((k) => RELATION_TABLES[k] === h.ref.table)}:${h.ref.id}`);
+      // Scoped: the module FK only — a relations hop could leave the scope.
+      const relKeys = scope ? [] : hitRefs.map((h) => `${Object.keys(RELATION_TABLES).find((k) => RELATION_TABLES[k] === h.ref.table)}:${h.ref.id}`);
       const rels = relKeys.length
         ? await tx<{ id: string; subject_type: string; subject_id: string; predicate: string; object_type: string; object_id: string }[]>`
             select id, subject_type::text, subject_id, predicate, object_type::text, object_id from relations
@@ -182,6 +201,7 @@ export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine
 
       return {
         query,
+        scope,
         model: embedder.model,
         generation,
         items,

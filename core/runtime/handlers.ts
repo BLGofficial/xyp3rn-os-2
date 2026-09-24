@@ -3,6 +3,8 @@ import { extractiveSummarizer } from '../agents/extractive-summarizer.ts';
 import { healthCheck } from '../agents/health-check.ts';
 import type { HandlerMap } from '../orchestrator/dispatch.ts';
 import { researchOrchestrator } from '../../research-intelligence/agents/research-orchestrator.ts';
+import { loadMusicSystem } from '../../records/x3lius/music-system.ts';
+import { subdomainStub } from '../../records/x3lius/subdomain-stub.ts';
 
 /**
  * Deterministic (`model: none`) agent handlers, keyed by agent name. Checked in and
@@ -14,4 +16,6 @@ export const HANDLERS: HandlerMap = {
   'extractive-summarizer': extractiveSummarizer,
   'health-check': healthCheck,
   'research-orchestrator': researchOrchestrator,
+  // Phase 7: one stub per X3LIUS sub-domain, from the checked-in manifest (not from agents/).
+  ...Object.fromEntries(loadMusicSystem().subdomains.map((s) => [s.slug, subdomainStub])),
 };

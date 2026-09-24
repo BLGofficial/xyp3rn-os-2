@@ -1,0 +1,209 @@
+Phase 7 — X3LIUS Music Intelligence: proof (2026-09-24)
+Produced with the repo's own commands against the local Supabase-emulating Postgres 16.
+================================================================================
+
+## 1. The wiring proof the guide asks for (tests/phase-07/propagation.test.ts)
+# A FIXTURE rule — synthetic, labelled '[FIXTURE]' in every field, in a throwaway test DB only —
+# is promoted through the real 6D gate with tag x3lius-suno, embedded, and retrieved on the
+# Suno sub-domain's context path via the Context Engine, the x3lius-suno stub agent, and pnpm-ask routing.
+# Mutations: no placement → 6 red; scope filter removed → 2 red; current-version filter removed → 1 red.
+
+ ✓ tests/phase-07/manifest.test.ts > module manifest normalizer > is selected for a module manifest and only for one
+ ✓ tests/phase-07/manifest.test.ts > module manifest normalizer > yields the parent + the guide's ten sub-domains under RECORDS, each subdomain_of the parent
+ ✓ tests/phase-07/manifest.test.ts > module manifest normalizer > states in each stub description which phase builds it (or that none does yet)
+ ✓ tests/phase-07/manifest.test.ts > module manifest normalizer > rejects a malformed manifest loudly (never half-normalized)
+ ✓ tests/phase-07/manifest.test.ts > module manifest normalizer > loadMusicSystem exposes the same sub-domains the runtime routes to
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-songwriting: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-lyrics: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-vocal-dna: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-composition: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-arrangement: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-genre-style: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-suno: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-production: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-mix-master: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > x3lius-evaluation: read-only Knowledge stub under RECORDS with a handler and a scope
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one stub agent per sub-domain > has no x3lius-* agent outside the manifest, and the whole registry still validates
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Write a Suno style prompt for the next X3LIUS single
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Master the new X3LIUS track to -9 LUFS
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Write the hook and chorus for an X3LIUS song
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Write rhymes and lyric bars for X3LIUS
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Describe the X3LIUS vocal DNA and ad-lib style
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Pick the chord progression and melody for the X3LIUS intro
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects nothing when no sub-domain matches — never a default
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > RECORDS requests go to the X3LIUS Music System entrypoint
+ ✓ tests/phase-07/propagation.test.ts > the X3LIUS Music System module is gate-written canonical knowledge > admits the parent + 10 sub-domain modules through the gate, each with history and a subdomain_of edge
+ ✓ tests/phase-07/propagation.test.ts > the X3LIUS Music System module is gate-written canonical knowledge > re-ingesting the unchanged manifest is a no-op
+ ✓ tests/phase-07/propagation.test.ts > the X3LIUS Music System module is gate-written canonical knowledge > an empty sub-domain answers with an empty scoped context, not with unrelated knowledge
+ ✓ tests/phase-07/propagation.test.ts > propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-domain context path > the gate places the rule in the sub-domain module its tag names, and says so
+ ✓ tests/phase-07/propagation.test.ts > propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-domain context path > once embedded, the Suno scope returns it — and every item stays inside the scope; Lyrics does not see it
+ ✓ tests/phase-07/propagation.test.ts > propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-domain context path > through the Agent Registry: the x3lius-suno stub returns it as consumable context and says it is a stub
+ ✓ tests/phase-07/propagation.test.ts > propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-domain context path > end to end from a raw request: route → RECORDS → X3LIUS entrypoint → x3lius-suno
+ ✓ tests/phase-07/propagation.test.ts > propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-domain context path > only the current version is consumable: v2 replaces v1 on the scoped path
+ ✓ tests/phase-07/propagation.test.ts > propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-domain context path > a request no sub-domain matches is answered with clarify, never a default sub-domain
+ ✓ tests/phase-07/propagation.test.ts > propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-domain context path > refuses a rule tagged with two sub-domains before queueing it (one sub-domain per rule)
+ Test Files  3 passed (3)
+      Tests  34 passed (34)
+
+## 2. Dev database: the module is gate-written, routing reaches the stubs
+# The Suno context is empty on the dev DB: no rule has been promoted into x3lius-suno there yet.
+
+$ pnpm db:up
+applied: 20260924160000
+
+$ pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_party
+{
+  "runId": "ea49877a-ec2f-48b0-9db3-916eef6803d4",
+  "status": "success",
+  "sourceId": "256da06e-b892-4ef9-865c-cfbaaabcfa87",
+  "stats": {
+    "normalizer": "xyp-module-manifest-v1",
+    "pages": 1,
+    "checksum": "7b32f5269cfe68edd612f9bf4ca804914c8cae4c7fa43319e9f8d11361e72145",
+    "modules": {
+      "inserted": 11,
+      "reused": 0
+    },
+    "prompts": {
+      "inserted": 0,
+      "reused": 0
+    },
+    "tags_linked": 0,
+    "relations_inserted": 21,
+    "quality_reports": 1,
+    "promotion_run_id": "c805b031-3da2-42ea-b8c2-7bd54579e162"
+  }
+}
+
+# The module + ten sub-domains, gate-written with history and subdomain_of edges (dev DB)
+        slug         |        title        | promoted_via |      history       | subdomain_of 
+---------------------+---------------------+--------------+--------------------+--------------
+ x3lius-music-system | X3LIUS Music System | gate         | first-party-ingest |            0
+ x3lius-arrangement  | Arrangement         | gate         | first-party-ingest |            1
+ x3lius-composition  | Composition         | gate         | first-party-ingest |            1
+ x3lius-evaluation   | Evaluation          | gate         | first-party-ingest |            1
+ x3lius-genre-style  | Genre/Style         | gate         | first-party-ingest |            1
+ x3lius-lyrics       | Lyrics              | gate         | first-party-ingest |            1
+ x3lius-mix-master   | Mix/Master          | gate         | first-party-ingest |            1
+ x3lius-production   | Production          | gate         | first-party-ingest |            1
+ x3lius-songwriting  | Songwriting         | gate         | first-party-ingest |            1
+ x3lius-suno         | Suno                | gate         | first-party-ingest |            1
+ x3lius-vocal-dna    | Vocal DNA           | gate         | first-party-ingest |            1
+(11 rows)
+
+$ pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_party   (again)
+  "status": "noop",
+
+$ pnpm ask "Write a Suno style prompt for the next X3LIUS single"
+route: {"status":"routed","domain":"RECORDS","evidence":{"RESEARCH_INTELLIGENCE":[],"RECORDS":["suno","x3lius"],"TECH":[],"GOVERNANCE":[]}}
+{
+  "status": "success",
+  "selected": [
+    "x3lius-suno"
+  ],
+  "selection": {
+    "selected": [
+      {
+        "name": "x3lius-suno",
+        "score": 6,
+        "matched": [
+          "style prompt",
+          "suno"
+        ]
+      }
+    ],
+    "notSelected": [
+      {
+        "name": "x3lius-genre-style",
+        "score": 2,
+        "matched": [
+          "style"
+        ]
+      },
+      {
+        "name": "x3lius-arrangement",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-composition",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-evaluation",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-lyrics",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-mix-master",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-production",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-songwriting",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-vocal-dna",
+        "score": 0,
+        "matched": []
+      }
+    ],
+    "threshold": 3
+  },
+  "workflowRunId": "81126951-c73a-46d7-a088-1dadb064d2fe",
+  "outputs": {
+    "x3lius-suno": {
+      "subdomain": "x3lius-suno",
+      "status": "stub",
+      "builtIn": "9",
+      "request": "Write a Suno style prompt for the next X3LIUS single",
+      "generation": "32@2026-09-24 11:36:32.951814+00|30@2026-09-24 12:13:14.594903+00|2@2026-09-24 12:13:14.594903+00|90@2026-09-24 12:13:14.594903+00",
+      "context": []
+    }
+  }
+}
+
+$ pnpm ask "Plan the X3LIUS release calendar"
+route: {"status":"routed","domain":"RECORDS","evidence":{"RESEARCH_INTELLIGENCE":[],"RECORDS":["release","x3lius"],"TECH":[],"GOVERNANCE":[]}}
+{
+  "status": "clarify",
+  "selected": [],
+  "selection": {
+    "selected": [],
+    "notSelected": [
+      {
+        "name": "x3lius-arrangement",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-composition",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-evaluation",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-genre-style",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "name": "x3lius-lyrics",
+        "score": 0,

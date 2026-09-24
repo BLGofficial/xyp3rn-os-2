@@ -1,4 +1,4 @@
-import type { ContextBundle, ContextEngine } from '../context-engine/context-engine.ts';
+import type { ContextBundle, ContextEngine, ContextScope } from '../context-engine/context-engine.ts';
 import type { RankLimits } from '../context-engine/rank.ts';
 
 /**
@@ -74,7 +74,8 @@ export const resolveBindings = (template: unknown, memory: RunMemory): unknown =
 };
 
 export type LongTermMemory = {
-  readonly recall: (query: string, limits?: RankLimits) => Promise<ContextBundle>;
+  /** `scope` narrows recall to modules (a sub-domain's context path, Phase 7). */
+  readonly recall: (query: string, options?: { readonly limits?: RankLimits; readonly scope?: ContextScope }) => Promise<ContextBundle>;
 };
 
 /**
@@ -83,5 +84,5 @@ export type LongTermMemory = {
  * @returns recall(query) — deliberately nothing else
  */
 export const createLongTermMemory = (engine: Pick<ContextEngine, 'retrieve'>): LongTermMemory => ({
-  recall: (query, limits) => engine.retrieve(query, limits ? { limits } : {}),
+  recall: (query, options = {}) => engine.retrieve(query, options),
 });

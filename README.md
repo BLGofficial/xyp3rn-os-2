@@ -22,7 +22,8 @@ pnpm context "your question"   # ranked, traceable context bundle
 pnpm agents:validate            # Agent Registry: validate agents/*.agent.md
 pnpm dispatch health-check '{"ping":"xyp"}'   # run an agent end to end, print its agent_runs row
 pnpm route "your request"       # domain routing decision with evidence
-pnpm ask "your request"         # front door: route → plan → run the domain entrypoint
+pnpm ask "your request"         # front door: route → plan → run the domain entrypoint (research, X3LIUS sub-domains)
+pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_party   # Phase 7: X3LIUS module + 10 sub-domains via the gate
 pnpm research <cmd> '<json>'    # 6C engines by hand: observation, cite, finding, candidate, eligibility, resolve, experiment:*
 pnpm gate run <candidateId>     # 6D Promotion Gate: the nine-step state machine, the only canonical writer
 pnpm gate queue                 # pending human approvals with the gate's reasons

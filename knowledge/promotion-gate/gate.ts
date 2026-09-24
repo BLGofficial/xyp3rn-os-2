@@ -159,6 +159,27 @@ const evaluate = async (tx: Queryable, c: CandidateRow, asOf: Date) => {
   return { decision, confidence, steps: [candidate, sourceVerification, tagging, controlledTest, evaluation, confidenceStep] };
 };
 
+/**
+ * Sub-domain placement (Phase 7 propagation). A candidate tag that names a sub-domain module —
+ * a module in the candidate's domain with a `subdomain_of` edge — places the rule in it, which
+ * puts it on that sub-domain's scoped context path. Data-driven: any manifest-declared
+ * sub-domain works, nothing is hardcoded here.
+ * @returns the latest version of the named sub-domain module, or null (domain default module)
+ * @throws Error when tags name more than one sub-domain: a rule belongs to exactly one
+ */
+const placementOf = async (tx: Queryable, c: CandidateRow): Promise<{ id: string; slug: string } | null> => {
+  const subs = await tx<{ id: string; slug: string }[]>`
+    select distinct on (m.slug) m.id, m.slug from modules m
+    where m.slug = any(${c.tags}) and m.domain = ${c.domain}
+      and exists (select 1 from relations r join modules x on r.subject_id = x.id::text
+                  where r.subject_type = 'module' and r.predicate = 'subdomain_of' and x.slug = m.slug)
+    order by m.slug, m.version desc`;
+  if (subs.length > 1) {
+    throw new Error(`candidate ${c.id}: tags name ${subs.length} sub-domains (${subs.map((x) => x.slug).join(', ')}); a rule belongs to exactly one`);
+  }
+  return subs[0] ?? null;
+};
+
 /** knowledge_versions rows for freshly inserted canonical rows (snapshot without embedding columns). */
 const writeVersions = async (
   tx: Queryable,
@@ -178,9 +199,10 @@ const writeVersions = async (
 /**
  * Propagation (step 9): regression checks owed by the new rows. Agents need no push — the
  * Context Engine cache keys on the knowledge generation, so the next retrieval sees the new
- * version (once `pnpm embed` has embedded it). Sub-domain skill wiring arrives in Phase 7.
+ * version (once `pnpm embed` has embedded it). A rule placed in a sub-domain module is also on
+ * that sub-domain's scoped context path (Phase 7), which the retrieval check names.
  */
-const propagate = async (tx: Queryable, promotionRunId: string, promptIds: readonly string[]): Promise<StepRecord> => {
+const propagate = async (tx: Queryable, promotionRunId: string, promptIds: readonly string[], scopeModule?: string): Promise<StepRecord> => {
   if (promptIds.length === 0) return { step: 'propagation', passed: true, reason: 'no new canonical prompts; nothing to propagate', regression: [] };
   const claims = await tx<{ id: string; claims: unknown[] }[]>`
     select id, structured->'claims' as claims from canonical_prompts
@@ -190,7 +212,10 @@ const propagate = async (tx: Queryable, promotionRunId: string, promptIds: reado
     insert into regression_queue (promotion_run_id, kind, payload)
     values (${promotionRunId}, 'retrieval', ${tx.json({
       canonical_prompt_ids: [...promptIds],
-      check: 'each row is embedded (pnpm embed) and the Context Engine returns it for its own title',
+      check: scopeModule
+        ? `each row is embedded (pnpm embed) and the Context Engine scoped to module ${scopeModule} returns it for its own title`
+        : 'each row is embedded (pnpm embed) and the Context Engine returns it for its own title',
+      ...(scopeModule ? { scope_module: scopeModule } : {}),
     })})`;
   kinds.push('retrieval');
   if (claims.length > 0) {
@@ -206,7 +231,8 @@ const propagate = async (tx: Queryable, promotionRunId: string, promptIds: reado
   return {
     step: 'propagation',
     passed: true,
-    reason: `regression enqueued (${kinds.join(', ')}); Context Engine generation changes with this write; embedding pending (pnpm embed); skill wiring is Phase 7`,
+    reason: `regression enqueued (${kinds.join(', ')}); Context Engine generation changes with this write; embedding pending (pnpm embed)${
+      scopeModule ? `; on the ${scopeModule} scoped context path` : ''}`,
     regression: kinds,
   };
 };
@@ -230,10 +256,18 @@ const recordRun = async (
 };
 
 /** Steps 8–9 for a candidate: append the canonical row (next version) + history, then propagate. */
-const promote = async (tx: Queryable, c: CandidateRow, promotionRunId: string, approval: Record<string, unknown>) => {
-  // Promoted rules live in one gate-owned module per domain until Phase 7's sub-domain modules.
-  const moduleSlug = `${c.domain.toLowerCase().replaceAll('_', '-')}-validated-rules`;
-  let [mod] = await tx<{ id: string }[]>`select id from modules where slug = ${moduleSlug} order by version desc limit 1`;
+const promote = async (
+  tx: Queryable,
+  c: CandidateRow,
+  promotionRunId: string,
+  approval: Record<string, unknown>,
+  placement: { readonly id: string; readonly slug: string } | null,
+) => {
+  // A sub-domain tag places the rule there (Phase 7); otherwise the gate-owned domain module.
+  const moduleSlug = placement?.slug ?? `${c.domain.toLowerCase().replaceAll('_', '-')}-validated-rules`;
+  let mod: { id: string } | undefined = placement
+    ? { id: placement.id }
+    : (await tx<{ id: string }[]>`select id from modules where slug = ${moduleSlug} order by version desc limit 1`)[0];
   const newModules: string[] = [];
   if (!mod) {
     [mod] = await tx<{ id: string }[]>`
@@ -267,12 +301,14 @@ const promote = async (tx: Queryable, c: CandidateRow, promotionRunId: string, a
   const write: StepRecord = {
     step: 'canonical-write',
     passed: true,
-    reason: `appended ${c.target_slug} v${next!.v}${newModules.length > 0 ? ` (+ module ${moduleSlug} v1)` : ''} with knowledge_versions history`,
+    reason: `appended ${c.target_slug} v${next!.v}${placement ? ` in sub-domain ${placement.slug} (candidate tag)` : ` in ${moduleSlug}`}${
+      newModules.length > 0 ? ` (+ module ${moduleSlug} v1)` : ''} with knowledge_versions history`,
+    module: moduleSlug,
     canonical_prompt_id: cp!.id,
     version: next!.v,
     module_ids_created: newModules,
   };
-  return { write, canonicalPromptId: cp!.id, version: next!.v };
+  return { write, canonicalPromptId: cp!.id, version: next!.v, moduleSlug };
 };
 
 /**
@@ -299,6 +335,8 @@ export const runGate = async (sql: Sql, candidateId: string, options: { readonly
     }
     // Modules carry no structured claims, so a module candidate would bypass contradiction guarding.
     if (c.proposed_kind !== 'canonical_prompt') throw new Error(`candidate ${candidateId}: only canonical_prompt candidates are promotable`);
+    // Resolved before anything is queued: an operator is never asked to approve an unplaceable rule.
+    const placement = await placementOf(tx, c);
 
     const { decision, confidence, steps } = await evaluate(tx, c, options.asOf ?? new Date());
     const runId = randomUUID();
@@ -359,8 +397,8 @@ export const runGate = async (sql: Sql, candidateId: string, options: { readonly
       };
     }
 
-    const { write, canonicalPromptId, version } = await promote(tx, c, runId, approval);
-    const s = [...steps, validated, write, await propagate(tx, runId, [canonicalPromptId])];
+    const { write, canonicalPromptId, version, moduleSlug } = await promote(tx, c, runId, approval, placement);
+    const s = [...steps, validated, write, await propagate(tx, runId, [canonicalPromptId], placement ? moduleSlug : undefined)];
     if (s.map((x) => x.step).join() !== GATE_STEPS.join()) throw new Error('gate step order drifted from GATE_STEPS');
     // Written last: knowledge_versions and regression_queue reference it through deferred FKs.
     await recordRun(tx, { ...base, outcome: 'promoted', steps: s, approvalId });
