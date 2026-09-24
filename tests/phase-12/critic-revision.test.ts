@@ -167,7 +167,10 @@ describe('Critic (x3lius-evaluation)', () => {
     expect((await run('x3lius-evaluation', { request: 'Evaluate the new X3LIUS take' })).error).toMatch(/critiques one artifact version: input \{ artifactId/);
     const l = await lyrics();
     const first = (await run('x3lius-evaluation', { artifactId: l.id })).output as CriticOutput;
-    expect((await run('x3lius-evaluation', { artifactId: l.id, previousCritiqueId: first.critique.id })).error).toMatch(/not the parent of/);
+    // Refused before any model call (the DB trigger would also refuse the write, after the call).
+    const model = fakeModel();
+    expect((await run('x3lius-evaluation', { artifactId: l.id, previousCritiqueId: first.critique.id }, model)).error).toMatch(/reviewed .*, not the parent of/);
+    expect(model.calls).toEqual([]);
   });
 });
 

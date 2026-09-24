@@ -27,6 +27,10 @@ describe('loop decision after each Critic pass (spec §7, first matching row win
     expect(decide(passes)).toEqual(expected);
   });
 
+  it('a mix report is studio work even when no revision is allowed', () => {
+    expect(decide([pass(2, 4, MIX)], 0)).toEqual(escalate('studio_work'));
+  });
+
   it('takes another cap', () => {
     expect(decide([pass(3), pass(2)], 1)).toEqual(escalate('iteration_cap'));
   });
