@@ -61,6 +61,8 @@ describe('model references: frontmatter `model` picks the provider', () => {
     ['anthropic:claude-opus-5', { provider: 'anthropic', model: 'claude-opus-5' }],
     ['groq:llama-3.3-70b-versatile', { provider: 'groq', model: 'llama-3.3-70b-versatile' }],
     ['openrouter:anthropic/claude-opus-5', { provider: 'openrouter', model: 'anthropic/claude-opus-5' }],
+    // OpenRouter variant suffixes keep their colon: only the first one separates the provider.
+    ['openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', { provider: 'openrouter', model: 'nvidia/nemotron-3-ultra-550b-a55b:free' }],
   ])('%s', (ref, expected) => {
     expect(parseModelRef(ref)).toEqual(expected);
   });
@@ -134,9 +136,18 @@ describe('OpenAI-compatible transport (Groq, OpenRouter; FAKE fetch)', () => {
     expect(c!.headers.authorization).toBe(`Bearer ${key}`);
     expect(c!.body).toMatchObject({
       model: wireModel,
-      messages: [{ role: 'system', content: 'SYSTEM' }, { role: 'user', content: 'USER' }],
+      messages: [{ role: 'system' }, { role: 'user', content: 'USER' }],
       response_format: { type: 'json_schema', json_schema: { name: 'test_schema', strict: true, schema: SCHEMA } },
     });
+  });
+
+  it('also states the schema in the system message: some routes (e.g. OpenRouter :free) silently drop response_format', async () => {
+    const f = fakeFetch([{ body: chatReply(JSON.stringify(GOOD)) }]);
+    await createLlmClient({ model: 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free', agentName: 'a', env: ENV, fetch: f.fn }).complete(REQ);
+    const system = (f.calls[0]!.body.messages as { content: string }[])[0]!.content;
+    expect(system.startsWith('SYSTEM\n\n')).toBe(true);
+    expect(system).toContain(JSON.stringify(SCHEMA));
+    expect(system).toMatch(/single JSON object/);
   });
 
   it('a reply cut off by the token limit is an error, not partial JSON', async () => {
@@ -146,7 +157,39 @@ describe('OpenAI-compatible transport (Groq, OpenRouter; FAKE fetch)', () => {
 
   it('a non-2xx reply surfaces status and provider message', async () => {
     const f = fakeFetch([{ status: 429, body: { error: { message: 'rate limited' } } }]);
-    await expect(createLlmClient({ model: 'openrouter:x/y', agentName: 'a', env: ENV, fetch: f.fn }).complete(REQ)).rejects.toThrow('openrouter API error 429: rate limited');
+    await expect(createLlmClient({ model: 'openrouter:x/y', agentName: 'a', env: ENV, fetch: f.fn, retryDelaysMs: [] }).complete(REQ)).rejects.toThrow('openrouter API error 429: rate limited');
+  });
+});
+
+describe('transient provider errors: bounded retries (a model call changes no external state)', () => {
+  const overloaded = { status: 503, body: { error: { message: 'Upstream error from Nvidia: Service temporarily overloaded', code: 503 } } };
+
+  it('retries 503 / 429 / 502, including an error reported inside a 200, then succeeds', async () => {
+    const f = fakeFetch([overloaded, { status: 200, body: { error: { message: 'overloaded', code: 502 } } }, { status: 429, body: { error: { message: 'rate limited' } } }, { body: chatReply(JSON.stringify(GOOD)) }]);
+    const r = await createLlmClient({ model: 'openrouter:x/y', agentName: 'a', env: ENV, fetch: f.fn, retryDelaysMs: [0, 0, 0] }).complete(REQ);
+    expect(r.json).toEqual(GOOD);
+    expect(f.calls).toHaveLength(4);
+  });
+
+  it('gives up after the last delay, surfacing the final error', async () => {
+    const f = fakeFetch([overloaded]);
+    await expect(createLlmClient({ model: 'openrouter:x/y', agentName: 'a', env: ENV, fetch: f.fn, retryDelaysMs: [0, 0] }).complete(REQ))
+      .rejects.toThrow('openrouter API error 503: Upstream error from Nvidia: Service temporarily overloaded (after 3 attempts)');
+    expect(f.calls).toHaveLength(3);
+  });
+
+  it('never retries a request the provider rejected as invalid (400/401/402)', async () => {
+    for (const status of [400, 401, 402]) {
+      const f = fakeFetch([{ status, body: { error: { message: 'no' } } }]);
+      await expect(createLlmClient({ model: 'groq:m', agentName: 'a', env: ENV, fetch: f.fn, retryDelaysMs: [0, 0] }).complete(REQ)).rejects.toThrow(`groq API error ${status}`);
+      expect(f.calls).toHaveLength(1);
+    }
+  });
+
+  it('never retries a schema-invalid reply (that is the model, not the transport)', async () => {
+    const f = fakeFetch([{ body: chatReply('{"nope":1}') }]);
+    await expect(createLlmClient({ model: 'groq:m', agentName: 'a', env: ENV, fetch: f.fn, retryDelaysMs: [0, 0] }).complete(REQ)).rejects.toThrow(/violates schema/);
+    expect(f.calls).toHaveLength(1);
   });
 });
 

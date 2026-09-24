@@ -88,6 +88,20 @@ const contextRef = (e: ContextEntry) =>
     ? { kind: e.kind, ref: e.ref, module: e.module, slug: e.slug, title: e.title, modelTag: e.modelTag, score: e.score, why: e.why, source: e.source }
     : { kind: e.kind, ref: e.ref, module: e.module, slug: e.slug, topic: e.topic, value: e.value, modelScope: e.modelScope, source: e.source };
 
+const normalizeRef = (ref: string): string => ref.trim().replace(/^\[(.*)\]$/, '$1').trim();
+
+/**
+ * Maps a cited ref to a given one. Exact refs pass; otherwise a claim topic or rule slug is
+ * accepted only when exactly one given entry carries it (models abbreviate refs — seen live).
+ * Anything else is returned unchanged, so the exact-match check refuses it.
+ */
+const resolveRef = (cited: string, entries: readonly ContextEntry[]): string => {
+  const ref = normalizeRef(cited);
+  if (entries.some((e) => e.ref === ref)) return ref;
+  const byAlias = entries.filter((e) => (e.kind === 'claim' ? e.topic === ref : e.slug === ref));
+  return byAlias.length === 1 ? byAlias[0]!.ref : ref;
+};
+
 const render = (v: unknown): string => (Array.isArray(v) ? v.map(render).join(', ') : typeof v === 'string' ? v : JSON.stringify(v));
 
 const promptLine = (e: ContextEntry): string =>
@@ -107,7 +121,7 @@ const systemPrompt = (title: string, slug: string, spec: CreativeSpec, entries: 
   '',
   'HOW TO USE THEM',
   '- Voice, style, tone and language choices must come from CANONICAL RULES. Do not add traits they do not state.',
-  '- In rulesApplied, list every rule you applied, with its ref copied exactly, and how it shaped the output.',
+  '- In rulesApplied, list every rule you applied, with its full ref copied exactly as shown inside the brackets (it starts with "canonical_prompts:"), and how it shaped the output.',
   '- In ungroundedChoices, list every creative decision no rule covers. When the rules are thin this list is long; that is expected, not a failure.',
   '- Reply with JSON only, matching the response schema.',
 ].join('\n');
@@ -190,10 +204,13 @@ const creativeProgram = (slug: string): LlmProgram => {
       schema: { name: llmSchema.id, schema: llmSchema.schema },
       signal: ctx.signal,
     });
-    const reply = res.json as Record<string, unknown>;
+    // Models copy refs loosely (brackets, bare topics — seen live with Nemotron): resolve to a given
+    // ref when that is unambiguous, then require an exact match.
+    const raw = res.json as Record<string, unknown>;
+    const reply = { ...raw, rulesApplied: (raw.rulesApplied as { ref: string; how: string }[]).map((r) => ({ ...r, ref: resolveRef(r.ref, entries) })) };
 
     const given = new Set(entries.map((e) => e.ref));
-    const unknown = (reply.rulesApplied as { ref: string }[]).map((r) => r.ref).filter((r) => !given.has(r));
+    const unknown = reply.rulesApplied.map((r) => r.ref).filter((r) => !given.has(r));
     if (unknown.length > 0) throw new Error(`${slug} reply cites refs it was not given: ${unknown.join(', ')}`);
     const { body, violations } = spec.finalize?.(reply, prepared, entries) ?? { body: reply, violations: [] };
     const all = [...violations, ...(spec.check?.(body) ?? [])];

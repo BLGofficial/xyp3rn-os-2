@@ -50,7 +50,7 @@ Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 - [x] Phase 5: Workflow / orchestration engine
 - [x] Phase 6: AI Music Research Intelligence (6A–6D; the 20 specialists still need an LLM program to run)
 - [x] Phase 7: X3LIUS Music Intelligence (module + ten sub-domains, scoped context path)
-- [x] Phase 8: Songwriting + Lyrics agents, plus Composition (F15). Built; the live-verse proof is pending a provider key ([handoff](docs/handoffs/PHASE-08.md))
+- [x] Phase 8: Songwriting + Lyrics agents, plus Composition (F15). Live verse produced with Nemotron via OpenRouter ([handoff](docs/handoffs/PHASE-08.md))
 - [x] Phase 9: Suno Generation System, plus Genre/Style (F15). Built; the live prompt-assembly proof is pending a provider key ([handoff](docs/handoffs/PHASE-09.md))
 - [ ] Phase 10: Vocal / Artist DNA
 - [ ] Phase 11: Production / Mix / Master

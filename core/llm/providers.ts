@@ -60,6 +60,15 @@ export type LlmClient = {
 };
 
 type Raw = Omit<LlmResponse, 'json'>;
+
+/** A provider failure worth retrying (overload, rate limit, gateway): the request itself was fine. */
+class TransientProviderError extends Error {}
+const TRANSIENT_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+const providerError = (message: string, status: number | string | undefined): Error =>
+  TRANSIENT_STATUS.has(Number(status)) ? new TransientProviderError(message) : new Error(message);
+
+/** Default waits between attempts: free/shared routes (e.g. OpenRouter :free) overload often. */
+const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [2_000, 6_000];
 type Transport = (key: string, model: string, req: LlmRequest, fetchFn: typeof fetch | undefined) => Promise<Raw>;
 
 // Non-streaming; 16k leaves room for adaptive thinking plus a structured reply this size.
@@ -83,7 +92,7 @@ const anthropicTransport: Transport = async (key, model, req, fetchFn) => {
   } catch (e) {
     if (e instanceof Anthropic.APIError && e.status !== undefined) {
       const detail = (e.error as { error?: { message?: string } } | undefined)?.error?.message ?? e.message;
-      throw new Error(`anthropic API error ${e.status}: ${detail}`);
+      throw providerError(`anthropic API error ${e.status}: ${detail}`, e.status);
     }
     throw e;
   }
@@ -100,6 +109,9 @@ type ChatCompletion = {
   error?: { message?: string; code?: number | string };
 };
 
+const schemaInstruction = (req: LlmRequest): string =>
+  `RESPONSE FORMAT\nReply with a single JSON object that validates against this JSON Schema (${req.schema.name}). No prose, no code fences.\n${JSON.stringify(req.schema.schema)}`;
+
 const openAiCompatible = (provider: Exclude<Provider, 'anthropic'>): Transport => async (key, model, req, fetchFn) => {
   const res = await (fetchFn ?? fetch)(`${PROVIDERS[provider].baseUrl}/chat/completions`, {
     method: 'POST',
@@ -107,14 +119,19 @@ const openAiCompatible = (provider: Exclude<Provider, 'anthropic'>): Transport =
     body: JSON.stringify({
       model,
       max_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS,
-      messages: [{ role: 'system', content: req.system }, { role: 'user', content: req.user }],
+      // Also stated in the prompt: some routes accept response_format but drop it (OpenRouter :free
+      // variants), and a model that never sees the schema can't match it. Validation stays local.
+      messages: [{ role: 'system', content: `${req.system}\n\n${schemaInstruction(req)}` }, { role: 'user', content: req.user }],
       response_format: { type: 'json_schema', json_schema: { name: req.schema.name.replace(/[^A-Za-z0-9_-]/g, '_'), strict: true, schema: req.schema.schema } },
     }),
     ...(req.signal ? { signal: req.signal } : {}),
   });
   const body = (await res.json().catch(() => ({}))) as ChatCompletion;
   // OpenRouter can report an upstream failure inside a 200.
-  if (!res.ok || body.error) throw new Error(`${provider} API error ${body.error?.code ?? res.status}: ${body.error?.message ?? res.statusText}`);
+  if (!res.ok || body.error) {
+    const status = body.error?.code ?? res.status;
+    throw providerError(`${provider} API error ${status}: ${body.error?.message ?? res.statusText}`, status);
+  }
   const choice = body.choices?.[0];
   const finish = choice?.finish_reason ?? null;
   if (finish === 'content_filter') throw new Error(`${provider} refused (content_filter)`);
@@ -129,6 +146,30 @@ const TRANSPORTS: Readonly<Record<Provider, Transport>> = {
   anthropic: anthropicTransport,
   groq: openAiCompatible('groq'),
   openrouter: openAiCompatible('openrouter'),
+};
+
+const pause = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error(String(signal.reason)));
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => { clearTimeout(t); reject(new Error(String(signal.reason))); }, { once: true });
+  });
+
+/**
+ * Retries a transport call on transient provider errors only. Safe because a completion changes
+ * no external state (unlike Execution agents, which stay retry-free per Phase 4D). Bounded by
+ * `delays` and by the run's abort signal (dispatch timeout).
+ */
+const withRetries = async (call: () => Promise<Raw>, delays: readonly number[], signal?: AbortSignal): Promise<Raw> => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call();
+    } catch (e) {
+      if (!(e instanceof TransientProviderError)) throw e;
+      if (attempt >= delays.length) throw new Error(attempt > 0 ? `${e.message} (after ${attempt + 1} attempts)` : e.message);
+      await pause(delays[attempt]!, signal);
+    }
+  }
 };
 
 /** Accepts bare JSON or JSON in one fenced block (some providers fence despite response_format). */
@@ -153,7 +194,10 @@ export const createLlmClient = (options: {
   readonly agentName: string;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly fetch?: typeof fetch;
+  /** Waits before each retry of a transient provider error; its length is the retry count (default 2 retries). */
+  readonly retryDelaysMs?: readonly number[];
 }): LlmClient => {
+  const delays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
   const modelRef = parseModelRef(options.model);
   return {
     modelRef,
@@ -161,7 +205,7 @@ export const createLlmClient = (options: {
       const { keyEnv } = PROVIDERS[modelRef.provider];
       const key = options.env[keyEnv];
       if (!key) throw new Error(`LLM runner unavailable: ${keyEnv} is not set (agent ${options.agentName} uses model ${options.model})`);
-      const raw = await TRANSPORTS[modelRef.provider](key, modelRef.model, req, options.fetch);
+      const raw = await withRetries(() => TRANSPORTS[modelRef.provider](key, modelRef.model, req, options.fetch), delays, req.signal);
       const json = parseReply(modelRef.provider, raw.text);
       const errors = validateJson(req.schema.schema, json);
       if (errors.length > 0) throw new Error(`${modelRef.provider} reply violates schema ${req.schema.name}: ${errors.join('; ')}`);
