@@ -14,10 +14,13 @@ export const ENTRYPOINT_PHASE: Readonly<Record<RoutableDomain, string>> = {
   GOVERNANCE: '15',
 };
 
-export type Entrypoints = Readonly<Partial<Record<RoutableDomain, string>>>;
+/** A domain entrypoint: a workflow spec path, or a named runtime service (e.g. research). */
+export type Entrypoint = string | { readonly service: string };
+export type Entrypoints = Readonly<Partial<Record<RoutableDomain, Entrypoint>>>;
 
 export type RequestPlan =
   | { readonly action: 'run-workflow'; readonly workflow: string; readonly input: { readonly request: string }; readonly route: RouteDecision }
+  | { readonly action: 'run-service'; readonly service: string; readonly input: { readonly request: string }; readonly route: RouteDecision }
   | { readonly action: 'hold'; readonly reason: string; readonly route: RouteDecision }
   | { readonly action: 'clarify'; readonly reason: string; readonly route: RouteDecision };
 
@@ -25,7 +28,7 @@ export type RequestPlan =
  * Plans what to do with a raw request.
  * @param request - user text
  * @param entrypoints - domain → entrypoint workflow path, as registered so far
- * @returns run-workflow (routed + registered), hold (routed, not built yet), or clarify
+ * @returns run-workflow / run-service (routed + registered), hold (routed, not built yet), or clarify
  */
 export const planRequest = (request: string, entrypoints: Entrypoints): RequestPlan => {
   const route = routeRequest(request);
@@ -33,12 +36,16 @@ export const planRequest = (request: string, entrypoints: Entrypoints): RequestP
     return { action: 'clarify', route, reason: `ambiguous between ${[...route.candidates].sort().join(' and ')} (margin ${route.margin}); say which` };
   }
   if (route.status === 'unroutable') return { action: 'clarify', route, reason: 'no domain matched; rephrase with domain terms' };
-  const workflow = entrypoints[route.domain];
-  if (!workflow) {
+  const entry = entrypoints[route.domain];
+  if (!entry) {
     return { action: 'hold', route, reason: `no entrypoint registered for ${route.domain} yet (built in Phase ${ENTRYPOINT_PHASE[route.domain]})` };
   }
-  return { action: 'run-workflow', workflow, input: { request }, route };
+  return typeof entry === 'string'
+    ? { action: 'run-workflow', workflow: entry, input: { request }, route }
+    : { action: 'run-service', service: entry.service, input: { request }, route };
 };
 
-/** Entrypoints registered so far. Phases 6A, 7, 14 and 15 each add theirs here. */
-export const ENTRYPOINTS: Entrypoints = {};
+/** Entrypoints registered so far. Phases 7, 14 and 15 add theirs here. */
+export const ENTRYPOINTS: Entrypoints = {
+  RESEARCH_INTELLIGENCE: { service: 'run-research' }, // Phase 6A: research-intelligence/entrypoint.ts
+};

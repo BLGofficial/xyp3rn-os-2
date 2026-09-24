@@ -181,10 +181,11 @@ describe('enums', () => {
 describe('updated_at triggers', () => {
   const MUTABLE = ['canonical_prompts', 'ingestion_runs', 'modules', 'prompt_variants', 'sources', 'tags'];
 
-  it('exist on exactly the mutable tables', async () => {
+  it('exist on exactly the mutable Phase 1 tables', async () => {
     const rows = await db.sql<{ t: string }[]>`
       select event_object_table as t from information_schema.triggers
       where trigger_schema = 'public' and trigger_name like 'trg_%_updated_at' and event_manipulation = 'UPDATE'
+        and event_object_table = any(${[...TABLES]})
       order by 1`;
     expect(rows.map((r) => r.t)).toEqual(MUTABLE);
   });

@@ -20,6 +20,8 @@ export type AgentDefinition = {
   readonly role: string;
   readonly contract: string;
   readonly refuses: string;
+  /** Every `## Section` in the body, including optional ones (e.g. a specialist's `Scope`). */
+  readonly sections: Readonly<Record<string, string>>;
   readonly path: string;
 };
 
@@ -94,6 +96,7 @@ export const parseAgentFile = (path: string, contents: string): ParseResult => {
       role: body.get('Role')!,
       contract: body.get('Contract')!,
       refuses: body.get('Refuses')!,
+      sections: Object.fromEntries(body),
       path,
     },
   };

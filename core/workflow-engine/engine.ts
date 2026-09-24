@@ -38,11 +38,22 @@ export type WorkflowResult = {
  * @returns the spec plus its path and content hash (recorded on every run)
  * @throws Error listing every validation problem
  */
-export const loadWorkflow = (path: string, registry: AgentRegistry): LoadedWorkflow => {
-  const source = readFileSync(path, 'utf8');
+export const loadWorkflow = (path: string, registry: AgentRegistry): LoadedWorkflow =>
+  compileWorkflow(readFileSync(path, 'utf8'), registry, path);
+
+/**
+ * Validates spec source that didn't come from a file (e.g. a plan emitted by an agent) through
+ * exactly the same checks as loadWorkflow.
+ * @param source - YAML (or JSON, which is YAML) spec text
+ * @param registry - agents the spec may reference
+ * @param label - recorded as the spec's path, e.g. "generated:research-orchestrator"
+ * @returns the validated spec with its content hash
+ * @throws Error listing every validation problem
+ */
+export const compileWorkflow = (source: string, registry: AgentRegistry, label: string): LoadedWorkflow => {
   const r = parseWorkflowSpec(source, new Set(registry.list().map((a) => a.name)));
-  if (!r.ok) throw new Error(`invalid workflow ${path}:\n- ${r.errors.join('\n- ')}`);
-  return { ...r.spec, path, sha256: createHash('sha256').update(source).digest('hex') };
+  if (!r.ok) throw new Error(`invalid workflow ${label}:\n- ${r.errors.join('\n- ')}`);
+  return { ...r.spec, path: label, sha256: createHash('sha256').update(source).digest('hex') };
 };
 
 const asRuntime = <T>(deps: EngineDeps, fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> =>
@@ -56,14 +67,15 @@ const asRuntime = <T>(deps: EngineDeps, fn: (tx: postgres.TransactionSql) => Pro
  * @param deps - dispatcher dependencies (DB, registries, handlers)
  * @param wf - loaded spec
  * @param input - workflow input (must carry every required key)
- * @param options - per-step `timeoutMs`; `log` receives the loud failure line (default stderr)
+ * @param options - per-step `timeoutMs`; `researchRunId` stamped on every step's agent_runs row;
+ *   `log` receives the loud failure line (default stderr)
  * @returns run id, status, output or the failing step + reason, skipped steps, per-step run ids
  */
 export const runWorkflow = async (
   deps: EngineDeps,
   wf: LoadedWorkflow,
   input: Readonly<Record<string, unknown>>,
-  options: { readonly timeoutMs?: number; readonly log?: (line: string) => void } = {},
+  options: { readonly timeoutMs?: number; readonly researchRunId?: string; readonly log?: (line: string) => void } = {},
 ): Promise<WorkflowResult> => {
   const log = options.log ?? ((line: string) => console.error(line));
   const spec = { name: wf.name, description: wf.description, requiredInput: wf.requiredInput, steps: wf.steps, output: wf.output };
@@ -103,6 +115,7 @@ export const runWorkflow = async (
       workflowRunId,
       stepId,
       ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      ...(options.researchRunId !== undefined ? { researchRunId: options.researchRunId } : {}),
     });
     steps.push({ stepId, agentRunId: r.runId, status: r.status });
     if (r.status === 'error') return fail(stepId, r.error ?? 'step failed');

@@ -22,6 +22,7 @@ pnpm context "your question"   # ranked, traceable context bundle
 pnpm agents:validate            # Agent Registry: validate agents/*.agent.md
 pnpm dispatch health-check '{"ping":"xyp"}'   # run an agent end to end, print its agent_runs row
 pnpm route "your request"       # domain routing decision with evidence
+pnpm ask "your request"         # front door: route → plan → run the domain entrypoint
 pnpm workflow core/workflows/retrieve-and-summarize.workflow.yaml '{"query":"..."}'
 pnpm test        # vitest: phase proofs + unit tests (DB tests use throwaway databases)
 pnpm typecheck   # tsc --noEmit

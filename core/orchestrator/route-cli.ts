@@ -13,4 +13,5 @@ console.log(`request: ${request}`);
 console.log(`route:   ${plan.route.status}${plan.route.status === 'routed' ? ` → ${plan.route.domain} (margin ${plan.route.margin})` : ''}`);
 console.log(`scores:  ${JSON.stringify(plan.route.scores)}`);
 console.log(`matched: ${JSON.stringify(plan.route.evidence)}`);
-console.log(`action:  ${plan.action}${'reason' in plan ? ` — ${plan.reason}` : ` → ${plan.workflow}`}`);
+const detail = plan.action === 'run-workflow' ? `→ ${plan.workflow}` : plan.action === 'run-service' ? `→ service ${plan.service}` : `— ${plan.reason}`;
+console.log(`action:  ${plan.action} ${detail}`);

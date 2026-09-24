@@ -194,6 +194,18 @@ Migration `20260924120000_workflow_runs.sql` adds `workflow_runs`. Its columns a
 - **Error rows:** an `error` row must name `failed_step` and carry `error_detail`.
 - **Step linkage:** `agent_runs` gains `workflow_run_id` (FK, restrict) and `step_id`. They are set together at insert (pair CHECK) and can't be updated, because neither is in `xyp_runtime`'s UPDATE grant.
 
+## Phase 6A additions: Research Intelligence schema
+
+Migration `20260924130000_research_schema.sql` adds the 11 research tables plus the join `research_finding_evidence`. The chain, all real FKs, is `sources → research_sources → research_evidence → research_finding_evidence → research_findings → knowledge_candidates`. `contradictions` hangs off findings, `experiments` → `experiment_runs` hang off candidates, and so does `knowledge_versions`. `agent_runs.research_run_id` is new.
+
+| Role | research chain | knowledge_candidates | canonical / knowledge_versions |
+|---|---|---|---|
+| `xyp_research` | INSERT + SELECT; UPDATE only on lifecycle columns of `research_runs`/`research_questions`/`research_projects`; no UPDATE or DELETE on evidence, findings or sources | INSERT only with `status = 'proposed'` (the RLS WITH CHECK rejects anything else with 42501); no UPDATE | SELECT only |
+
+- **Evidence requirements:** `research_evidence` requires a source, `model_tag`, `confidence` in [0, 1] with `confidence_inputs`, and a non-empty claim, all NOT NULL.
+- **Content addressing:** `research_sources` is unique by `content_sha256`, the same approach as `sources`.
+- **Seal:** `research_runs` is sealed once it leaves `running`.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

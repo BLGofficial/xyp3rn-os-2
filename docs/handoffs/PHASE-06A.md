@@ -1,0 +1,36 @@
+HANDOFF — Phase 6A complete
+
+- **Built:**
+  - Migration `20260924130000_research_schema.sql` adds the 11 research tables plus `research_finding_evidence`.
+  - The FK chain `sources → research_sources → research_evidence → (join) → research_findings → knowledge_candidates`, with `contradictions`, `experiments`/`experiment_runs` and `knowledge_versions` hanging off it.
+  - `agent_runs.research_run_id`, set at insert only.
+  - The `xyp_research` role.
+  - The Research Orchestrator: a Planning-class agent (`agents/research-orchestrator.agent.md` + `research-intelligence/agents/research-orchestrator.ts`) that selects specialists by scope keywords (`research-intelligence/orchestrator/select.ts`).
+  - The runtime entrypoint `runResearch()` (`research-intelligence/entrypoint.ts`), registered as the `RESEARCH_INTELLIGENCE` entrypoint behind `pnpm ask`.
+  - **Proof** (`docs/proofs/PHASE-06A-research.txt`):
+    - 18 tests, constraint tests first (15 red before the migration).
+    - Only relevant specialists run, and every run is linked to the research run.
+    - The missing LLM key is recorded as a failure, not hidden.
+    - A live `pnpm ask` on the Phase 17 question fails loudly because the 6B roster is empty. That is the correct result for now.
+- **Key decisions:**
+  - **Enforced at DB level (grants + RLS):**
+    - `xyp_research` gets INSERT and SELECT on the research chain, with no UPDATE or DELETE on evidence, findings or sources.
+    - A candidate can only be inserted as `status = 'proposed'`; an RLS policy WITH CHECK rejects anything else with 42501.
+    - Its only UPDATE rights are the lifecycle columns on `research_runs`/`questions`/`projects`.
+    - It has no canonical or `knowledge_versions` writes.
+  - **The orchestrator decides, the runtime executes:** the agent gets the roster as input (so its `agent_runs.input` records exactly what it chose from) and returns a workflow plan. `runResearch` checks the plan through the same validation as a file spec (`compileWorkflow`) and runs it through the Workflow Engine. Agents never dispatch agents.
+  - **Selection:** each specialist's `## Scope` holds one sentence and `Keywords: term (weight), …`. The threshold is 3. There is no default set: no match means nothing is dispatched, and an empty roster is an error.
+- **Deviations from spec:**
+  - **A 12th table**, `research_finding_evidence`: evidence and findings are both insert-only, so the evidence→finding link can't be a column.
+  - **The orchestrator's class is Planning, not Research:** it decides what to do and writes no evidence.
+  - **`knowledge_candidate_status`** is `proposed|promoted|rejected` for now; 6D adds its state-machine values.
+  - **Shared keyword matcher:** extracted to `core/orchestrator/keyword-match.ts`; the router was refactored onto it and all its tests still pass.
+  - **Agent parser:** `AgentDefinition` now also exposes every body section (`sections`).
+- **Open flags:**
+  - **Specialists are LLM agents (user decision).** Until `ANTHROPIC_API_KEY` exists and the Claude runner plus `fetch_source` are built in a session that has it, every specialist step fails with "LLM runner unavailable".
+  - **Specialists run one at a time,** so the first failure skips the rest. That's correct fail-loud behaviour, but it means research throughput depends on parallel steps later.
+  - **Scope keywords are brittle,** the same as the router's.
+- **Next phase needs (6B):**
+  - 20 `.agent.md` files: class Research, domain RESEARCH_INTELLIGENCE, a one-sentence `## Scope` plus `Keywords:`, writes only `research_evidence` / `research_sources` with a model/version tag on every claim, and refusals for canonical promotion and unsourced claims.
+  - A scope-overlap table.
+  - The Phase 17 question must activate at least: Suno, AI Vocal Systems, Prompt Engineering, Artist Identity, Evaluation.

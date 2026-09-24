@@ -1,0 +1,35 @@
+# Phase 6A proof: research-role constraint tests + live front door
+# Tests written first; initial run failed: role "xyp_research" does not exist / relation "research_projects" does not exist (15 failed).
+# After migration 20260924130000_research_schema.sql:
+$ pnpm vitest run tests/phase-06a --reporter=verbose
+✓ tests/phase-06a/research-schema.test.ts > schema > creates the eleven research tables plus the finding↔evidence join 4ms
+✓ tests/phase-06a/research-schema.test.ts > schema > wires the relationship chain as FKs: source → evidence → finding → candidate 3ms
+✓ tests/phase-06a/research-schema.test.ts > schema > rejects evidence missing source, model/version tag, confidence or claim (23502) 14ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > can write the whole chain up to a proposed candidate 5ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > is denied: UPDATE research_evidence (42501) 5ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > is denied: DELETE research_evidence (42501) 4ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > is denied: UPDATE research_findings (42501) 4ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > is denied: DELETE research_findings (42501) 4ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > is denied: UPDATE research_sources (42501) 4ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > is denied: UPDATE knowledge_candidates (status moves are the gate's) (42501) 4ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > is denied: INSERT canonical_prompts (42501) 10ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > is denied: INSERT knowledge_versions (42501) 6ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > is denied: TRUNCATE research_evidence (42501) 3ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > cannot insert a candidate in any status but proposed (RLS 42501) 6ms
+✓ tests/phase-06a/research-schema.test.ts > xyp_research: INSERT-only on evidence and findings (grant level) > research_run_id on agent_runs is identity: runtime cannot re-link a run (42501) 2ms
+✓ tests/phase-06a/research-orchestrator.test.ts > runResearch > selects only relevant specialists, dispatches exactly those, links every run, and records the LLM gap 47ms
+✓ tests/phase-06a/research-orchestrator.test.ts > runResearch > fails loudly when no Research specialist is registered at all (config error, not "no match") 6ms
+✓ tests/phase-06a/research-orchestrator.test.ts > runResearch > records a question no specialist matches as a finished run with nothing dispatched 10ms
+Tests  18 passed (18)
+
+# Live front door against the real agents/ dir. The 6B roster is not written yet, so the research run
+# must fail as misconfiguration — not report a hollow success:
+$ pnpm ask "Research the best current method for controlling dark baritone vocals in Suno." --project suno-vocal-control
+route: {"status":"routed","domain":"RESEARCH_INTELLIGENCE","evidence":{"RESEARCH_INTELLIGENCE":["best current method","research"],"RECORDS":["suno","vocal"],"TECH":[],"GOVERNANCE":[]}}
+{
+  "researchRunId": "8d375093-604f-42f3-bc4f-c4665d326c60",
+  "status": "error",
+  "selected": [],
+  "workflowRunId": null,
+  "error": "no Research specialists with a ## Scope are registered (roster is empty)"
+}

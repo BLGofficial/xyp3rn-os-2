@@ -1,4 +1,5 @@
 import type { Domain } from '../contracts/taxonomy.ts';
+import { scoreTerms } from './keyword-match.ts';
 
 /**
  * Request router (Phase 5, user decision: explicit keyword rules). Classifies a raw request into
@@ -51,8 +52,6 @@ export type RouteDecision =
   | { readonly status: 'ambiguous'; readonly candidates: readonly RoutableDomain[]; readonly margin: number; readonly scores: Scores; readonly evidence: Evidence }
   | { readonly status: 'unroutable'; readonly scores: Scores; readonly evidence: Evidence };
 
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const matcher = (term: string) => new RegExp(`(?<![\\w])${escape(term)}s?(?![\\w])`, 'i');
 
 /**
  * Classifies a request.
@@ -63,9 +62,9 @@ export const routeRequest = (request: string): RouteDecision => {
   const scores = {} as Record<RoutableDomain, number>;
   const evidence = {} as Record<RoutableDomain, string[]>;
   for (const d of ROUTABLE_DOMAINS) {
-    const hits = ROUTING_LEXICON[d].filter(([term]) => matcher(term).test(request));
-    scores[d] = hits.reduce((a, [, w]) => a + w, 0);
-    evidence[d] = hits.map(([term]) => term);
+    const { score, matched } = scoreTerms(request, ROUTING_LEXICON[d]);
+    scores[d] = score;
+    evidence[d] = matched;
   }
   const ranked = [...ROUTABLE_DOMAINS].sort((a, b) => scores[b] - scores[a]);
   const top = ranked[0]!;

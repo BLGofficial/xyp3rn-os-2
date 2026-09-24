@@ -18,6 +18,11 @@ describe('orchestrator entry: classify BEFORE dispatch', () => {
     });
   });
 
+  it('routes research to the registered research service (Phase 6A)', () => {
+    const plan = planRequest('Research the best current method for controlling dark baritone vocals in Suno.', { RESEARCH_INTELLIGENCE: { service: 'run-research' } });
+    expect(plan).toMatchObject({ action: 'run-service', service: 'run-research' });
+  });
+
   it('never dispatches an ambiguous request; asks for clarification naming the candidates', () => {
     const plan = planRequest('Check the rights on this track', { RECORDS: 'x.yaml', GOVERNANCE: 'y.yaml' });
     expect(plan.action).toBe('clarify');
