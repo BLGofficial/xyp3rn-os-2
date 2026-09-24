@@ -1,41 +1,28 @@
 import type { ClaimBundle, ContextBundle } from '../../../core/context-engine/context-engine.ts';
-import type { JsonSchema } from '../../../core/llm/json-schema.ts';
 import type { LlmProgram } from '../../../core/llm/runner.ts';
 import { loadMusicSystem } from '../music-system.ts';
+import { SUNO_FORMULA_SPEC } from '../suno/formula.ts';
 import {
-  COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, LYRICS_SCHEMA, LYRICS_SCHEMA_ID, SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
+  COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, GENRE_STYLE_SCHEMA, GENRE_STYLE_SCHEMA_ID, LYRICS_SCHEMA, LYRICS_SCHEMA_ID,
+  SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
 } from './schemas.ts';
+import { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE, type ContextEntry, type CreativeSpec, type Prepared } from './types.ts';
+
+export { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE } from './types.ts';
 
 /**
- * Phase 8 Creative agents: Songwriting, Lyrics and (F15) Composition. One program, three specs.
+ * X3LIUS Creative agents: Songwriting, Lyrics, Composition (Phase 8), Genre/Style and the Suno
+ * Prompt-Formula (Phase 9). One program, one spec per sub-domain.
  *
- * Every run: pull canonical rules from the sub-domain's own module and from Vocal DNA (scoped
- * Context Engine, current versions only) plus the artist's canonical claims (exact topic lookup)
- * → measure how much knowledge that is → ask the model for a schema-shaped artifact built only
- * from those rules → validate shape, refs and semantics → append the artifact → return it.
+ * Every run: derive the brief → pull canonical rules from the spec's modules (scoped Context
+ * Engine, current versions only) plus canonical claims (exact topic lookup) → drop entries that
+ * don't apply to this run → measure how much knowledge is left → ask the model for a
+ * schema-shaped reply built only from those rules → validate shape, refs and semantics → append
+ * the artifact → return it.
  *
  * The voice is never in this file (ARCHITECTURE.md invariant 5): it arrives as data at run time,
  * so a rule the Research → Promotion Gate path adds changes the next output with no code change.
  */
-
-/** Scoped rules below this count mark the artifact `sparse`: expect output close to generic. */
-export const MIN_SCOPED_RULES = 3;
-/** Voice rules live in Vocal DNA (Phase 7 handoff): every creative agent reads it besides its own module. */
-export const VOICE_MODULE = 'x3lius-vocal-dna';
-/**
- * The artist's claim namespace: canonical claim topics are `<slugified artist>.<topic>` (set by
- * the build-guide normalizer and by research claim topics). A namespace, not a voice.
- */
-export const CLAIM_NAMESPACE = 'x3lius.';
-
-type CreativeSpec = {
-  readonly schemaId: string;
-  readonly schema: JsonSchema;
-  /** What to produce: the task's shape, never its style. */
-  readonly task: string;
-  /** Checks the schema subset can't express; returns violations. */
-  readonly check?: (body: Record<string, unknown>) => string[];
-};
 
 const SPECS: Readonly<Record<string, CreativeSpec>> = {
   'x3lius-songwriting': {
@@ -72,13 +59,19 @@ const SPECS: Readonly<Record<string, CreativeSpec>> = {
       ...((b.progressions as { chords: unknown[] }[]).some((p) => p.chords.length === 0) ? ['every progression needs at least one chord'] : []),
     ],
   },
+  'x3lius-genre-style': {
+    schemaId: GENRE_STYLE_SCHEMA_ID,
+    schema: GENRE_STYLE_SCHEMA,
+    task: 'Set the genre and style target for the brief: the primary genre, subgenres, a tempo range, mood words, the sound palette (element and how it should sound), reference descriptors (describe sounds; never name an artist, song or album) and what to avoid.',
+    check: (b) => {
+      const t = b.tempoBpm as { min: number; max: number };
+      return t.min > 0 && t.min <= t.max ? [] : [`tempoBpm must satisfy 0 < min <= max, got ${t.min}–${t.max}`];
+    },
+  },
+  'x3lius-suno': SUNO_FORMULA_SPEC,
 };
 
 export const CREATIVE_SUBDOMAINS: readonly string[] = Object.keys(SPECS);
-
-type ContextEntry =
-  | { readonly kind: 'rule'; readonly ref: string; readonly module: string; readonly slug: string | null; readonly title: string; readonly text: string; readonly score: number; readonly why: string; readonly source: { readonly id: string; readonly uri: string } | null }
-  | { readonly kind: 'claim'; readonly ref: string; readonly module: string; readonly slug: string; readonly title: string; readonly topic: string; readonly value: unknown; readonly source: { readonly id: string; readonly uri: string } | null };
 
 export type KnowledgeReport = {
   readonly sparse: boolean;
@@ -92,8 +85,8 @@ export type KnowledgeReport = {
 /** What the artifact records per entry. Rule text is left out: the ref names an immutable canonical version. */
 const contextRef = (e: ContextEntry) =>
   e.kind === 'rule'
-    ? { kind: e.kind, ref: e.ref, module: e.module, slug: e.slug, title: e.title, score: e.score, why: e.why, source: e.source }
-    : { kind: e.kind, ref: e.ref, module: e.module, slug: e.slug, topic: e.topic, value: e.value, source: e.source };
+    ? { kind: e.kind, ref: e.ref, module: e.module, slug: e.slug, title: e.title, modelTag: e.modelTag, score: e.score, why: e.why, source: e.source }
+    : { kind: e.kind, ref: e.ref, module: e.module, slug: e.slug, topic: e.topic, value: e.value, modelScope: e.modelScope, source: e.source };
 
 const render = (v: unknown): string => (Array.isArray(v) ? v.map(render).join(', ') : typeof v === 'string' ? v : JSON.stringify(v));
 
@@ -119,26 +112,34 @@ const systemPrompt = (title: string, slug: string, spec: CreativeSpec, entries: 
   '- Reply with JSON only, matching the response schema.',
 ].join('\n');
 
-const knowledgeReport = (slug: string, perModule: Record<string, number>, claims: ClaimBundle): KnowledgeReport => {
+const knowledgeReport = (slug: string, modules: readonly string[], perModule: Record<string, number>, claims: readonly ContextEntry[], excluded: number, spec: CreativeSpec): KnowledgeReport => {
   const scopedRules = Object.values(perModule).reduce((a, b) => a + b, 0);
   const sparse = scopedRules < MIN_SCOPED_RULES;
-  const topics = [...new Set(claims.items.map((c) => c.topic))];
+  const voice = claims.filter((c) => c.kind === 'claim' && c.topic.startsWith(CLAIM_NAMESPACE));
+  const topics = [...new Set(voice.map((c) => (c.kind === 'claim' ? c.topic : '')))];
   return {
     sparse,
     threshold: MIN_SCOPED_RULES,
     scopedRules,
     perModule,
-    voiceClaims: claims.items.length,
+    voiceClaims: voice.length,
     reasons: [
       ...Object.entries(perModule).map(([m, n]) => `${m}: ${n} rules on the scoped context path`),
-      claims.items.length > 0
-        ? `voice: ${claims.items.length} claim(s) under ${CLAIM_NAMESPACE}* from outside the sub-domain scope (${topics.join(', ')})`
+      voice.length > 0
+        ? `voice: ${voice.length} claim(s) under ${CLAIM_NAMESPACE}* from outside the sub-domain scope (${topics.join(', ')})`
         : `voice: no canonical claim under ${CLAIM_NAMESPACE}*`,
+      ...(excluded > 0 ? [`excluded ${excluded} canonical ${excluded === 1 ? 'entry' : 'entries'} ${spec.exclusionReason ?? 'that do not apply to this run'}`] : []),
       ...(sparse
-        ? [`fewer than ${MIN_SCOPED_RULES} scoped rules: expect output close to generic. Promote rules tagged ${slug} or ${VOICE_MODULE} through the gate to change that.`]
+        ? [`fewer than ${MIN_SCOPED_RULES} scoped rules: expect output close to generic. Promote rules tagged ${modules.filter((m) => m !== slug).length > 0 ? `${slug} or ${modules.filter((m) => m !== slug).join(' / ')}` : slug} through the gate to change that.`]
         : []),
     ],
   };
+};
+
+const defaultPrepare = async (_ctx: unknown, input: Record<string, unknown>): Promise<Prepared> => {
+  const request = input.request;
+  if (typeof request !== 'string' || request.trim() === '') throw new Error('request must be a non-empty string');
+  return { brief: request, userSections: [], state: null };
 };
 
 /**
@@ -148,50 +149,59 @@ const knowledgeReport = (slug: string, perModule: Record<string, number>, claims
  */
 const creativeProgram = (slug: string): LlmProgram => {
   const spec = SPECS[slug]!;
+  const modules = spec.modules ?? [slug, VOICE_MODULE];
+  const namespaces = spec.claimNamespaces ?? [CLAIM_NAMESPACE];
+  const llmSchema = spec.llmSchema ?? { id: spec.schemaId, schema: spec.schema };
   return async (ctx, input, llm) => {
-    const request = (input as { request?: unknown } | null)?.request;
-    if (typeof request !== 'string' || request.trim() === '') throw new Error('request must be a non-empty string');
+    if (input === null || typeof input !== 'object' || Array.isArray(input)) throw new Error('input must be an object');
     const sub = loadMusicSystem().subdomains.find((s) => s.slug === slug);
     if (!sub) throw new Error(`${slug} is not an X3LIUS sub-domain in the manifest`);
+    const prepared = await (spec.prepare ?? defaultPrepare)(ctx, input as Record<string, unknown>);
 
-    // One scoped read per module, so each count is exact and one module can't crowd out the other.
-    const modules = [slug, VOICE_MODULE];
-    const perModule: Record<string, number> = {};
-    const entries: ContextEntry[] = [];
+    // One scoped read per module, so each count is exact and one module can't crowd out another.
+    const pulled: { entry: ContextEntry; module: string | null }[] = [];
     for (const module of modules) {
-      const bundle = (await ctx.useTool('retrieve_context', { query: request, scope: { modules: [module] } })) as ContextBundle;
-      const rules = bundle.items.filter((i) => i.ref.table === 'canonical_prompts');
-      perModule[module] = rules.length;
-      for (const r of rules) {
-        entries.push({ kind: 'rule', ref: `canonical_prompts:${r.ref.id}`, module, slug: r.slug, title: r.title, text: r.text, score: r.score, why: r.why, source: r.source });
+      const bundle = (await ctx.useTool('retrieve_context', { query: prepared.brief, scope: { modules: [module] } })) as ContextBundle;
+      for (const r of bundle.items.filter((i) => i.ref.table === 'canonical_prompts')) {
+        pulled.push({ module, entry: { kind: 'rule', ref: `canonical_prompts:${r.ref.id}`, module, slug: r.slug, title: r.title, text: r.text, modelTag: r.modelTag, score: r.score, why: r.why, source: r.source } });
       }
     }
-    const claims = (await ctx.useTool('retrieve_claims', { topicPrefix: CLAIM_NAMESPACE })) as ClaimBundle;
-    for (const c of claims.items) {
-      entries.push({ kind: 'claim', ref: `canonical_prompts:${c.ref.id}#${c.topic}`, module: c.module, slug: c.slug, title: c.title, topic: c.topic, value: c.value, source: c.source });
+    const seen = new Set<string>();
+    for (const prefix of namespaces) {
+      const claims = (await ctx.useTool('retrieve_claims', { topicPrefix: prefix })) as ClaimBundle;
+      for (const c of claims.items) {
+        const ref = `canonical_prompts:${c.ref.id}#${c.topic}`;
+        if (seen.has(ref)) continue;
+        seen.add(ref);
+        pulled.push({ module: null, entry: { kind: 'claim', ref, module: c.module, slug: c.slug, title: c.title, topic: c.topic, value: c.value, modelScope: c.modelScope, source: c.source } });
+      }
     }
 
-    const knowledge = knowledgeReport(slug, perModule, claims);
+    const kept = pulled.filter((p) => spec.admit?.(p.entry, prepared) ?? true);
+    const entries = kept.map((p) => p.entry);
+    const perModule = Object.fromEntries(modules.map((m) => [m, kept.filter((p) => p.module === m).length]));
+    const knowledge = knowledgeReport(slug, modules, perModule, entries, pulled.length - kept.length, spec);
     await ctx.useTool('log_message', { message: `${slug}: context pulled: ${entries.length > 0 ? entries.map((e) => e.ref).join(', ') : 'none'}` });
     if (knowledge.sparse) await ctx.useTool('log_message', { level: 'warn', message: `${slug}: SPARSE canonical knowledge — ${knowledge.reasons.join(' | ')}` });
 
     const res = await llm.complete({
       system: systemPrompt(sub.title, slug, spec, entries),
-      user: `BRIEF\n${request}`,
-      schema: { name: spec.schemaId, schema: spec.schema },
+      user: [`BRIEF\n${prepared.brief}`, ...prepared.userSections].join('\n\n'),
+      schema: { name: llmSchema.id, schema: llmSchema.schema },
       signal: ctx.signal,
     });
-    const body = res.json as Record<string, unknown>;
+    const reply = res.json as Record<string, unknown>;
 
     const given = new Set(entries.map((e) => e.ref));
-    const unknown = (body.rulesApplied as { ref: string }[]).map((r) => r.ref).filter((r) => !given.has(r));
+    const unknown = (reply.rulesApplied as { ref: string }[]).map((r) => r.ref).filter((r) => !given.has(r));
     if (unknown.length > 0) throw new Error(`${slug} reply cites refs it was not given: ${unknown.join(', ')}`);
-    const violations = spec.check?.(body) ?? [];
-    if (violations.length > 0) throw new Error(`${slug} reply failed checks: ${violations.join('; ')}`);
+    const { body, violations } = spec.finalize?.(reply, prepared, entries) ?? { body: reply, violations: [] };
+    const all = [...violations, ...(spec.check?.(body) ?? [])];
+    if (all.length > 0) throw new Error(`${slug} reply failed checks: ${all.join('; ')}`);
 
     const context = entries.map(contextRef);
     const written = (await ctx.useTool('write_artifact', {
-      schemaId: spec.schemaId, brief: request, body, contextRefs: context, knowledge, model: ctx.agent.model,
+      schemaId: spec.schemaId, brief: prepared.brief, body, contextRefs: context, knowledge, model: ctx.agent.model,
     })) as { artifact_id: string; lineage_id: string; version: number };
 
     return {

@@ -1,0 +1,191 @@
+Phase 9 — Suno Generation System (+ F15 Genre/Style): proof (2026-09-24)
+Produced with the repo's own commands against the local Supabase-emulating Postgres 16.
+================================================================================
+
+## 0. Status of the guide's "one real end-to-end prompt assembly (formula agent output shown)"
+# NOT PRODUCED IN THIS SESSION. The formula agent and its inputs (Phase 8 artifacts) are LLM
+# agents, and no provider key exists in this container (same blocker as Phase 8's verse). Section 3
+# shows the live dev-DB run up to that point; section 4 shows the SHAPE of the output from a FAKE
+# model on a throwaway DB — every text field "[FAKE]", takes "[FIXTURE]". It is not a Suno prompt.
+# Suno access: no official public API exists (partner-only exploration since 2026-07); adapters are
+# manual (works now) and the sunoapi.org reseller (unverified until SUNO_API_KEY exists).
+
+## 1. Tests (tests/phase-09; FAKE model + FAKE Suno fetch; FIXTURE rules in a throwaway DB only)
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > offers exactly manual and sunoapi; anything else is refused
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model v5 → sunoapi V5
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model v4.5 → sunoapi V4_5
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model v4.5plus → sunoapi V4_5PLUS
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model v5.5 → sunoapi V5_5
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model V6 → sunoapi V6
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > refuses a model it cannot map
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > submit records nothing externally and returns no provider task
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > capture takes the operator’s takes, each an https audio URL
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses undefined
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses []
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses [{"audioUrl":"http://cdn1.suno.ai/abc.mp3"}]
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses [{"url":"https://x"}]
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses [{"audioUrl":"https://x.org/a.mp3","durationSeconds":-3}]
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > submit: custom-mode generate with the prompt fields, bearer key, mapped model and the configured callback
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > fails before any call when configuration is missing
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > fails before any call when configuration is missing
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > a non-200 code is an error carrying the vendor message
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > capture: SUCCESS yields the takes (either field casing); PENDING yields none, not an error
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > capture: a failed task is an error naming the status
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > capture refuses operator-supplied takes: sunoapi takes come from the provider
+ ✓ tests/phase-09/suno-schema.test.ts > suno_submissions > records the adapter, the model and the full prompt; the provider task id matches the adapter
+ ✓ tests/phase-09/suno-schema.test.ts > suno_submissions > the prompt must carry every Suno field
+ ✓ tests/phase-09/suno-schema.test.ts > suno_takes > needs an https audio URL, and a submission records each URL once
+ ✓ tests/phase-09/suno-schema.test.ts > take_scores: the scoring hook > a stub row carries no score; a real row must carry one
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > suno_submissions: xyp_execution holds INSERT + SELECT only
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > suno_takes: xyp_execution holds INSERT + SELECT only
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > take_scores: xyp_execution holds INSERT + SELECT only
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > even the owner cannot rewrite or delete a submission, take or score (trigger)
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > as xyp_execution: reads the artifact it submits, appends the trail, cannot write artifacts or canonical knowledge
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > xyp_runtime (context reads, read_artifact) may read artifacts but not the Suno trail, and writes nothing
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > anon and authenticated have no access; RLS is on
+ ✓ tests/phase-09/suno-flow.test.ts > registry: Phase 9 agents > Genre/Style (F15) and Suno are Creative now; the manifest’s Phase 9 sub-domains are exactly those
+ ✓ tests/phase-09/suno-flow.test.ts > registry: Phase 9 agents > suno-submitter is a deterministic Execution agent under RECORDS
+ ✓ tests/phase-09/suno-flow.test.ts > registry: Phase 9 agents > authorization follows the class matrix
+ ✓ tests/phase-09/suno-flow.test.ts > registry: Phase 9 agents > every sub-domain not built yet is still a read-only stub; the registry validates
+ ✓ tests/phase-09/suno-flow.test.ts > no hardcoded voice in the Phase 9 code either > no Suno or creative source file carries a word of the canonical voice claim
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Prompt-Formula agent (x3lius-suno) > builds its inputs: structure, lyrics and genre/style artifacts (FAKE model)
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Prompt-Formula agent (x3lius-suno) > assembles from the artifacts + canonical Suno rules; the lyrics are rendered, never written by the model
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Prompt-Formula agent (x3lius-suno) > refuses without lyrics artifacts, and refuses an artifact of the wrong schema
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Prompt-Formula agent (x3lius-suno) > a model reply that tries to supply lyrics is refused
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Prompt-Formula agent (x3lius-suno) > enforces a length limit only when a canonical claim states it, for the Suno model it is scoped to
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Execution agent (suno-submitter) > manual: records the exact prompt from the formula artifact, and logs it in full to agent_runs
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Execution agent (suno-submitter) > the operation must be fully specified: no adapter, a wrong artifact, or both modes at once are refused
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Execution agent (suno-submitter) > manual capture: the operator’s takes are recorded and each gets a STUB score row (no number)
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Execution agent (suno-submitter) > capturing the same takes again writes nothing new
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Execution agent (suno-submitter) > sunoapi (FAKE Suno): submit records the provider task; capture polls — pending first, then takes + stub scores
+ ✓ tests/phase-09/suno-flow.test.ts > the Suno Execution agent (suno-submitter) > a provider rejection still leaves the full prompt on agent_runs, and no submission row
+ ✓ tests/phase-09/suno-flow.test.ts > end to end: one workflow from a brief to a Suno-ready prompt (FAKE model) > records/x3lius/song-to-suno.workflow.yaml: songwriting + lyrics + genre/style → formula, each artifact feeding the next
+
+Full suite: pnpm test → Test Files 46 passed (46), Tests 679 passed (679). pnpm typecheck → clean.
+pnpm agents:validate → validateAll(): 0 failure(s).
+
+## 2. Mutations (each applied, run, reverted)
+- Suno-version filter removed (admit → always true)            → 2 red (v4.5 run leaks a v5 rule/limit; workflow)
+- canonical length limit not enforced                            → 1 red
+- scoring hook skipped (no stub score rows)                      → 2 red
+- full prompt logged only AFTER the external call                → 1 red (provider rejection leaves no prompt on agent_runs)
+- suno_submissions/suno_takes/take_scores immutability removed   → 1 red
+
+## 3. Live dev DB, no key:
+##    pnpm workflow records/x3lius/song-to-suno.workflow.yaml '{"request":"An X3LIUS track about the city at night","sunoModel":"v5"}'
+spec: x3lius-song-to-suno (records/x3lius/song-to-suno.workflow.yaml, sha256 d922a3027468…) steps: structure=x3lius-songwriting → lyrics=x3lius-lyrics → genre=x3lius-genre-style → formula=x3lius-suno
+[workflow] x3lius-song-to-suno FAILED at step structure: LLM runner unavailable: OPENROUTER_API_KEY is not set (agent x3lius-songwriting uses model openrouter:anthropic/claude-opus-5) (run …; not run: lyrics, genre, formula)
+status: error (failed at structure: LLM runner unavailable: OPENROUTER_API_KEY is not set (agent x3lius-songwriting uses model openrouter:anthropic/claude-opus-5))
+output:
+null
+workflow_runs row:
+{
+  "id": "…",
+  "workflow_name": "x3lius-song-to-suno",
+  "status": "error",
+  "failed_step": "structure",
+  "skipped_steps": [
+    "lyrics",
+    "genre",
+    "formula"
+  ],
+  "created_at": "…",
+  "completed_at": "…"
+}
+agent_runs rows (one per step):
+[
+  {
+    "id": "…",
+    "step_id": "structure",
+    "agent_name": "x3lius-songwriting",
+    "class": "Creative",
+    "status": "error",
+    "latency_ms": 270,
+    "tokens_used": null,
+    "logs": [
+      {
+        "at": "…",
+        "level": "info",
+        "message": "x3lius-songwriting: context pulled: canonical_prompts:ab30dc65-8670-4f5f-a4ce-a723242db6e7#x3lius.voice-reference"
+      },
+      {
+        "at": "…",
+        "level": "warn",
+        "message": "x3lius-songwriting: SPARSE canonical knowledge — x3lius-songwriting: 0 rules on the scoped context path | x3lius-vocal-dna: 0 rules on the scoped context path | voice: 1 claim(s) under x3lius.* from outside the sub-domain scope (x3lius.voice-reference) | fewer than 3 scoped rules: expect output close to generic. Promote rules tagged x3lius-songwriting or x3lius-vocal-dna through the gate to change that."
+      }
+    ]
+  }
+]
+
+## 4. Output SHAPE (FAKE model, throwaway DB): song-to-suno workflow → suno-submitter manual submit → capture
+workflow: success; formula artifact x3lius.suno-prompt/v1 v1
+formula body:
+{
+  "sunoModel": "v5",
+  "title": "[FAKE] Suno Title",
+  "style": "[FAKE] style prompt",
+  "excludeStyles": [
+    "[FAKE] excluded"
+  ],
+  "lyrics": "[Verse 1]\n[FAKE] bar 1\n[FAKE] bar 2\n[FAKE] bar 3\n[FAKE] bar 4",
+  "sources": [
+    {
+      "role": "lyrics",
+      "artifactId": "<uuid>",
+      "schemaId": "x3lius.lyrics/v1",
+      "version": 1
+    },
+    {
+      "role": "structure",
+      "artifactId": "<uuid>",
+      "schemaId": "x3lius.song-structure/v1",
+      "version": 1
+    },
+    {
+      "role": "genre-style",
+      "artifactId": "<uuid>",
+      "schemaId": "x3lius.genre-style/v1",
+      "version": 1
+    }
+  ],
+  "limits": [],
+  "rulesApplied": [
+    {
+      "ref": "canonical_prompts:<uuid>#x3lius.voice-reference",
+      "how": "[FAKE] cited to exercise traceability"
+    }
+  ],
+  "ungroundedChoices": [
+    "[FAKE] everything not covered by a cited rule"
+  ]
+}
+knowledge:
+{
+  "sparse": true,
+  "threshold": 3,
+  "scopedRules": 0,
+  "perModule": {
+    "x3lius-suno": 0,
+    "x3lius-genre-style": 0,
+    "x3lius-vocal-dna": 0
+  },
+  "voiceClaims": 1,
+  "reasons": [
+    "x3lius-suno: 0 rules on the scoped context path",
+    "x3lius-genre-style: 0 rules on the scoped context path",
+    "x3lius-vocal-dna: 0 rules on the scoped context path",
+    "voice: 1 claim(s) under x3lius.* from outside the sub-domain scope (x3lius.voice-reference)",
+    "fewer than 3 scoped rules: expect output close to generic. Promote rules tagged x3lius-suno or x3lius-genre-style / x3lius-vocal-dna through the gate to change that."
+  ]
+}
+submit (manual): {"submissionId":"<uuid>","adapter":"manual","sunoModel":"v5","providerTaskId":null,"status":"awaiting-takes"}
+capture (manual): {"submissionId":"<uuid>","status":"captured","inserted":1,"alreadyCaptured":0,"takes":[{"id":"<uuid>","audioUrl":"https://cdn1.suno.ai/FIXTURE-take-a.mp3"}],"scoring":{"status":"stub","scorer":"stub:phase-12-critic","rows":1}}
+take_scores: [{"scorer":"stub:phase-12-critic","is_stub":true,"score":null,"detail":{"note":"STUB: no scoring until the Phase 12 Critic. This row marks the hook, not a judgement.","phase":12}}]
+
+## 5. Producing the real assembly + a take (keyed session)
+# 1. OPENROUTER_API_KEY (or switch the agents' `model:`) → new session. 2.:
+#    pnpm workflow records/x3lius/song-to-suno.workflow.yaml '{"request":"<brief>","sunoModel":"v5"}'
+#    pnpm dispatch suno-submitter '{"submit":{"formulaArtifactId":"<formula artifact id>","adapter":"manual"}}'
+#    … generate in the Suno UI with the logged prompt, then:
+#    pnpm dispatch suno-submitter '{"capture":{"submissionId":"<id>","takes":[{"audioUrl":"https://…"}]}}'
+# For sunoapi instead: SUNO_API_KEY + SUNO_CALLBACK_URL, adapter "sunoapi", capture without takes (polls once).

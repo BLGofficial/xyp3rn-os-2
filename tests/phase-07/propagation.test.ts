@@ -27,6 +27,8 @@ import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 
 const FIXTURE_SLUG = 'fixture-phase-07-suno-rule';
 const QUERY = 'How should the Suno style prompt order vocal descriptors?';
+const MIX_FIXTURE_SLUG = 'fixture-phase-07-mix-rule';
+const MIX_QUERY = 'Master the new X3LIUS track to -9 LUFS';
 
 let db: TestDb;
 let embedder: Embedder;
@@ -36,7 +38,7 @@ const registry = createAgentRegistry({ dir: join(REPO_ROOT, 'agents') });
 const deps = () => ({ sql: db.sql, registry, tools: createRuntimeTools({ sql: db.sql }), handlers: HANDLERS });
 
 /** A synthetic candidate, marked FIXTURE end to end, promoted through the real gate path. */
-const fixtureCandidate = async (note: string, tags: readonly string[], slug = FIXTURE_SLUG) => {
+const fixtureCandidate = async (note: string, tags: readonly string[], slug = FIXTURE_SLUG, topic = 'fixture.suno-vocal-descriptor-position') => {
   const src = await registerResearchSource(db.sql, {
     researchRunId, kind: 'observation', uri: `fixture:phase-07/${createHash('sha256').update(note).digest('hex').slice(0, 12)}`,
     title: `[FIXTURE] ${note}`, contentSha256: createHash('sha256').update(`fixture\n${note}`).digest('hex'),
@@ -44,10 +46,10 @@ const fixtureCandidate = async (note: string, tags: readonly string[], slug = FI
   const ev = await writeEvidence(db.sql, { researchRunId, agentRunId: null, specialist: 'fixture:phase-07-test' }, {
     research_source_id: src.id, claim: `[FIXTURE] ${note}`, model_tag: 'suno-v4.5', confidence: 0.7,
     confidence_inputs: { basis: 'synthetic fixture for the Phase 7 wiring proof — not a real observation' },
-    claim_topic: 'fixture.suno-vocal-descriptor-position', claim_value: 'first',
+    claim_topic: topic, claim_value: 'first',
   });
   const f = await recordFinding(db.sql, {
-    researchRunId, claim: `[FIXTURE] ${note}`, claim_topic: 'fixture.suno-vocal-descriptor-position', claim_value: 'first', model_tag: 'suno-v4.5', evidenceIds: [ev],
+    researchRunId, claim: `[FIXTURE] ${note}`, claim_topic: topic, claim_value: 'first', model_tag: 'suno-v4.5', evidenceIds: [ev],
   });
   return proposeCandidate(db.sql, {
     findingId: f.findingId, proposed_kind: 'canonical_prompt', target_slug: slug, title: `[FIXTURE] ${note}`,
@@ -135,21 +137,27 @@ describe('propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-d
     expect(lyrics.items.map((i) => i.slug)).not.toContain(FIXTURE_SLUG);
   });
 
-  it('through the Agent Registry: the x3lius-suno stub returns it as consumable context and says it is a stub', async () => {
-    const r = await dispatch(deps(), 'x3lius-suno', { request: QUERY });
+  // Phase 9 turned x3lius-suno into a Creative agent (tests/phase-09), so the stub-agent half of this
+  // proof runs on a sub-domain that is still a stub: Mix/Master (built in Phase 11), with its own
+  // FIXTURE rule promoted the same way.
+  it('through the Agent Registry: a stub sub-domain returns its promoted rule as consumable context and says it is a stub', async () => {
+    const r0 = await approveAndPromote(await fixtureCandidate('Master X3LIUS masters to the loudness target first.', ['x3lius-mix-master'], MIX_FIXTURE_SLUG, 'fixture.mix-loudness-first'));
+    expect(r0.outcome).toBe('promoted');
+    await embedPending(db.sql, embedder);
+    const r = await dispatch(deps(), 'x3lius-mix-master', { request: MIX_QUERY });
     expect(r.status, r.error).toBe('success');
     const out = r.output as { subdomain: string; status: string; builtIn: string | null; context: { slug: string }[] };
-    expect(out).toMatchObject({ subdomain: 'x3lius-suno', status: 'stub', builtIn: '9' });
-    expect(out.context.map((i) => i.slug)).toContain(FIXTURE_SLUG);
+    expect(out).toMatchObject({ subdomain: 'x3lius-mix-master', status: 'stub', builtIn: '11' });
+    expect(out.context.map((i) => i.slug)).toContain(MIX_FIXTURE_SLUG);
+    expect(out.context.map((i) => i.slug)).not.toContain(FIXTURE_SLUG);
   });
 
-  it('end to end from a raw request: route → RECORDS → X3LIUS entrypoint → x3lius-suno', async () => {
-    const request = 'Write a Suno style prompt for the next X3LIUS single';
-    expect(planRequest(request, ENTRYPOINTS)).toMatchObject({ action: 'run-service', service: 'x3lius-music-system' });
-    const r = await runMusicSystem(deps(), { request });
-    expect(r).toMatchObject({ status: 'success', selected: ['x3lius-suno'] });
-    const out = r.outputs['x3lius-suno'] as { context: { slug: string }[] };
-    expect(out.context.map((i) => i.slug)).toContain(FIXTURE_SLUG);
+  it('end to end from a raw request: route → RECORDS → X3LIUS entrypoint → x3lius-mix-master', async () => {
+    expect(planRequest(MIX_QUERY, ENTRYPOINTS)).toMatchObject({ action: 'run-service', service: 'x3lius-music-system' });
+    const r = await runMusicSystem(deps(), { request: MIX_QUERY });
+    expect(r).toMatchObject({ status: 'success', selected: ['x3lius-mix-master'] });
+    const out = r.outputs['x3lius-mix-master'] as { context: { slug: string }[] };
+    expect(out.context.map((i) => i.slug)).toContain(MIX_FIXTURE_SLUG);
   });
 
   it('only the current version is consumable: v2 replaces v1 on the scoped path', async () => {

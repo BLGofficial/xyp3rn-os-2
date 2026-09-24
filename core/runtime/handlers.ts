@@ -6,6 +6,7 @@ import { researchOrchestrator } from '../../research-intelligence/agents/researc
 import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { loadMusicSystem } from '../../records/x3lius/music-system.ts';
 import { subdomainStub } from '../../records/x3lius/subdomain-stub.ts';
+import { sunoSubmitter } from '../../records/x3lius/suno/submitter.ts';
 
 /**
  * Deterministic (`model: none`) agent handlers, keyed by agent name. Checked in and
@@ -17,8 +18,10 @@ export const HANDLERS: HandlerMap = {
   'extractive-summarizer': extractiveSummarizer,
   'health-check': healthCheck,
   'research-orchestrator': researchOrchestrator,
+  // Phase 9: Suno Execution (deterministic; its side effects go through submit_suno / capture_suno_takes).
+  'suno-submitter': sunoSubmitter,
   // Phase 7: one stub per X3LIUS sub-domain, from the checked-in manifest (not from agents/),
-  // except those a later phase built as LLM agents (Phase 8: core/runtime/programs.ts).
+  // except those a later phase built as LLM agents (Phases 8–9: core/runtime/programs.ts).
   ...Object.fromEntries(
     loadMusicSystem().subdomains.filter((s) => !CREATIVE_SUBDOMAINS.includes(s.slug)).map((s) => [s.slug, subdomainStub]),
   ),

@@ -24,6 +24,8 @@ export type ContextItem = {
   /** Full row text (prompt body, module description, source title) for downstream agents. */
   readonly text: string;
   readonly domain: Domain | null;
+  /** canonical_prompts.model_tag (e.g. `suno-v5`), so a caller can keep rules to its model version (Phase 9); null elsewhere. */
+  readonly modelTag: string | null;
   readonly score: number;
   readonly reasons: readonly Reason[];
   /** Human-readable form of `reasons`. */
@@ -177,22 +179,22 @@ export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine
 
       // Hydrate every ranked ref from its own table — an unresolvable ref is a bug, not a gap.
       const ids = (t: ContextTable) => ranked.items.filter((i) => i.ref.table === t).map((i) => i.ref.id);
-      const rows = new Map<string, { slug: string | null; title: string; text: string; domain: Domain | null; source_id: string | null; source_uri: string | null }>();
-      for (const r of await tx<{ id: string; slug: string; title: string; body: string; domain: Domain; source_id: string | null; uri: string | null }[]>`
-        select cp.id, cp.slug, cp.title, cp.body, m.domain, cp.source_id, s.uri
+      const rows = new Map<string, { slug: string | null; title: string; text: string; domain: Domain | null; model_tag: string | null; source_id: string | null; source_uri: string | null }>();
+      for (const r of await tx<{ id: string; slug: string; title: string; body: string; domain: Domain; model_tag: string | null; source_id: string | null; uri: string | null }[]>`
+        select cp.id, cp.slug, cp.title, cp.body, m.domain, cp.model_tag, cp.source_id, s.uri
         from canonical_prompts cp join modules m on m.id = cp.module_id left join sources s on s.id = cp.source_id
         where cp.id = any(${ids('canonical_prompts')}::uuid[])`) {
-        rows.set(`canonical_prompts:${r.id}`, { slug: r.slug, title: r.title, text: r.body, domain: r.domain, source_id: r.source_id, source_uri: r.uri });
+        rows.set(`canonical_prompts:${r.id}`, { slug: r.slug, title: r.title, text: r.body, domain: r.domain, model_tag: r.model_tag, source_id: r.source_id, source_uri: r.uri });
       }
       for (const r of await tx<{ id: string; slug: string; title: string; description: string | null; domain: Domain; source_id: string | null; uri: string | null }[]>`
         select m.id, m.slug, m.title, m.description, m.domain, m.source_id, s.uri
         from modules m left join sources s on s.id = m.source_id
         where m.id = any(${ids('modules')}::uuid[])`) {
-        rows.set(`modules:${r.id}`, { slug: r.slug, title: r.title, text: r.description ?? '', domain: r.domain, source_id: r.source_id, source_uri: r.uri });
+        rows.set(`modules:${r.id}`, { slug: r.slug, title: r.title, text: r.description ?? '', domain: r.domain, model_tag: null, source_id: r.source_id, source_uri: r.uri });
       }
       for (const r of await tx<{ id: string; title: string; uri: string }[]>`
         select id, title, uri from sources where id = any(${ids('sources')}::uuid[])`) {
-        rows.set(`sources:${r.id}`, { slug: null, title: r.title, text: r.title, domain: null, source_id: r.id, source_uri: r.uri });
+        rows.set(`sources:${r.id}`, { slug: null, title: r.title, text: r.title, domain: null, model_tag: null, source_id: r.id, source_uri: r.uri });
       }
 
       const slugOf = (ref: EntityRef) => {
@@ -209,6 +211,7 @@ export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine
           snippet: row.text.length > SNIPPET_CHARS ? `${row.text.slice(0, SNIPPET_CHARS)}…` : row.text,
           text: row.text,
           domain: row.domain,
+          modelTag: row.model_tag,
           score: it.score,
           reasons: it.reasons,
           why: it.reasons.map((r) => describe(r, slugOf)).join('; '),

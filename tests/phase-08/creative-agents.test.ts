@@ -171,9 +171,9 @@ afterAll(async () => {
 describe('registry: three Creative agents replace their stubs under the same names', () => {
   const creative = ['x3lius-songwriting', 'x3lius-lyrics', 'x3lius-composition'];
 
-  it('the creative set is exactly Songwriting, Lyrics and (F15) Composition', () => {
-    expect([...CREATIVE_SUBDOMAINS].sort()).toEqual([...creative].sort());
-    expect(Object.keys(LLM_PROGRAMS).sort()).toEqual([...creative].sort());
+  it('Phase 8 built exactly Songwriting, Lyrics and (F15) Composition (later phases add more)', () => {
+    expect(CREATIVE_SUBDOMAINS).toEqual(expect.arrayContaining(creative));
+    expect(Object.keys(LLM_PROGRAMS)).toEqual(expect.arrayContaining(creative));
     expect(loadMusicSystem().subdomains.filter((s) => s.builtIn === '8').map((s) => s.slug).sort()).toEqual([...creative].sort());
   });
 
@@ -185,9 +185,9 @@ describe('registry: three Creative agents replace their stubs under the same nam
     expect(() => parseScope(name, a.sections.Scope ?? '')).not.toThrow();
   });
 
-  it('the other seven sub-domains stay read-only Knowledge stubs; the registry validates', () => {
-    const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !creative.includes(s));
-    expect(stubs).toHaveLength(7);
+  it('every sub-domain no phase has built yet stays a read-only Knowledge stub; the registry validates', () => {
+    const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !CREATIVE_SUBDOMAINS.includes(s));
+    expect(stubs.length + CREATIVE_SUBDOMAINS.length).toBe(10);
     for (const s of stubs) expect(registry.get(s)).toMatchObject({ class: 'Knowledge', model: 'none' });
     expect(registry.validateAll()).toEqual([]);
   });

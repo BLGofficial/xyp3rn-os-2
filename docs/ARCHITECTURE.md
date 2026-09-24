@@ -64,7 +64,7 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
 
 **Purpose.** The label and artist system. It has two parts:
 
-- The X3LIUS Music System: ten creative sub-domains (Phases 7–12). Built in Phase 7 as gate-written modules from `records/x3lius/music-system.manifest.yaml`, with one read-only stub agent per sub-domain. A promoted rule tagged with a sub-domain's slug lands in that module and is consumable on its scoped context path. Phase 8 replaced the Songwriting, Lyrics and Composition stubs with Creative agents of the same names. They write versioned, schema-validated artifacts to `creative_artifacts` from canonical rules and claims pulled at run time.
+- The X3LIUS Music System: ten creative sub-domains (Phases 7–12). Built in Phase 7 as gate-written modules from `records/x3lius/music-system.manifest.yaml`, with one read-only stub agent per sub-domain. A promoted rule tagged with a sub-domain's slug lands in that module and is consumable on its scoped context path. Phase 8 replaced the Songwriting, Lyrics and Composition stubs with Creative agents of the same names. They write versioned, schema-validated artifacts to `creative_artifacts` from canonical rules and claims pulled at run time. Phase 9 did the same for Genre/Style and Suno (the Prompt-Formula), and added `suno-submitter` (Execution), which submits a formula artifact and records submissions, takes and stub scores in an append-only trail.
 - Records ops: catalog, releases, rights splits and release calendar (Phase 13).
 
 **Owns.** Creative artifacts (song structures, lyrics, Suno prompts, takes, critiques, revisions) plus `releases`, `tracks` and `rights_splits`.
@@ -193,3 +193,16 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - The creative sub-domains and Vocal DNA hold 0 rules. The model's whole voice context is the guide's one claim, `x3lius.voice-reference` (4 descriptors).
 - Every artifact is written with `knowledge.sparse = true` and a long `ungroundedChoices` list. No fallback voice exists in code, and a test enforces that.
 - It closes only through data: rules tagged with a sub-domain slug, promoted by the gate (Research Intelligence, or an operator-cited first-party source).
+
+**F19. Suno access.** DECIDED (user, Phase 9): pluggable adapters.
+- Suno has no official public API (a developer API has been in partner-only exploration since 2026-07).
+- The adapters:
+  - `manual`: the prompt is recorded and the operator registers takes. It works now, with no ToS exposure.
+  - `sunoapi`: the sunoapi.org reseller, an unofficial resale of Suno access, unverified until `SUNO_API_KEY` exists.
+- Browser automation was rejected (captcha, fragility, ToS).
+- The caller names the adapter; the Execution agent never chooses.
+- When Suno ships an official API, it becomes a third adapter.
+
+**F20. Suno rules are version-scoped.** DECIDED (Phase 9, recorded here because it constrains Phases 10–12).
+- A canonical rule or claim tagged `suno-<version>` applies only to prompts for that version; anything else applies to all.
+- Platform limits (`suno.limit.<field>-chars`) are canonical claims, never constants in code.

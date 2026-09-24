@@ -25,6 +25,7 @@ The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04
 | `candidate.propose` | INSERT `knowledge_candidates` with status `proposed` | Y | — | — | — | — | — | — | — |
 | `plan.write` | Write plans, workflow drafts, `rd_backlog` proposals | — | — | Y | — | — | — | — | — |
 | `artifact.write` | Write a new version of a creative artifact (never overwrite) | — | — | — | Y | — | Y | — | — |
+| `artifact.read` | Read a creative artifact version by id (Phase 9) | — | — | — | Y | Y | Y | Y | Y |
 | `critique.write` | Write a structured critique object | — | — | — | — | Y | — | — | — |
 | `external.execute` | Perform an external side effect (API submit, file export) | — | — | — | — | — | — | Y | — |
 | `governance.flag` | Write compliance/legal/rights flags; enqueue approval items | — | — | — | — | — | — | — | Y |

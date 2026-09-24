@@ -8,7 +8,7 @@ import { CREATIVE_PROGRAMS } from '../../records/x3lius/creative/program.ts';
  * "no LLM program registered" (the Phase 6B specialists, until their runner exists).
  */
 export const LLM_PROGRAMS: Readonly<Record<string, LlmProgram>> = {
-  // Phase 8: X3LIUS Songwriting, Lyrics, Composition.
+  // Phase 8: X3LIUS Songwriting, Lyrics, Composition. Phase 9: Genre/Style, Suno Prompt-Formula.
   ...CREATIVE_PROGRAMS,
 };
 

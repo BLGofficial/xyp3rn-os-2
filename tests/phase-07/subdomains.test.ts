@@ -4,6 +4,7 @@ import { createAgentRegistry } from '../../core/agent-registry/registry.ts';
 import { ENTRYPOINTS, planRequest } from '../../core/orchestrator/orchestrate.ts';
 import { HANDLERS } from '../../core/runtime/handlers.ts';
 import { parseScope } from '../../research-intelligence/orchestrator/select.ts';
+import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { loadMusicSystem, MUSIC_SYSTEM_SERVICE, selectSubdomains } from '../../records/x3lius/music-system.ts';
 import { REPO_ROOT } from '../helpers/db.ts';
 
@@ -12,12 +13,12 @@ import { REPO_ROOT } from '../helpers/db.ts';
 const registry = createAgentRegistry({ dir: join(REPO_ROOT, 'agents') });
 const system = loadMusicSystem();
 
-// Phase 8 built Songwriting, Lyrics and Composition as Creative agents under the same names
-// (tests/phase-08); every other sub-domain is still the Phase 7 stub.
-const PHASE_08 = ['x3lius-songwriting', 'x3lius-lyrics', 'x3lius-composition'];
+// Later phases replace stubs with real agents under the same names (Phase 8: Songwriting, Lyrics,
+// Composition; Phase 9: Suno, Genre/Style — tests/phase-08, tests/phase-09). The rest stay stubs.
+const BUILT: readonly string[] = CREATIVE_SUBDOMAINS;
 
 describe('Agent Registry: one agent per sub-domain', () => {
-  it.each(system.subdomains.filter((s) => !PHASE_08.includes(s.slug)).map((s) => [s.slug]))('%s: read-only Knowledge stub under RECORDS with a handler and a scope', (slug) => {
+  it.each(system.subdomains.filter((s) => !BUILT.includes(s.slug)).map((s) => [s.slug]))('%s: read-only Knowledge stub under RECORDS with a handler and a scope', (slug) => {
     const a = registry.get(slug);
     expect(a).toMatchObject({ name: slug, class: 'Knowledge', domain: 'RECORDS', tools: ['retrieve_context', 'log_message'], model: 'none' });
     expect(HANDLERS[slug]).toBeTypeOf('function');
