@@ -1,6 +1,6 @@
 import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseAgentFile } from './parse-agent-file.ts';
 import { createAgentRegistry, loadAgents } from './registry.ts';
@@ -81,7 +81,7 @@ describe('validateAll over a directory', () => {
     copyFileSync(BROKEN, join(dir, 'registry-fixture-missing-class.agent.md'));
     writeFileSync(join(dir, 'second-broken.agent.md'), variant('name: registry-fixture-valid', 'name: second-broken').replace('domain: KNOWLEDGE', 'domain: MARKETING'));
     const registry = createAgentRegistry({ dir, log: () => {} });
-    expect(registry.validateAll().map((f) => f.path.split('/').at(-1))).toEqual([
+    expect(registry.validateAll().map((f) => basename(f.path))).toEqual([
       'registry-fixture-missing-class.agent.md',
       'second-broken.agent.md',
     ]);
@@ -89,7 +89,7 @@ describe('validateAll over a directory', () => {
 
   it('skips _-prefixed templates explicitly (reported, not silently ignored)', () => {
     const snap = loadAgents(AGENTS_DIR);
-    expect(snap.skipped.map((p) => p.split('/').at(-1))).toContain('_template.agent.md');
+    expect(snap.skipped.map((p) => basename(p))).toContain('_template.agent.md');
     expect(snap.failures).toEqual([]);
   });
 });
