@@ -19,6 +19,8 @@ import { registerResearchSource } from '../../research-intelligence/sources/veri
 import { proposeCandidate, recordFinding } from '../../research-intelligence/synthesis/findings.ts';
 import type { CriticOutput } from '../../records/x3lius/evaluation/critic.ts';
 import { evaluate } from '../../records/x3lius/evaluation/loop.ts';
+import { designExperiment, experimentResult, recordTrial } from '../../research-intelligence/experiments/engine.ts';
+import { CRITIC_SCORER_ID, criticScorer, scoreOf } from '../../records/x3lius/evaluation/scorer.ts';
 import type { RevisionOutput } from '../../records/x3lius/evaluation/revision.ts';
 import { MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/music-system.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
@@ -280,5 +282,38 @@ describe('loop controller (the proof runs)', () => {
     await expect(evaluate(depsWith(), 'not-a-uuid')).rejects.toThrow(/is not an artifact id \(a uuid\)/);
     await expect(evaluate(depsWith(), randomUUID())).rejects.toThrow(/no artifact/);
     await expect(evaluate(depsWith(), prompts.loop)).rejects.toThrow(/the latest version of its lineage is .* Evaluate that one/);
+  });
+});
+
+describe('6C: experiment trials scored by the Critic (the stub is gone from the path)', () => {
+  it('scores passed / checked from a real critique; a trial naming no artifact gets null with the reason', async () => {
+    const l = await lyrics();
+    const scorer = criticScorer(depsWith(scripted({ critic: (a) => [{ ruleRef: `canonical_prompts:${rules.lyrics}`, path: '/sections/0/bars/0/text', quote: String(((a.sections as Json[])[0]!.bars as Json[])[0]!.text), expected: 'a place', found: 'none' }] })));
+    expect(await scorer.score({ take: 'recorded by hand' })).toEqual({ score: null, inputs: { reason: 'the trial output names no artifactId: nothing for the Critic to check' } });
+    const s = await scorer.score({ artifactId: l.id });
+    const [c] = await critiqueRow((s.inputs as { critiqueId: string }).critiqueId);
+    expect(s.score).toBe(scoreOf(c!));
+    expect(s.inputs).toMatchObject({ passed: c!.passed, checked: c!.checked, violations: 1 });
+  });
+
+  it('an experiment whose every trial the Critic scored can validate', async () => {
+    const src = await registerResearchSource(db.sql, {
+      researchRunId, kind: 'observation', uri: 'fixture:phase-12/experiment', title: '[FIXTURE] experiment candidate',
+      contentSha256: createHash('sha256').update('fixture\nphase-12 experiment').digest('hex'),
+    });
+    const ev = await writeEvidence(db.sql, { researchRunId, agentRunId: null, specialist: 'fixture:phase-12-test' }, {
+      research_source_id: src.id, claim: '[FIXTURE] Name a street in every bar.', model_tag: 'model-agnostic', confidence: 0.7,
+      confidence_inputs: { basis: 'synthetic fixture for the Phase 12 proof' }, claim_topic: 'fixture.x3lius-street-per-bar', claim_value: 'street',
+    });
+    const f = await recordFinding(db.sql, { researchRunId, claim: '[FIXTURE] Name a street in every bar.', claim_topic: 'fixture.x3lius-street-per-bar', claim_value: 'street', model_tag: 'model-agnostic', evidenceIds: [ev] });
+    const candidateId = await proposeCandidate(db.sql, {
+      findingId: f.findingId, proposed_kind: 'canonical_prompt', target_slug: 'fixture-phase-12-experiment', title: '[FIXTURE] street per bar',
+      body: '[FIXTURE — synthetic, Phase 12 proof] Name a street in every bar.', domain: 'RECORDS', tags: ['x3lius-lyrics'],
+    });
+    const exp = await designExperiment(db.sql, { candidateId, hypothesis: '[FIXTURE] street names raise rule compliance', variantA: { rule: 'current' }, variantB: { rule: 'street per bar' }, nPerVariant: 1 }, CRITIC_SCORER_ID);
+    const scorer = criticScorer(depsWith(scripted({})));
+    await recordTrial(db.sql, { experimentId: exp, variant: 'a', trial: 1, output: { artifactId: (await lyrics()).id } }, scorer);
+    await recordTrial(db.sql, { experimentId: exp, variant: 'b', trial: 1, output: { artifactId: (await lyrics()).id } }, scorer);
+    expect(await experimentResult(db.sql, exp)).toMatchObject({ validated: true, scoredBy: [CRITIC_SCORER_ID] });
   });
 });

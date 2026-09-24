@@ -1,12 +1,14 @@
 import type postgres from 'postgres';
 
 /**
- * The take → scoring hook (Phase 9). Evaluation isn't built until Phase 12, so every captured take
- * gets one STUB take_scores row: it marks where the Critic plugs in and carries no number
- * (is_stub, score null — the table refuses a stub with a score). The Phase 12 Critic appends real
- * rows next to it; nothing here pretends to judge a take.
+ * The take → scoring hook (Phase 9). A take is audio; the Phase 12 Critic reads structured
+ * artifacts, so an honest take score needs a trace.analysis/v1 of the render (Phase 14's TRACE
+ * integration). Until then every captured take gets one STUB take_scores row: it marks where that
+ * scorer plugs in and carries no number (is_stub, score null — the table refuses a stub with a
+ * score). Rows written before Phase 12 keep their old marker, stub:phase-12-critic; rows are never
+ * rewritten.
  */
-export const STUB_SCORER = 'stub:phase-12-critic';
+export const STUB_SCORER = 'stub:needs-trace-analysis';
 
 /**
  * @param tx - transaction already running as xyp_execution
@@ -16,7 +18,7 @@ export const STUB_SCORER = 'stub:phase-12-critic';
  */
 export const recordStubScores = async (tx: postgres.TransactionSql, takeIds: readonly string[], agentRunId: string): Promise<string[]> => {
   if (takeIds.length === 0) return [];
-  const detail = { note: 'STUB: no scoring until the Phase 12 Critic. This row marks the hook, not a judgement.', phase: 12 };
+  const detail = { note: 'STUB: no take scoring until a TRACE analysis of the render exists (Phase 14). This row marks the hook, not a judgement.', phase: 14 };
   const rows = await tx<{ id: string }[]>`
     insert into take_scores (take_id, agent_run_id, scorer, is_stub, score, detail)
     select t, ${agentRunId}, ${STUB_SCORER}, true, null, ${tx.json(detail)} from unnest(${takeIds}::uuid[]) as t
