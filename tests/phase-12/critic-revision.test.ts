@@ -16,6 +16,7 @@ import { writeEvidence } from '../../research-intelligence/evidence/engine.ts';
 import { registerResearchSource } from '../../research-intelligence/sources/verify.ts';
 import { proposeCandidate, recordFinding } from '../../research-intelligence/synthesis/findings.ts';
 import type { CriticOutput } from '../../records/x3lius/evaluation/critic.ts';
+import type { RevisionOutput } from '../../records/x3lius/evaluation/revision.ts';
 import { MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/music-system.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 import { FAKE_KEYS, fakeModel } from '../helpers/fake-llm.ts';
@@ -161,5 +162,39 @@ describe('Critic (x3lius-evaluation)', () => {
     const l = await lyrics();
     const first = (await run('x3lius-evaluation', { artifactId: l.id })).output as CriticOutput;
     expect((await run('x3lius-evaluation', { artifactId: l.id, previousCritiqueId: first.critique.id })).error).toMatch(/not the parent of/);
+  });
+});
+
+describe('Revision (x3lius-revision)', () => {
+  it('writes v2 with the edit, naming the critique it answers; derived Suno lengths are recomputed', async () => {
+    const critic = scripted({ critic: (a) => (String(a.title).startsWith('[FAKE]') ? [{ ruleRef: `canonical_prompts:${rules.suno}`, path: '/title', quote: '[FAKE] Suno Title', expected: 'a real title', found: 'a placeholder' }] : []) });
+    const c = (await run('x3lius-evaluation', { artifactId: prompts.revision }, critic)).output as CriticOutput;
+    const titleKey = c.body.violations.find((x) => x.path === '/title')!.key;
+    const reviser = scripted({ revise: () => [{ path: '/title', replacement: 'Neon Night Drive', violationKeys: [titleKey] }] });
+    const r = await run('x3lius-revision', { critiqueId: c.critique.id }, reviser);
+    expect(r.status, r.error).toBe('success');
+    const out = r.output as RevisionOutput;
+    expect(out.artifact).toMatchObject({ version: 2, schemaId: 'x3lius.suno-prompt/v1' });
+    expect(out.body.title).toBe('Neon Night Drive');
+    expect((out.body.limits as { field: string; actual: number }[]).find((l) => l.field === 'title')?.actual).toBe('Neon Night Drive'.length);
+    const [row] = await db.sql<{ parent_id: string; critique_id: string; agent_name: string }[]>`select parent_id, critique_id, agent_name from creative_artifacts where id = ${out.artifact.id}`;
+    expect(row).toEqual({ parent_id: prompts.revision, critique_id: c.critique.id, agent_name: 'x3lius-revision' });
+    // Revision sees the violations with their keys, and the artifact without its trace.
+    expect(reviser.calls.at(-1)!.user).toContain(`"key":"${titleKey}"`);
+    expect(reviser.calls.at(-1)!.user).not.toContain('rulesApplied');
+  });
+
+  it('refuses an edit outside every violation, and writes nothing', async () => {
+    const l = await lyrics();
+    const critic = scripted({ critic: (a) => [{ ruleRef: `canonical_prompts:${rules.lyrics}`, path: '/sections/0/bars/0/text', quote: String(((a.sections as Json[])[0]!.bars as Json[])[0]!.text), expected: 'a place', found: 'none' }] });
+    const c = (await run('x3lius-evaluation', { artifactId: l.id }, critic)).output as CriticOutput;
+    const r = await run('x3lius-revision', { critiqueId: c.critique.id }, scripted({ revise: (vs) => [{ path: '/sections/1/bars/0/text', replacement: 'Canal Street', violationKeys: [vs[0]!.key] }] }));
+    expect(r.status).toBe('error');
+    expect(r.error).toMatch(/revision refused: edit 0 \(\/sections\/1\/bars\/0\/text\) is not at or inside a field a violation points to/);
+    expect(await artifactsOf(r.runId)).toEqual([]);
+  });
+
+  it('refuses a bare request', async () => {
+    expect((await run('x3lius-revision', { request: 'fix it' })).error).toMatch(/revises from one critique: input \{ critiqueId \}/);
   });
 });
