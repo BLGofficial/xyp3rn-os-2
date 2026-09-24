@@ -40,6 +40,7 @@ HANDOFF — Phase 11 built and proven on fixtures; the real rubric values are ou
     3. Run `pnpm dispatch x3lius-mix-master '{"analysis": …}'` on a real render.
   - **Not live-run:** Arrangement and Production have not been run against a live model (no `OPENROUTER_API_KEY`; the free quota ran out on 2026-09-24). Their wiring is proven on the FAKE model.
   - **Dev DB not set up:** on this Windows checkout every migration is still pending.
+  - **Production vs arrangement coverage:** a production made for an arrangement that uses elements is refused if it has no drum or sound-design element, or no channel. Which production element covers which arrangement element is not code-checked, because names vary and a lead vocal isn't made in drums or sound design.
   - **A research bound on a metric the file already states** leaves two current rows, and the report is refused until the operator drops the metric from the file (a re-ingest).
   - **The Phase 3 ranking assertion** (`adds 1-hop graph neighbours…`) fails on this machine's embeddings. It is unrelated to Phase 11. It is investigated and fixed in PR #7, which changes only the test.
     - The ranking works as designed. The `phase-4-agent-runtime-registry` module is found, but the limit of 4 graph-only items cuts it.

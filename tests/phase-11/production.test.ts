@@ -17,6 +17,7 @@ import { asRole } from '../../research-intelligence/db.ts';
 import { writeEvidence } from '../../research-intelligence/evidence/engine.ts';
 import { registerResearchSource } from '../../research-intelligence/sources/verify.ts';
 import { proposeCandidate, recordFinding } from '../../research-intelligence/synthesis/findings.ts';
+import { ARRANGEMENT_SPEC, PRODUCTION_SPEC } from '../../records/x3lius/creative/production.ts';
 import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { loadMusicSystem, MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/music-system.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
@@ -218,5 +219,37 @@ describe('registry: Phase 11 Creative agents replace their stubs under the same 
     expect(system.subdomains.filter((s) => s.builtIn === '11').map((s) => s.slug).sort()).toEqual(['x3lius-arrangement', 'x3lius-mix-master', 'x3lius-production']);
     expect(registry.get('x3lius-evaluation')).toMatchObject({ class: 'Knowledge', model: 'none' });
     expect(registry.validateAll()).toEqual([]);
+  });
+});
+
+describe('upstream checks in finalize (no model, no DB)', () => {
+  const source = { role: 'up', artifactId: 'a', schemaId: 's', version: 1 };
+  const prepared = (body: Json) => ({ brief: REQUEST, userSections: [], state: { source, body } });
+  const arranged = (...ids: string[]) => ({ sections: ids.map((sectionId) => ({ sectionId, kind: 'verse', bars: 8, energy: 5 })) });
+
+  it('arrangement: compares section ids one by one, so ids containing ", " cannot join to the same string', () => {
+    const structure = { sections: [{ id: 'a, b', kind: 'verse', bars: 8 }, { id: 'c', kind: 'chorus', bars: 8 }] };
+    expect(ARRANGEMENT_SPEC.finalize!(arranged('a', 'b, c'), prepared(structure), []).violations).toEqual([
+      'sections [a, b, c] do not follow the song structure [a, b, c] in order',
+    ]);
+    expect(ARRANGEMENT_SPEC.finalize!(arranged('a, b', 'c'), prepared(structure), []).violations).toEqual([]);
+  });
+
+  const production = (drums: Json[], soundDesign: Json[], channels: Json[]) => ({ tempoBpm: 140, drums, soundDesign, flStudio: { channels, mixerTracks: [] } });
+  const withElements = { sections: [{ sectionId: 'v1', elements: [{ element: '808', role: 'bass' }] }] };
+  const drum = { element: '808', sound: 's', pattern: 'p' };
+  const channel = { name: '808', generator: 'g', mixerTrack: 1 };
+
+  it('production: refuses empty drums and sound design, or no channels, when the arrangement lists elements', () => {
+    expect(PRODUCTION_SPEC.finalize!(production([], [], []), prepared(withElements), []).violations).toEqual([
+      'the arrangement lists 1 element(s), but drums and soundDesign are both empty',
+      'the arrangement lists 1 element(s), but flStudio.channels is empty',
+    ]);
+    expect(PRODUCTION_SPEC.finalize!(production([drum], [], [channel]), prepared(withElements), []).violations).toEqual([]);
+  });
+
+  it('production: an arrangement with no elements, or none given, asks for nothing', () => {
+    expect(PRODUCTION_SPEC.finalize!(production([], [], []), prepared({ sections: [{ sectionId: 'v1', elements: [] }] }), []).violations).toEqual([]);
+    expect(PRODUCTION_SPEC.finalize!(production([], [], []), { brief: REQUEST, userSections: [], state: { source: null, body: null } }, []).violations).toEqual([]);
   });
 });

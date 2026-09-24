@@ -50,12 +50,14 @@ export const ARRANGEMENT_SPEC: CreativeSpec = {
     const sections = reply.sections as ArrangedSection[];
     if (!up.source) return { body: { ...reply, sources: [] }, violations: [] };
     const structure = up.body!.sections as StructureSection[];
-    const got = sections.map((s) => s.sectionId).join(', ');
-    const want = structure.map((s) => s.id).join(', ');
+    const got = sections.map((s) => s.sectionId);
+    const want = structure.map((s) => s.id);
+    // Compared one by one: ids are free text, so two different lists can join to the same string.
+    const follows = got.length === want.length && got.every((id, i) => id === want[i]);
     const byId = new Map(structure.map((s) => [s.id, s]));
     return {
       body: { ...reply, sections: sections.map((s) => ({ ...s, kind: byId.get(s.sectionId)?.kind ?? s.kind, bars: byId.get(s.sectionId)?.bars ?? s.bars })), sources: [up.source] },
-      violations: got === want ? [] : [`sections [${got}] do not follow the song structure [${want}] in order`],
+      violations: follows ? [] : [`sections [${got.join(', ')}] do not follow the song structure [${want.join(', ')}] in order`],
     };
   },
   check: (b) => {
@@ -79,9 +81,18 @@ export const PRODUCTION_SPEC: CreativeSpec = {
   task: 'Produce the track the brief asks for: the tempo, each drum element (its sound and pattern), each non-drum sound (its source and processing chain), and the FL Studio project layout — Channel Rack channels, each routed to a mixer track, and the mixer tracks with their effect chains. When an ARRANGEMENT is given, produce the elements it uses.',
   modules: ['x3lius-production', 'x3lius-arrangement', VOICE_MODULE],
   prepare: withUpstream('arrangementArtifactId', ARRANGEMENT_SCHEMA_ID, 'arrangement', 'ARRANGEMENT'),
+  // An arrangement that uses elements can't yield an empty production. Which production element
+  // covers which arrangement element is not code-checked: names vary ("hi-hats" / "hi-hat") and
+  // some elements (a lead vocal) aren't made in drums or sound design.
   finalize: (reply, p) => {
     const up = p.state as Upstream;
-    return { body: { ...reply, sources: up.source ? [up.source] : [] }, violations: [] };
+    const used = up.body ? (up.body.sections as { elements: unknown[] }[]).reduce((n, s) => n + s.elements.length, 0) : 0;
+    const fl = reply.flStudio as { channels: unknown[] };
+    const violations = used === 0 ? [] : [
+      ...((reply.drums as unknown[]).length + (reply.soundDesign as unknown[]).length === 0 ? [`the arrangement lists ${used} element(s), but drums and soundDesign are both empty`] : []),
+      ...(fl.channels.length === 0 ? [`the arrangement lists ${used} element(s), but flStudio.channels is empty`] : []),
+    ];
+    return { body: { ...reply, sources: up.source ? [up.source] : [] }, violations };
   },
   check: (b) => {
     const fl = b.flStudio as { channels: Channel[]; mixerTracks: { track: number }[] };
