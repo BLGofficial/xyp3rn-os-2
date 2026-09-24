@@ -187,7 +187,9 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - An agent names its provider in frontmatter `model` (`<provider>:<model>`, or a bare `claude-*`). Keys are per provider (`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`) and are read at call time.
 - Replies are validated against the caller's schema whatever the provider claims.
 - The Anthropic base URL is pinned, not read from `ANTHROPIC_BASE_URL` (hosted dev containers set that variable for their own tooling).
-- Still unverified against live providers: no key existed when it was built.
+- Live-verified on OpenRouter with `nvidia/nemotron-3-ultra-550b-a55b:free` (Phase 8 addendum), which is now the creative agents' model (user decision). Anthropic and Groq are still verified against fakes only.
+- The schema is stated in the prompt as well as in `response_format`, because some routes drop the latter.
+- Model calls retry transient provider errors (408/429/5xx) twice with backoff. A completion changes no external state; Execution agents stay retry-free (Phase 4D).
 
 **F18. Canonical knowledge is too sparse for a distinct X3LIUS voice.** OPEN (flagged by Phase 8, as the guide requires).
 - The creative sub-domains and Vocal DNA hold 0 rules. The model's whole voice context is the guide's one claim, `x3lius.voice-reference` (4 descriptors).

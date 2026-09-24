@@ -3,7 +3,7 @@ name: x3lius-songwriting
 class: Creative
 domain: RECORDS
 tools: [retrieve_context, retrieve_claims, write_artifact, log_message]
-model: openrouter:anthropic/claude-opus-5
+model: openrouter:nvidia/nemotron-3-ultra-550b-a55b:free
 ---
 
 # X3LIUS Songwriting

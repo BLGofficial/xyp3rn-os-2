@@ -1,4 +1,4 @@
-HANDOFF — Phase 8 built; live-verse proof pending a provider key
+HANDOFF — Phase 8 complete (live verse produced; see the addendum at the end)
 
 - **Built:**
   - **Three Creative agents** replace their Phase 7 stubs under the same names, so routing, scope and registry entries carry over:
@@ -41,7 +41,7 @@ HANDOFF — Phase 8 built; live-verse proof pending a provider key
   - **Earlier-phase edits:**
     - The dispatch message for a missing runner is now `no LLM runner configured` (4D/6A test regexes updated).
     - The Phase 7 registry test now expects 7 stubs, not 10.
-    - `runMusicSystem` passes `LLM_TIMEOUT_MS` (180s).
+    - `runMusicSystem` passes `LLM_TIMEOUT_MS` (180s, raised to 300s in the addendum).
     - `pnpm dispatch` uses it for LLM agents.
 - **Open flags:**
   - **The live verse and the first real artifact are outstanding.** Add `OPENROUTER_API_KEY` (or change `model:` and add that provider's key), open a new session, then run the command in the proof's §6.
@@ -56,3 +56,16 @@ HANDOFF — Phase 8 built; live-verse proof pending a provider key
   - **The Suno Execution agent** (Execution class) needs a new `external.execute` tool, and its full prompt text must land in `agent_runs.input`/`output` (the Governance audit trail). It is side-effecting, so decide idempotency before any retry. `DispatchDeps.llmRunner` is not needed for it unless it calls a model.
   - **The scoring hook** should link each take to its source artifact (`creative_artifacts.id`, lineage + version). Revision in Phase 12 appends versions through the same table (`parent_id`), never an update.
   - **Keys:** Phase 9's live proof needs the same provider key as Phase 8's verse, plus Suno access. Do both proofs in one keyed session.
+
+**Addendum (2026-09-24, later): live integration with Nemotron via OpenRouter (user decision).**
+- **Model:** all five creative agents now use `openrouter:nvidia/nemotron-3-ultra-550b-a55b:free`, replacing my earlier default `openrouter:anthropic/claude-opus-5`. The key was supplied for the session and is not committed; store it in the environment settings and rotate it, since it was pasted in chat.
+- **Live verse produced** (`docs/proofs/PHASE-08-creative.txt` §7): a real `x3lius.lyrics/v1` artifact with 8 bars, alternating BG/EN and citing the guide's voice claim, with 5 ungrounded choices listed.
+- **Three runner fixes the live run forced** (tests added; 686/686):
+  - The `:free` route accepts `response_format` but drops it, so the schema is now also stated in the system prompt.
+  - The route often answers 503 "overloaded", so model calls get bounded retries (2s, 6s) on 408/429/5xx only. Execution agents stay retry-free (Phase 4D).
+  - The model cited `[ref]` with its brackets, so one surrounding pair is stripped before the exact-match check. A made-up ref is still refused.
+- **The per-step LLM timeout is now 300s:** the verse took 113s.
+- **Quality, for the Phase 12 Critic:**
+  - The declared rhyme scheme doesn't hold across the BG/EN pairs.
+  - Some Bulgarian looks ungrammatical and needs a native check.
+  - The voice context is still one canonical line (F18).

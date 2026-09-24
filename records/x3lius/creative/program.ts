@@ -88,6 +88,8 @@ const contextRef = (e: ContextEntry) =>
     ? { kind: e.kind, ref: e.ref, module: e.module, slug: e.slug, title: e.title, modelTag: e.modelTag, score: e.score, why: e.why, source: e.source }
     : { kind: e.kind, ref: e.ref, module: e.module, slug: e.slug, topic: e.topic, value: e.value, modelScope: e.modelScope, source: e.source };
 
+const normalizeRef = (ref: string): string => ref.trim().replace(/^\[(.*)\]$/, '$1').trim();
+
 const render = (v: unknown): string => (Array.isArray(v) ? v.map(render).join(', ') : typeof v === 'string' ? v : JSON.stringify(v));
 
 const promptLine = (e: ContextEntry): string =>
@@ -107,7 +109,7 @@ const systemPrompt = (title: string, slug: string, spec: CreativeSpec, entries: 
   '',
   'HOW TO USE THEM',
   '- Voice, style, tone and language choices must come from CANONICAL RULES. Do not add traits they do not state.',
-  '- In rulesApplied, list every rule you applied, with its ref copied exactly, and how it shaped the output.',
+  '- In rulesApplied, list every rule you applied, with its ref copied exactly (without the brackets), and how it shaped the output.',
   '- In ungroundedChoices, list every creative decision no rule covers. When the rules are thin this list is long; that is expected, not a failure.',
   '- Reply with JSON only, matching the response schema.',
 ].join('\n');
@@ -190,10 +192,13 @@ const creativeProgram = (slug: string): LlmProgram => {
       schema: { name: llmSchema.id, schema: llmSchema.schema },
       signal: ctx.signal,
     });
-    const reply = res.json as Record<string, unknown>;
+    // Models sometimes copy the ref with the brackets it's shown in (seen live with Nemotron);
+    // strip one surrounding pair, then require an exact match.
+    const raw = res.json as Record<string, unknown>;
+    const reply = { ...raw, rulesApplied: (raw.rulesApplied as { ref: string; how: string }[]).map((r) => ({ ...r, ref: normalizeRef(r.ref) })) };
 
     const given = new Set(entries.map((e) => e.ref));
-    const unknown = (reply.rulesApplied as { ref: string }[]).map((r) => r.ref).filter((r) => !given.has(r));
+    const unknown = reply.rulesApplied.map((r) => r.ref).filter((r) => !given.has(r));
     if (unknown.length > 0) throw new Error(`${slug} reply cites refs it was not given: ${unknown.join(', ')}`);
     const { body, violations } = spec.finalize?.(reply, prepared, entries) ?? { body: reply, violations: [] };
     const all = [...violations, ...(spec.check?.(body) ?? [])];

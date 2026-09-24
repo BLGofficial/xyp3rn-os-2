@@ -279,6 +279,16 @@ describe('x3lius-lyrics end to end (FAKE model, real runner, real context, real 
     expect(await artifactsOf(r.runId)).toHaveLength(0);
   });
 
+  it('a ref cited with its brackets (as shown in the prompt) is accepted and stored normalized', async () => {
+    // Seen live (Nemotron via OpenRouter, 2026-09-24): the model copied "[ref]" including the brackets.
+    const r = await run(depsWith(fakeModel({ cite: (refs) => refs.slice(0, 1).map((x) => ` [${x}] `) })), 'x3lius-lyrics');
+    expect(r.status, r.error).toBe('success');
+    const out = r.output as CreativeOutput;
+    expect(out.body.rulesApplied.map((x) => x.ref)).toEqual([`canonical_prompts:${fixtureId}`]);
+    const [a] = await artifactsOf(r.runId);
+    expect((a!.body as CreativeOutput['body']).rulesApplied.map((x) => x.ref)).toEqual([`canonical_prompts:${fixtureId}`]);
+  });
+
   it('a prose / wrong-shape reply is refused; nothing is written', async () => {
     const r = await run(depsWith(fakeModel({ override: () => ({ verse: 'free text' }) })), 'x3lius-lyrics');
     expect(r.status).toBe('error');
