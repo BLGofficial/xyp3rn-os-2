@@ -206,6 +206,16 @@ Migration `20260924130000_research_schema.sql` adds the 11 research tables plus 
 - **Content addressing:** `research_sources` is unique by `content_sha256`, the same approach as `sources`.
 - **Seal:** `research_runs` is sealed once it leaves `running`.
 
+## Phase 6C additions: structured claims, Contradiction Engine, `xyp_verifier`
+
+Migration `20260924140000_research_engines.sql`:
+
+- **Structured claims:** `research_findings` and `knowledge_candidates` now require `claim_topic` (dotted kebab, e.g. `suno.vocal-descriptor-position`) and `claim_value jsonb`. On `research_evidence` the claim is optional, but topic and value must come together. Canonical rows carry claims in `structured.claims[] = {topic, value, model_scope}`.
+- **`canonical_claims` view:** one row per claim on the latest version of each canonical slug.
+- **Detection in the database:** `xyp_detect_contradictions()` (SECURITY DEFINER) runs AFTER INSERT on every finding and every candidate. A conflict is the same topic, an overlapping model scope (equal tags, or either side `model-agnostic`) and a different value. Different model versions never conflict. Research roles have no INSERT on `contradictions`, so they can neither fabricate nor suppress one.
+- **`knowledge_candidate_eligibility` view:** a candidate is blocked while any open contradiction touches it, either through its own finding or by naming it as the target.
+- **`xyp_verifier` role:** can UPDATE only `status`, `resolution` and `resolved_at` on `contradictions`, and can insert experiments and experiment runs. It cannot insert findings, evidence or contradictions.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

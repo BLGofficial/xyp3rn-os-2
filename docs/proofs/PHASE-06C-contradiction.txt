@@ -1,0 +1,83 @@
+# Phase 6C proof: contradiction block against a live canonical row (dev DB, real ingested build guide)
+# Tests: pnpm vitest run tests/phase-06c → 21 passed; mutation (detection triggers removed) → 4 failed.
+
+$ pnpm ingest --file XYP3RN_Agentic_OS_Build_Sequence.pdf --origin first_party   # normalizer v2 re-normalizes the same bytes
+  "status": "success",
+    "renormalized": true,
+      "inserted": 0,
+      "reused": 19
+      "inserted": 1,
+      "reused": 30
+
+$ psql: live canonical claim (phase-8, latest version)
+        slug         | version |         topic          |                                                 value                                                  |  model_scope   
+---------------------+---------+------------------------+--------------------------------------------------------------------------------------------------------+----------------
+ phase-8-meta-prompt |       2 | x3lius.voice-reference | ["modern brutalism", "aggressive/confrontational", "bilingual Bulgarian/English", "dark melodic trap"] | model-agnostic
+(1 row)
+
+research run: 2138efb7-e6a5-41d1-96b6-4b3db03b0e17
+
+$ pnpm research observation   # a deliberately WRONG claim about the X3LIUS voice
+{
+  "researchSourceId": "0de408b4-06c2-41b9-8991-baa137208cdf",
+  "reliability": 0.7,
+  "evidenceId": "135b7b62-1860-4cc4-83b3-ab842bbc7bc7"
+}
+
+$ pnpm research finding   # the Contradiction Engine fires on insert
+{
+  "findingId": "a4d26b3a-4805-4f9e-9cab-583462c1a662",
+  "confidence": 0.36749999999999994,
+  "confidenceInputs": {
+    "formula": "mean(confidence × reliability) × min(1, 0.5 + 0.25k)",
+    "support": [
+      0.48999999999999994
+    ],
+    "mean_support": 0.48999999999999994,
+    "independent_sources": 1,
+    "corroboration_factor": 0.75
+  },
+  "contradictions": [
+    {
+      "id": "cd97dda7-b296-451b-8313-68ccd3fa3c9d",
+      "target_type": "canonical_prompt",
+      "target_id": "78ff8622-570b-40cd-aeb1-7a12715fefd8",
+      "detail": {
+        "topic": "x3lius.voice-reference",
+        "target_slug": "phase-8-meta-prompt",
+        "target_value": [
+          "modern brutalism",
+          "aggressive/confrontational",
+          "bilingual Bulgarian/English",
+          "dark melodic trap"
+        ],
+        "finding_value": [
+          "soft pop ballad",
+          "gentle",
+          "English only"
+        ],
+        "target_version": 2,
+        "finding_model_tag": "model-agnostic",
+        "target_model_scope": "model-agnostic"
+      }
+    }
+  ],
+  "coverage": {
+    "canonicalRowsWithClaims": 1,
+    "canonicalRowsUncheckable": 30
+  }
+}
+
+$ pnpm research candidate
+{
+  "candidateId": "65f000cf-0067-4321-87fe-bf0e5454fb2b"
+}
+
+$ pnpm research eligibility <candidate>   # blocked: it cannot reach the Promotion Gate
+{
+  "blocked": true,
+  "openContradictions": 1,
+  "conflictsWith": [
+    "phase-8-meta-prompt v2"
+  ]
+}

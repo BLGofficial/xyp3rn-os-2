@@ -25,6 +25,8 @@ export type ParsedPrompt = {
   readonly deliverables?: string;
   /** 6B's proposed specialist roster. */
   readonly roster?: ReadonlyArray<{ readonly n: number; readonly name: string }>;
+  /** "Voice reference: <ARTIST> — a, b, c." inside CONTEXT (Phase 8). */
+  readonly voiceReference?: { readonly artist: string; readonly descriptors: readonly string[] };
 };
 
 export type ParsedSection = {
@@ -129,6 +131,13 @@ const parseProse = (lines: readonly string[]) => {
   return { goal, dependsOn, deliverables, intro: rest.length > 0 ? rest.join('\n\n') : undefined };
 };
 
+/** "Voice reference: X3LIUS — modern brutalism, …, dark melodic trap." → artist + ordered descriptors. */
+const parseVoiceReference = (context: string | undefined) => {
+  const m = /Voice reference:\s*(\S+)\s*—\s*(.+?)\.(?:\s|$)/.exec(joinProse((context ?? '').split('\n')));
+  if (!m) return undefined;
+  return { artist: m[1]!, descriptors: m[2]!.split(/,\s*/).map((d) => d.trim()).filter(Boolean) };
+};
+
 /** Splits "1. a 11. b" two-column table lines into roster entries. */
 const parseRoster = (lines: readonly string[]) => {
   const entries: { n: number; name: string }[] = [];
@@ -200,14 +209,17 @@ const parsePromptSpan = (key: string, title: string, span: readonly string[], is
   const bodyLines = start === -1 ? [] : span.slice(start);
   const { deliverables } = parseProse(prose);
   const roster = parseRoster(prose);
+  const parsed = parsePromptBody(bodyLines);
+  const voiceReference = parseVoiceReference(parsed.context);
   const prompt: ParsedPrompt = stripUndefined({
     key,
     title,
     kind: 'meta-prompt',
     body: bodyLines.join('\n').trim(),
-    ...parsePromptBody(bodyLines),
+    ...parsed,
     ...(isSubPrompt && deliverables ? { deliverables } : {}),
     ...(roster ? { roster } : {}),
+    ...(voiceReference ? { voiceReference } : {}),
   });
   return { prompt, prose };
 };

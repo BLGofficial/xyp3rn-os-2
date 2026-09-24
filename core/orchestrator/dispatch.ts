@@ -125,7 +125,10 @@ export const dispatch = async (
         if (!agent.tools.includes(name)) throw new Error(`tool not declared by agent ${agent.name}: ${name}`);
         const a = deps.tools.authorize(agent.class, name);
         if (!a.allow) throw new Error(`tool authorization denied: ${name}: ${a.reason}`);
-        return deps.tools.get(name)!.handler({ runId, agentName: agent.name, log }, args);
+        return deps.tools.get(name)!.handler(
+          { runId, agentName: agent.name, log, ...(options.researchRunId ? { researchRunId: options.researchRunId } : {}) },
+          args,
+        );
       },
     };
 

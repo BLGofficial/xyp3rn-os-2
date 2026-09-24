@@ -104,6 +104,14 @@ describe('build-sequence parser (real PDF)', () => {
     }
   });
 
+  it('extracts the Phase 8 voice reference as structured data (real source text)', () => {
+    expect(prompt('8').voiceReference).toEqual({
+      artist: 'X3LIUS',
+      descriptors: ['modern brutalism', 'aggressive/confrontational', 'bilingual Bulgarian/English', 'dark melodic trap'],
+    });
+    expect(prompt('9').voiceReference).toBeUndefined();
+  });
+
   it('does not detect an unrelated document', () => {
     expect(detectBuildSequence(['Some other PDF\nNothing to see'])).toBe(false);
   });

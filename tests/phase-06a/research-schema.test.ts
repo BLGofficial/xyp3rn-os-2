@@ -40,11 +40,14 @@ const chain = async (tx: postgres.TransactionSql) => {
     values (${run}, 'web', 'https://example.org/suno-v45-notes', 'Suno v4.5 notes', ${'b'.repeat(64)}) returning id`);
   const evidence = await one(tx`insert into research_evidence (research_run_id, research_source_id, specialist, claim, model_tag, confidence, confidence_inputs)
     values (${run}, ${source}, 'suno-researcher', 'Placing the vocal descriptor first in the style prompt improves timbre adherence.', 'suno-v4.5', 0.6, '{"basis":"single source"}') returning id`);
-  const finding = await one(tx`insert into research_findings (research_run_id, claim, model_tag, confidence, confidence_inputs)
-    values (${run}, 'Lead the style prompt with the vocal descriptor for Suno v4.5.', 'suno-v4.5', 0.6, '{"evidence_count":1}') returning id`);
+  // claim_topic/claim_value: structured claim required since 6C (Contradiction Engine input).
+  const finding = await one(tx`insert into research_findings (research_run_id, claim, model_tag, confidence, confidence_inputs, claim_topic, claim_value)
+    values (${run}, 'Lead the style prompt with the vocal descriptor for Suno v4.5.', 'suno-v4.5', 0.6, '{"evidence_count":1}',
+            'suno.vocal-descriptor-position', '"first"') returning id`);
   await tx`insert into research_finding_evidence (finding_id, evidence_id) values (${finding}, ${evidence})`;
-  const candidate = await one(tx`insert into knowledge_candidates (finding_id, proposed_kind, target_slug, title, body, model_tag, domain)
-    values (${finding}, 'canonical_prompt', 'suno-vocal-descriptor-first', 'Vocal descriptor first', 'Lead the style prompt with the vocal descriptor.', 'suno-v4.5', 'RECORDS') returning id`);
+  const candidate = await one(tx`insert into knowledge_candidates (finding_id, proposed_kind, target_slug, title, body, model_tag, domain, claim_topic, claim_value)
+    values (${finding}, 'canonical_prompt', 'suno-vocal-descriptor-first', 'Vocal descriptor first', 'Lead the style prompt with the vocal descriptor.', 'suno-v4.5', 'RECORDS',
+            'suno.vocal-descriptor-position', '"first"') returning id`);
   return { project, question, run, source, evidence, finding, candidate };
 };
 
@@ -119,8 +122,8 @@ describe(`${RESEARCH}: INSERT-only on evidence and findings (grant level)`, () =
       () =>
         asRole(db.sql, RESEARCH, async (tx) => {
           const ids = await chain(tx);
-          await tx`insert into knowledge_candidates (finding_id, proposed_kind, target_slug, title, body, model_tag, domain, status)
-                   values (${ids.finding}, 'canonical_prompt', 'sneaky', 'x', 'x', 'suno-v5', 'RECORDS', 'promoted')`;
+          await tx`insert into knowledge_candidates (finding_id, proposed_kind, target_slug, title, body, model_tag, domain, status, claim_topic, claim_value)
+                   values (${ids.finding}, 'canonical_prompt', 'sneaky', 'x', 'x', 'suno-v5', 'RECORDS', 'promoted', 'suno.sneaky', '"x"')`;
         }),
       '42501',
     );

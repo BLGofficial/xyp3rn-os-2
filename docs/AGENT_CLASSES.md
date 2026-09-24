@@ -20,6 +20,7 @@ The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04
 |---|---|---|---|---|---|---|---|---|---|
 | `context.read` | Query the Context Engine (canonical + sources, read-only) | Y | Y | Y | Y | Y | Y | Y | Y |
 | `log.write` | Emit a log message attached to the current run | Y | Y | Y | Y | Y | Y | Y | Y |
+| `web.read` | Fetch an external URL and register it as a research source (Phase 6C) | Y | — | — | — | — | — | — | — |
 | `research.write` | INSERT `research_evidence` / `research_sources` / `research_findings` | Y | — | — | — | — | — | — | — |
 | `candidate.propose` | INSERT `knowledge_candidates` with status `proposed` | Y | — | — | — | — | — | — | — |
 | `plan.write` | Write plans, workflow drafts, `rd_backlog` proposals | — | — | Y | — | — | — | — | — |

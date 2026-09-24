@@ -78,20 +78,32 @@ export const ingestSource = async (
         on conflict (checksum_sha256) do nothing
         returning id`;
 
+      // No-op = same bytes AND already normalized by this normalizer version. A normalizer
+      // upgrade re-normalizes into the existing source (versioned writes, nothing overwritten).
+      let sourceId: string;
+      let renormalized = false;
       if (inserted.length === 0) {
         const [existing] = await tx<{ id: string }[]>`select id from sources where checksum_sha256 = ${src.checksum}`;
-        const stats = { reason: 'checksum already registered', checksum: src.checksum };
-        await tx`
-          update ingestion_runs
-          set status = 'noop', source_id = ${existing!.id}, checksum_sha256 = ${src.checksum},
-              stats = ${tx.json(stats)}, completed_at = clock_timestamp()
-          where id = ${runId}`;
-        return { runId, status: 'noop', sourceId: existing!.id, stats } as const;
+        const done = await tx`
+          select 1 from ingestion_runs
+          where source_id = ${existing!.id} and status = 'success' and stats->>'normalizer' = ${normalizer.id} limit 1`;
+        if (done.length > 0) {
+          const stats = { reason: 'checksum already normalized by this normalizer', checksum: src.checksum, normalizer: normalizer.id };
+          await tx`
+            update ingestion_runs
+            set status = 'noop', source_id = ${existing!.id}, checksum_sha256 = ${src.checksum},
+                stats = ${tx.json(stats)}, completed_at = clock_timestamp()
+            where id = ${runId}`;
+          return { runId, status: 'noop', sourceId: existing!.id, stats } as const;
+        }
+        sourceId = existing!.id;
+        renormalized = true;
+      } else {
+        sourceId = inserted[0]!.id;
       }
 
-      const sourceId = inserted[0]!.id;
       const written = await writeNormalized(tx, doc, { sourceId, runId, kind: src.kind, origin: src.origin, asOf });
-      const stats = { normalizer: normalizer.id, pages: pages.length, checksum: src.checksum, ...written };
+      const stats = { normalizer: normalizer.id, pages: pages.length, checksum: src.checksum, ...(renormalized ? { renormalized } : {}), ...written };
       await tx`
         update ingestion_runs
         set status = 'success', source_id = ${sourceId}, checksum_sha256 = ${src.checksum},

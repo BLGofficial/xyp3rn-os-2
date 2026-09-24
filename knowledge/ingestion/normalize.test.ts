@@ -58,6 +58,19 @@ describe('build-sequence normalization (real PDF)', () => {
     expect(p.tags).toEqual(expect.arrayContaining(['meta-prompt', 'phase-4', 'test-first']));
   });
 
+  it('turns the voice reference into a checkable structured claim on the canonical row (6C)', () => {
+    const doc = normalizeBuildSequence(parseBuildSequence(pages));
+    const p8 = doc.prompts.find((x) => x.slug === 'phase-8-meta-prompt')!;
+    expect(p8.structured.claims).toEqual([
+      {
+        topic: 'x3lius.voice-reference',
+        value: ['modern brutalism', 'aggressive/confrontational', 'bilingual Bulgarian/English', 'dark melodic trap'],
+        model_scope: 'model-agnostic',
+      },
+    ]);
+    expect(doc.prompts.filter((x) => x.structured.claims !== undefined).map((x) => x.slug)).toEqual(['phase-8-meta-prompt']);
+  });
+
   it('derives depends_on edges from "Depends on:" text (phase 2 -> phase 1)', () => {
     const doc = normalizeBuildSequence(parseBuildSequence(pages));
     expect(doc.relations).toContainEqual({
@@ -74,7 +87,7 @@ describe('build-sequence normalization (real PDF)', () => {
   });
 
   it('selects the build-sequence normalizer for the PDF and none for unrelated text', () => {
-    expect(selectNormalizer(pages)?.id).toBe('xyp-build-sequence-v1');
+    expect(selectNormalizer(pages)?.id).toBe('xyp-build-sequence-v2');
     expect(selectNormalizer(['meeting notes: nothing structured here'])).toBeUndefined();
   });
 });

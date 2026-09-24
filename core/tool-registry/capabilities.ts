@@ -8,6 +8,7 @@ import type { AgentClass } from '../contracts/taxonomy.ts';
 export const CAPABILITIES = [
   'context.read',
   'log.write',
+  'web.read',
   'research.write',
   'candidate.propose',
   'plan.write',
@@ -27,6 +28,8 @@ const ALL: readonly AgentClass[] = ['Research', 'Knowledge', 'Planning', 'Creati
 export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass[]>> = {
   'context.read': ALL,
   'log.write': ALL,
+  // Phase 6C: fetch external material and register it as a research source.
+  'web.read': ['Research'],
   'research.write': ['Research'],
   'candidate.propose': ['Research'],
   'plan.write': ['Planning'],

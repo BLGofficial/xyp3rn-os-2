@@ -5,14 +5,21 @@ import { createToolRegistry, type ToolRegistry } from '../tool-registry/registry
 import { logMessageTool } from '../tool-registry/tools/log-message.ts';
 import { createRetrieveContextTool } from '../tool-registry/tools/retrieve-context.ts';
 import { loadEmbedder } from '../../knowledge/vector-retrieval/embedder.ts';
+import { createFetchSourceTool } from '../../research-intelligence/tools/fetch-source.ts';
+import { createWriteEvidenceTool } from '../../research-intelligence/tools/write-evidence.ts';
 
 /**
  * The live tool set. Adding a tool here is the only way it becomes requestable.
  * @param deps - pool the Context Engine reads through (as xyp_runtime)
- * @returns registry with log_message + retrieve_context
+ * @returns registry with log_message, retrieve_context, fetch_source, write_evidence
  */
 export const createRuntimeTools = (deps: { readonly sql: Sql }): ToolRegistry => {
   let longTerm: Promise<LongTermMemory> | undefined;
   const lazyLongTerm = () => (longTerm ??= loadEmbedder().then((e) => createLongTermMemory(createContextEngine(deps.sql, e))));
-  return createToolRegistry([logMessageTool, createRetrieveContextTool(lazyLongTerm)]);
+  return createToolRegistry([
+    logMessageTool,
+    createRetrieveContextTool(lazyLongTerm),
+    createFetchSourceTool(deps),
+    createWriteEvidenceTool(deps),
+  ]);
 };

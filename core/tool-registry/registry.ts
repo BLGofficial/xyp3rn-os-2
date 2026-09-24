@@ -5,6 +5,8 @@ import { CLASS_CAPABILITIES, isCapability, type Capability } from './capabilitie
 export type ToolContext = {
   readonly runId: string;
   readonly agentName: string;
+  /** Set when the run executes on behalf of a research run (Phase 6); research tools require it. */
+  readonly researchRunId?: string;
   readonly log: (level: 'info' | 'warn' | 'error', message: string) => void;
 };
 

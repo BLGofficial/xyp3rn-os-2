@@ -23,7 +23,8 @@
     "route": "node core/orchestrator/route-cli.ts",
     "workflow": "node core/workflow-engine/cli.ts",
     "ask": "node core/orchestrator/ask-cli.ts",
-    "specialists:table": "node research-intelligence/specialists/table-cli.ts"
+    "specialists:table": "node research-intelligence/specialists/table-cli.ts",
+    "research": "node research-intelligence/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
