@@ -1,5 +1,6 @@
 import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createRuntimeTools } from '../../core/runtime/tools.ts';
 import { createTestDb, type TestDb } from '../helpers/db.ts';
 
 // Phase 12 proof (part 1): the critiques table, the critique_id link on creative_artifacts and the
@@ -109,5 +110,57 @@ describe("xyp_escalate_critique: the loop's one way into the human queue", () =>
     for (const role of ['xyp_runtime', 'xyp_critic', 'xyp_creative', 'service_role', 'anon', 'authenticated']) {
       await expect(escalate(role, c, { reason: 'stall' })).rejects.toThrow(/permission denied for function xyp_escalate_critique/);
     }
+  });
+});
+
+describe('tools: write_critique, read_critique, read_artifact', () => {
+  const REF = 'canonical_prompts:11111111-1111-4111-8111-111111111111';
+  const ctx = (runId: string, agentName = 'x3lius-evaluation') => ({ runId, agentName, log: () => {} });
+  const body = (artifactId: string, extra: Record<string, unknown> = {}) => ({
+    artifact: { id: artifactId, schemaId: 'x3lius.lyrics/v2', version: 1, agent: 'x3lius-lyrics' },
+    rules: [{ ref: REF, kind: 'rule', method: 'model' }],
+    violations: [{ key: `${REF}@/sections/0/bars/0/text`, ruleRef: REF, method: 'model', path: '/sections/0/bars/0/text', quote: 'x', expected: 'y', found: 'z' }],
+    resolved: [], unverified: [], counts: { checked: 1, passed: 0, violations: 1 }, ...extra,
+  });
+  const tools = () => createRuntimeTools({ sql: db.sql });
+
+  it('write_critique stores a valid critique as xyp_critic and read_critique returns it', async () => {
+    const a = await artifact();
+    const runId = await runRow('x3lius-evaluation', 'Critic');
+    const { critique_id } = (await tools().get('write_critique')!.handler(ctx(runId), { artifactId: a, body: body(a) })) as { critique_id: string };
+    expect(await tools().get('read_critique')!.handler(ctx(runId), { id: critique_id })).toMatchObject({
+      id: critique_id, artifactId: a, previousId: null, checked: 1, passed: 0, body: body(a),
+    });
+  });
+
+  it('write_critique refuses a body whose counts, keys or artifact disagree, and writes nothing', async () => {
+    const a = await artifact();
+    const other = await artifact();
+    const runId = await runRow('x3lius-evaluation', 'Critic');
+    const write = (args: unknown) => tools().get('write_critique')!.handler(ctx(runId), args);
+    await expect(write({ artifactId: a, body: body(a, { counts: { checked: 1, passed: 1, violations: 1 } }) })).rejects.toThrow(/counts.passed/);
+    await expect(write({ artifactId: a, body: { ...body(a), violations: [{ ...body(a).violations[0]!, key: 'wrong' }] } })).rejects.toThrow(/key/);
+    await expect(write({ artifactId: other, body: body(a) })).rejects.toThrow(/body.artifact.id/);
+    await expect(write({ artifactId: a, body: body(a, { previousCritiqueId: '22222222-2222-4222-8222-222222222222' }) })).rejects.toThrow(/previousCritiqueId/);
+    await expect(write({ artifactId: a, body: { prose: 'looks fine' } })).rejects.toThrow(/write_critique rejected/);
+    expect(await db.sql`select id from critiques where artifact_id = ${a}`).toHaveLength(0);
+  });
+
+  it('read_artifact returns the brief, parent and critique a revision needs', async () => {
+    const v1 = await artifact();
+    const c1 = await critique(v1);
+    const v2 = await artifact(v1, c1);
+    const runId = await runRow('x3lius-revision', 'Revision');
+    expect(await tools().get('read_artifact')!.handler(ctx(runId, 'x3lius-revision'), { id: v2 })).toMatchObject({
+      id: v2, version: 2, parentId: v1, critiqueId: c1, brief: '[FIXTURE] brief', contextRefs: [], knowledge: {}, body: { fixture: true },
+    });
+  });
+
+  it('authorization: Critic writes critiques; Critic, Revision and Governance read them', () => {
+    const t = tools();
+    expect(t.authorize('Critic', 'write_critique')).toEqual({ allow: true, capability: 'critique.write' });
+    expect(t.authorize('Revision', 'write_critique')).toMatchObject({ allow: false });
+    for (const c of ['Critic', 'Revision', 'Governance'] as const) expect(t.authorize(c, 'read_critique')).toEqual({ allow: true, capability: 'critique.read' });
+    for (const c of ['Creative', 'Knowledge', 'Execution'] as const) expect(t.authorize(c, 'read_critique')).toMatchObject({ allow: false });
   });
 });

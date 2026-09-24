@@ -15,6 +15,8 @@ export type WriteArtifactArgs = {
   readonly model: string;
   /** Set to write the next version of an existing artifact; omitted for v1. */
   readonly parentId?: string;
+  /** The critique this version answers (Revision, Phase 12); requires parentId. */
+  readonly critiqueId?: string;
   /** Defects found in the body that did not block the write (default none). */
   readonly warnings?: readonly unknown[];
 };
@@ -41,13 +43,14 @@ export const createWriteArtifactTool = (deps: { readonly sql: Sql; readonly sche
         ...(a.knowledge && typeof a.knowledge === 'object' && !Array.isArray(a.knowledge) ? [] : ['knowledge must be an object']),
         ...(typeof a.model === 'string' && a.model !== '' ? [] : ['model is required']),
         ...(a.warnings === undefined || Array.isArray(a.warnings) ? [] : ['warnings must be an array']),
+        ...(a.critiqueId === undefined || (typeof a.critiqueId === 'string' && typeof a.parentId === 'string') ? [] : ['critiqueId needs a parentId: a critique answers an earlier version']),
       ];
       if (errors.length > 0) throw new Error(`write_artifact rejected: ${errors.join('; ')}`);
       const row = await deps.sql.begin(async (tx) => {
         await tx.unsafe(`set local role ${quoteIdent(CREATIVE_ROLE)}`);
         const [r] = await tx<{ id: string; lineage_id: string; version: number }[]>`
-          insert into creative_artifacts (schema_id, agent_name, agent_run_id, parent_id, brief, body, context_refs, knowledge, model, warnings)
-          values (${a.schemaId!}, ${ctx.agentName}, ${ctx.runId}, ${a.parentId ?? null}, ${a.brief!},
+          insert into creative_artifacts (schema_id, agent_name, agent_run_id, parent_id, critique_id, brief, body, context_refs, knowledge, model, warnings)
+          values (${a.schemaId!}, ${ctx.agentName}, ${ctx.runId}, ${a.parentId ?? null}, ${a.critiqueId ?? null}, ${a.brief!},
                   ${tx.json(a.body as postgres.JSONValue)}, ${tx.json(a.contextRefs as postgres.JSONValue)},
                   ${tx.json(a.knowledge as postgres.JSONValue)}, ${a.model!}, ${tx.json((a.warnings ?? []) as postgres.JSONValue)})
           returning id, lineage_id, version`;
