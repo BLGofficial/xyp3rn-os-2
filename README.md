@@ -54,7 +54,7 @@ Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 - [x] Phase 9: Suno Generation System, plus Genre/Style (F15). Live brief-to-Suno-prompt produced with Nemotron via OpenRouter: whole-song lyrics against the structure, hook in every chorus; no Suno take yet ([handoff](docs/handoffs/PHASE-09.md))
 - [~] Phase 10: Vocal / Artist DNA. Built and proven on a fixture; waiting on the operator's real Vocal DNA values ([handoff](docs/handoffs/PHASE-10.md))
 - [ ] Phase 11: Production / Mix / Master
-- [ ] Phase 12: Critic + Revision System
+- [~] Phase 12: Critic + Revision System. Built and proven on the FAKE model (both loop proofs, 6C scoring through the Critic); not run live yet, no model key ([handoff](docs/handoffs/PHASE-12.md))
 - [ ] Phase 13: XYP3RN Records
 - [ ] Phase 14: XYP3RN Tech
 - [ ] Phase 15: Legal / Governance

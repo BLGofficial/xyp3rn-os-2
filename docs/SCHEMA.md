@@ -291,7 +291,7 @@ Migration `20260924190000_suno_generation.sql`.
   - `prompt`: the exact `{title, style, excludeStyles, lyrics}` sent, copied from the artifact;
   - `provider_response`.
 - **`suno_takes`:** takes per submission: an `https` `audio_url`, unique per submission (re-capture is a no-op), plus `provider_take_id`, `title`, `duration_seconds > 0` and `metadata`.
-- **`take_scores`:** the scoring hook. `check (is_stub = (score is null))`: a stub row marks where the Phase 12 Critic plugs in and never carries a number; a real score always does.
+- **`take_scores`:** the scoring hook. `check (is_stub = (score is null))`: a stub row marks where a scorer plugs in and never carries a number; a real score always does. Since Phase 12 new stubs say `stub:needs-trace-analysis` (a take is audio; ARCHITECTURE F30).
 - **Append-only:** all three refuse UPDATE/DELETE for every role, owner included (55000).
 - **`xyp_execution`:** a new role. It may INSERT/SELECT the three tables and SELECT `creative_artifacts` (to read the artifact it submits). It cannot write artifacts or canonical knowledge (42501).
 - **`artifact.read`:** a new capability for Creative, Critic, Revision, Execution and Governance. `xyp_runtime` gains SELECT on `creative_artifacts` for the `read_artifact` tool.
@@ -308,6 +308,16 @@ Migration `20260924200000_artifact_warnings.sql`.
 - **New `creative_artifacts.schema_id` values:** `x3lius.arrangement/v1`, `x3lius.production/v1` and `x3lius.mix-report/v1`.
   - A mix report's `model` is `none`, since Mix/Master is deterministic, and its `body.analysis` is the `trace.analysis/v1` it checked.
 - **New canonical claims:** `x3lius.<stage>.<metric>` = `{ min?, max? }` (`model_scope` `trace`), read through `canonical_claims` like every claim (ARCHITECTURE F24).
+
+## Phase 12 additions: `critiques`, `critique_id`, the evaluation loop
+
+- **`critiques`** (migration `20260925100000_critiques`): the Critic class's only output (`critique.write`).
+  - Columns: `artifact_id` (the version reviewed), `previous_id` (the critique of the parent version, which chains a loop), `agent_run_id`, `schema_id` (`x3lius.critique/v1`), `body`, `checked`, `passed` (`0 ≤ passed ≤ checked`).
+  - A trigger requires `previous_id` to be the critique of the reviewed artifact's parent. Rows are immutable for every role.
+  - Grants: `xyp_critic` INSERT/SELECT (the `write_critique` tool); `xyp_runtime` and `service_role` SELECT (`read_critique`, capability `critique.read`: Critic, Revision, Governance); `anon`/`authenticated` nothing.
+- **`creative_artifacts.critique_id`:** set by Revision on the version it writes. `check (critique_id is null or parent_id is not null)`, and a trigger requires the critique to be about the new version's parent.
+- **`xyp_escalate_critique(critique_id, request)`:** `SECURITY DEFINER`; inserts one pending `approval_queue` row with `item_type critique_escalation`. EXECUTE is `xyp_evaluation_loop`'s alone (the loop controller's role).
+- **New roles:** `xyp_critic`, `xyp_evaluation_loop`.
 
 ## Adding a table (checklist, every phase)
 
