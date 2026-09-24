@@ -289,6 +289,21 @@ describe('x3lius-lyrics end to end (FAKE model, real runner, real context, real 
     expect((a!.body as CreativeOutput['body']).rulesApplied.map((x) => x.ref)).toEqual([`canonical_prompts:${fixtureId}`]);
   });
 
+  it('a ref cited by its claim topic or rule slug resolves only when exactly one given entry has it', async () => {
+    // Seen live (Nemotron via OpenRouter, 2026-09-24): the model cited "x3lius.voice-reference" instead of the full ref.
+    const [claim] = await voiceClaims();
+    const r = await run(depsWith(fakeModel({ cite: () => ['x3lius.voice-reference', FIXTURE_SLUG] })), 'x3lius-lyrics');
+    expect(r.status, r.error).toBe('success');
+    expect((r.output as CreativeOutput).body.rulesApplied.map((x) => x.ref)).toEqual([
+      `canonical_prompts:${claim!.canonical_prompt_id}#x3lius.voice-reference`, `canonical_prompts:${fixtureId}`,
+    ]);
+    for (const alias of ['voice-reference', 'fixture', 'x3lius.']) {
+      const bad = await run(depsWith(fakeModel({ cite: () => [alias] })), 'x3lius-lyrics');
+      expect(bad.error).toMatch(new RegExp(`cites refs it was not given: ${alias.replace('.', '\\.')}$`));
+      expect(await artifactsOf(bad.runId)).toHaveLength(0);
+    }
+  });
+
   it('a prose / wrong-shape reply is refused; nothing is written', async () => {
     const r = await run(depsWith(fakeModel({ override: () => ({ verse: 'free text' }) })), 'x3lius-lyrics');
     expect(r.status).toBe('error');
