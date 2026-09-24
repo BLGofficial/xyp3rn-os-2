@@ -1,6 +1,6 @@
 # Schema
 
-Status: Phase 1 canonical base (Knowledge Layer) + Phase 2 ingest role. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
+Status: Phase 1 canonical base (Knowledge Layer) + Phase 2 ingest role + Phase 3 embeddings. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
 
 ## ERD
 
@@ -153,6 +153,25 @@ Migration `20260924090000_ingest_bootstrap_role.sql` adds the temporary pre-gate
 - **Row access:** it sees rows through per-role policies (`ingest_bootstrap_select` / `_insert` / `_update`), using `true` because the OS is single-tenant. The grants do the restricting.
 - **Rollback:** removes this database's grants and policies but not the role itself. Roles are cluster-wide, so dropping one is a manual operation.
 - **Phase 6D:** revokes its canonical INSERT.
+
+## Phase 3 additions: embeddings + retrieval roles
+
+Migration `20260924100000_embeddings.sql`:
+
+- **pgvector** lives in the `extensions` schema (the Supabase convention).
+- **New columns** on `canonical_prompts` and `sources`: `embedding vector(384)`, `embedding_model`, `embedding_input_sha256`, `embedding_truncated`, `embedded_at`.
+  - A CHECK constraint keeps them all-or-nothing: `num_nulls(...) in (0, 5)`.
+  - The input hash includes the model id, so changing models re-embeds every row rather than mixing vector spaces.
+- **Indexes:** HNSW with `vector_cosine_ops` on both columns.
+- **`xyp_match_knowledge(query vector, limit)`:** nearest neighbours across both tables. Each branch is ordered by distance with its own LIMIT so the index is used, and `similarity = 1 - cosine distance`.
+- **Roles:**
+
+| Role | Can | Can't |
+|---|---|---|
+| `xyp_embedder` | SELECT `canonical_prompts`, `sources`, `modules`; UPDATE only the 5 embedding columns | touch content columns, INSERT, DELETE |
+| `xyp_runtime` | SELECT knowledge tables; EXECUTE `xyp_match_knowledge` | any write (retrieval also runs in a `read only` transaction) |
+
+- **`updated_at`:** writing an embedding bumps `updated_at` through the Phase 1 trigger. That is intended, because retrieval results change once a row is embedded, and the Context Engine's cache key includes `max(updated_at)`.
 
 ## Adding a table (checklist, every phase)
 

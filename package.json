@@ -15,7 +15,9 @@
     "db:down": "node core/db/cli.ts down",
     "db:status": "node core/db/cli.ts status",
     "db:seed:proof": "node supabase/seed/run-fk-proof.ts",
-    "ingest": "node knowledge/ingestion/cli.ts"
+    "ingest": "node knowledge/ingestion/cli.ts",
+    "embed": "node knowledge/vector-retrieval/cli.ts",
+    "context": "node core/context-engine/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
@@ -23,8 +25,15 @@
     "vitest": "^5.0.1"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
     "postgres": "^3.4.9",
     "unpdf": "^1.8.1",
     "yaml": "^2.9.1"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "onnxruntime-node",
+      "protobufjs"
+    ]
   }
 }
