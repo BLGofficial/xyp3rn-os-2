@@ -22,7 +22,6 @@ afterAll(async () => {
   await db?.drop();
 });
 
-const slugs = (b: ContextBundle) => b.items.map((i) => i.slug);
 const direct = (b: ContextBundle) => b.items.filter((i) => i.reasons.some((r) => r.kind === 'vector'));
 
 describe('ranked retrieval on real data', () => {
@@ -61,8 +60,23 @@ describe('ranked retrieval on real data', () => {
       expect(i.score).toBeGreaterThanOrEqual(r.parentScore * r.weight - 1e-12);
       expect(r.via).toMatch(/^(relations:[0-9a-f-]{36}|fk:canonical_prompts\.module_id)$/);
     }
-    // 4B's module (via FK) and its sequence neighbours (via precedes) are reachable in one hop
-    expect(slugs(bundle)).toContain('phase-4-agent-runtime-registry');
+    for (const i of bundle.items) {
+      expect(i.score).toBe(Math.max(...i.reasons.map((r) => (r.kind === 'vector' ? r.similarity : r.parentScore * r.weight))));
+    }
+  });
+
+  it("reaches 4B's module (via FK) and its sequence neighbours (via precedes) in one hop", async () => {
+    // Which neighbours survive the default quota of 4 depends on the exact similarity of the
+    // lowest direct hits, which varies with the ONNX runtime build (Linux vs Windows). Lift the
+    // quota so this checks expansion itself; the quota cut is unit-tested in rank.test.ts.
+    const bundle = await engine.retrieve('Agent Registry scanner validator for agent.md frontmatter', { limits: { direct: 8, expanded: 1000 } });
+    const hit = bundle.items.find((i) => i.slug === 'phase-4b-agent-registry');
+    expect(hit?.reasons.some((r) => r.kind === 'vector')).toBe(true);
+    const from4b = (slug: string) =>
+      bundle.items.find((i) => i.slug === slug)?.reasons.find((r) => r.kind === 'graph' && r.parent.id === hit!.ref.id);
+    expect(from4b('phase-4-agent-runtime-registry')).toMatchObject({ predicate: 'module_of', direction: 'out', weight: 0.6, via: 'fk:canonical_prompts.module_id' });
+    expect(from4b('phase-4a-agent-runs-schema')).toMatchObject({ predicate: 'precedes', direction: 'in', via: expect.stringMatching(/^relations:/) });
+    expect(from4b('phase-4c-tool-registry')).toMatchObject({ predicate: 'precedes', direction: 'out', via: expect.stringMatching(/^relations:/) });
   });
 });
 
