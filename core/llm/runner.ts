@@ -3,11 +3,12 @@ import { createLlmClient, type LlmClient } from './providers.ts';
 
 /**
  * Per-run timeout for LLM-backed agents (dispatch's 30s default is sized for deterministic work).
- * 600s (user decision): a reasoning model on a shared free route took 262s for whole-song lyrics
- * (11k output tokens; Nemotron via OpenRouter, 2026-09-24), and an attempt the provider abandons
- * mid-generation must leave room for a retry. Callers pass it as dispatch `timeoutMs`.
+ * 30 min (user decision): whole-song lyrics make one call per structure section, about ten, at
+ * 30–110s each on a shared free route (Nemotron via OpenRouter, 2026-09-24), plus retries of
+ * transient provider errors. OpenRouter's own upstream idle timeout (120s) still ends a stalled
+ * call. Callers pass it as dispatch `timeoutMs`.
  */
-export const LLM_TIMEOUT_MS = 600_000;
+export const LLM_TIMEOUT_MS = 1_800_000;
 
 /**
  * An LLM-backed agent's program: its own deterministic steps (context pulls, validation, writes)

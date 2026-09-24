@@ -53,22 +53,33 @@ export const LYRICS_V1_SCHEMA = obj({
 });
 
 // Whole-song lyrics (after the Phase 9 live run showed one verse reaching Suno with no chorus): every
-// section of the song structure in one reply. The model writes sections + instrumental
-// (LYRICS_LLM); code records which structure artifact they follow (sources).
+// section of the song structure, written one section per model call (LYRICS_SECTION_LLM; a whole
+// song in one reply proved unreliable on the free route) and assembled by code, which sets each
+// section's id and kind from the structure and records the structure followed (sources). A bare
+// brief with no structure is one call on LYRICS_LLM.
 export const LYRICS_SCHEMA_ID = 'x3lius.lyrics/v2';
 export const LYRICS_LLM_SCHEMA_ID = 'x3lius.lyrics-llm/v2';
+export const LYRICS_SECTION_LLM_SCHEMA_ID = 'x3lius.lyrics-section-llm/v2';
+const SECTION_WRITTEN = {
+  label: str('e.g. "Verse 1", "Chorus"'),
+  bars: arr(BAR),
+  rhymeScheme: str('The pattern across this section’s bars, e.g. AABB'),
+  devices: arr(obj({ bar: int('Bar number within this section'), device: str('Named technique, e.g. internal rhyme'), note: str('Where and how it is used') })),
+};
 const LYRICS_WRITTEN = {
   sections: arr(obj({
     sectionId: str('The id of the SONG STRUCTURE section this covers (e.g. v1); a short id of your own when no structure is given'),
     kind: SECTION_KIND,
-    label: str('e.g. "Verse 1", "Chorus"'),
-    bars: arr(BAR),
-    rhymeScheme: str('The pattern across this section’s bars, e.g. AABB'),
-    devices: arr(obj({ bar: int('Bar number within this section'), device: str('Named technique, e.g. internal rhyme'), note: str('Where and how it is used') })),
+    ...SECTION_WRITTEN,
   }), 'In song order'),
   instrumental: arr(str('Id of a SONG STRUCTURE section that has no vocals')),
 };
 export const LYRICS_LLM_SCHEMA = obj({ ...LYRICS_WRITTEN, ...TRACEABILITY });
+export const LYRICS_SECTION_LLM_SCHEMA = obj({
+  instrumental: { type: 'boolean', description: 'true when this section has no vocals; bars is then empty' },
+  ...SECTION_WRITTEN,
+  ...TRACEABILITY,
+});
 export const LYRICS_SCHEMA = obj({
   ...LYRICS_WRITTEN,
   sources: arr(obj({ role: { type: 'string', enum: ['structure'] }, artifactId: str(), schemaId: str(), version: int('Artifact version') }), 'The song structure followed; empty when none was given'),

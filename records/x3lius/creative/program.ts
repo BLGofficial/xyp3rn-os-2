@@ -7,7 +7,7 @@ import {
   COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, GENRE_STYLE_SCHEMA, GENRE_STYLE_SCHEMA_ID, SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
 } from './schemas.ts';
 import { mixedScriptWords, type MixedScriptWord } from './script-check.ts';
-import { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE, type ContextEntry, type CreativeSpec, type Prepared } from './types.ts';
+import { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE, type ContextEntry, type CreativeSpec, type ModelCall, type Prepared } from './types.ts';
 
 export { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE } from './types.ts';
 
@@ -188,12 +188,17 @@ const creativeProgram = (slug: string): LlmProgram => {
     await ctx.useTool('log_message', { message: `${slug}: context pulled: ${entries.length > 0 ? entries.map((e) => e.ref).join(', ') : 'none'}` });
     if (knowledge.sparse) await ctx.useTool('log_message', { level: 'warn', message: `${slug}: SPARSE canonical knowledge — ${knowledge.reasons.join(' | ')}` });
 
-    const res = await llm.complete({
-      system: systemPrompt(sub.title, slug, spec, entries),
-      user: [`BRIEF\n${prepared.brief}`, ...prepared.userSections].join('\n\n'),
-      schema: { name: llmSchema.id, schema: llmSchema.schema },
+    const system = systemPrompt(sub.title, slug, spec, entries);
+    const call: ModelCall = (extra, schema = llmSchema) => llm.complete({
+      system,
+      user: [`BRIEF\n${prepared.brief}`, ...prepared.userSections, ...extra].join('\n\n'),
+      schema: { name: schema.id, schema: schema.schema },
       signal: ctx.signal,
     });
+    const log = async (message: string) => {
+      await ctx.useTool('log_message', { message: `${slug}: ${message}` });
+    };
+    const res = spec.generate ? await spec.generate(call, prepared, log) : await call([]);
     // Models copy refs loosely (brackets, bare topics — seen live with Nemotron): resolve to a given
     // ref when that is unambiguous, then require an exact match.
     const raw = res.json as Record<string, unknown>;

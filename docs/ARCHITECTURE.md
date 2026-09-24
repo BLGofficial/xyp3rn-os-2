@@ -190,7 +190,7 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - Live-verified on OpenRouter with `nvidia/nemotron-3-ultra-550b-a55b:free` (Phase 8 addendum), which is now the creative agents' model (user decision). Anthropic and Groq are still verified against fakes only.
 - The schema is stated in the prompt as well as in `response_format`, because some routes drop the latter.
 - Model calls retry transient provider errors twice with backoff: 408/429/5xx, and a 200 whose `finish_reason` is `error` (the upstream abandoned the generation; seen live). A completion changes no external state; Execution agents stay retry-free (Phase 4D).
-- The LLM step timeout is 600s (user decision): whole-song lyrics took 262s live, and a retry must fit.
+- The LLM step timeout is 30 min (user decision): whole-song lyrics make about ten calls of 30–110s each. OpenRouter's upstream idle timeout (120s) still ends a stalled call.
 
 **F18. Canonical knowledge is too sparse for a distinct X3LIUS voice.** OPEN (flagged by Phase 8, as the guide requires).
 - The creative sub-domains and Vocal DNA hold 0 rules. The model's whole voice context is the guide's one claim, `x3lius.voice-reference` (4 descriptors).
@@ -210,10 +210,17 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - A canonical rule or claim tagged `suno-<version>` applies only to prompts for that version; anything else applies to all.
 - Platform limits (`suno.limit.<field>-chars`) are canonical claims, never constants in code.
 
-**F21. Lyrics follow the song structure, whole song in one reply.** DECIDED (user, after the Phase 9 live run).
+**F21. Lyrics follow the song structure: the whole song, one model call per section.** DECIDED (user, after the Phase 9 live runs).
 - Lyrics written from the brief alone gave Suno one verse and no hook.
-- `x3lius-lyrics` now reads the song-structure artifact and writes `x3lius.lyrics/v2`: every section, each either written or listed as instrumental, in the structure's order and with its kinds (code-checked). Code records the structure version it followed.
-- Chosen over one step per section: one call keeps the song consistent across sections. The cost is one long reply on a free route; a failure loses the whole song.
+- `x3lius-lyrics` now reads the song-structure artifact and writes one `x3lius.lyrics/v2` artifact covering every section: each written or listed as instrumental.
+- It makes one model call per structure section, in order (`x3lius.lyrics-section-llm/v2`). Each call sees the structure (with its selected hook) and the lyrics written so far.
+- Code sets each section's id and kind from the structure, so coverage and order hold by construction. It records the structure version followed, and tags each call's trace with its section.
+- One whole-song reply was tried first and dropped. On the free Nemotron route only 1 of 5 attempts returned a complete reply:
+  - the provider abandoned one at 137s;
+  - one hit the 16k output cap at 357s;
+  - with reasoning off, 3 tries all hit the 120s upstream idle timeout.
+- Short replies are what that route handles reliably. A failed section call stops the run, and nothing is written.
+- A bare brief with no structure is still one call.
 - `x3lius.lyrics/v1` artifacts stay readable (the formula renders both) and revisable.
 - Whether the hook actually appears in the chorus is not code-checked (fuzzy); it is the Phase 12 Critic's.
 

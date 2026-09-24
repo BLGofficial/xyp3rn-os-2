@@ -22,7 +22,7 @@ import { loadMusicSystem, MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/mus
 import { renderLyrics, SONG_TO_SUNO_WORKFLOW } from '../../records/x3lius/suno/formula.ts';
 import { STUB_SCORER } from '../../records/x3lius/suno/score-hook.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
-import { FAKE_KEYS, fakeBody, fakeModel } from '../helpers/fake-llm.ts';
+import { FAKE_KEYS, FAKE_USAGE, fakeBody, fakeModel } from '../helpers/fake-llm.ts';
 
 // Phase 9 proof: song → Suno prompt → submission → takes → scoring hook, against a throwaway DB
 // holding the real ingested guide + X3LIUS manifest.
@@ -195,7 +195,7 @@ describe('the Suno Prompt-Formula agent (x3lius-suno)', () => {
     expect(o.body.lyrics).toBe(renderLyrics([{ schemaId: lyricsRow!.schema_id, body: lyricsRow!.body }]));
     // Every section, in song order: a [label] meta-tag, one line per bar, a blank line between sections.
     const [v1, c1] = lyricsRow!.body.sections;
-    expect(o.body.lyrics).toBe(`[Verse 1]\n${v1!.bars.map((b) => b.text).join('\n')}\n\n[Chorus]\n${c1!.bars.map((b) => b.text).join('\n')}`);
+    expect(o.body.lyrics).toBe(`[Verse]\n${v1!.bars.map((b) => b.text).join('\n')}\n\n[Chorus]\n${c1!.bars.map((b) => b.text).join('\n')}`);
     expect(Object.keys((model.calls[0]!.schema.properties as object))).not.toContain('lyrics');
 
     const prompt = model.calls[0]!.system;
@@ -245,12 +245,13 @@ describe('the Suno Prompt-Formula agent (x3lius-suno)', () => {
   });
 });
 
-describe('whole-song lyrics (x3lius.lyrics/v2): written against the song structure in one call', () => {
-  /** A FAKE lyrics reply built from the default one, with `edit` applied to its sections. */
-  const lyricsReply = (edit: (b: { sections: Record<string, unknown>[]; instrumental: string[] }) => void) => fakeModel({
-    override: (schema, refs) => {
-      if (!('instrumental' in (schema.properties as object))) return undefined;
-      const b = fakeBody(schema, refs.slice(0, 1)) as { sections: Record<string, unknown>[]; instrumental: string[] };
+describe('whole-song lyrics (x3lius.lyrics/v2): one model call per structure section, one artifact', () => {
+  type SectionReply = { instrumental: boolean; label: string; bars: { n: number; text: string }[] };
+  /** A FAKE model whose per-section reply for section `id` gets `edit` applied. */
+  const sectionReply = (id: string, edit: (b: SectionReply) => void) => fakeModel({
+    override: (schema, refs, user) => {
+      if (!('bars' in (schema.properties as object)) || !user.includes(`WRITE NOW: section ${id} (`)) return undefined;
+      const b = fakeBody(schema, refs.slice(0, 1), user) as unknown as SectionReply;
       edit(b);
       return b;
     },
@@ -260,40 +261,62 @@ describe('whole-song lyrics (x3lius.lyrics/v2): written against the song structu
     withStructure.structureArtifactId = ids.structure;
   });
 
-  it('reads the structure artifact, writes every section in its order, and records the structure it followed', async () => {
+  it('writes each structure section in its own call, in order, each seeing what was written before it', async () => {
     const model = fakeModel();
     const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
     expect(r.status, r.error).toBe('success');
     const o = out(r);
     expect(o.artifact.schemaId).toBe('x3lius.lyrics/v2');
-    const body = o.body as unknown as LyricsV2;
-    expect(body.sections.map((x) => x.sectionId)).toEqual(['v1', 'c1']);
+
+    // The fake structure has two sections (v1 verse, c1 chorus): two calls, each on the per-section schema.
+    expect(model.calls).toHaveLength(2);
+    for (const c of model.calls) expect(Object.keys(c.schema.properties as object).sort()).toEqual(['bars', 'devices', 'instrumental', 'label', 'rhymeScheme', 'rulesApplied', 'ungroundedChoices']);
+    expect(model.calls[0]!.user).toContain('WRITE NOW: section v1 (verse, 16 bars)');
+    expect(model.calls[1]!.user).toContain('WRITE NOW: section c1 (chorus, 8 bars)');
+    // Every call carries the structure (with its selected hook); the second also carries the first section's words.
+    for (const c of model.calls) {
+      expect(c.user).toContain(`SONG STRUCTURE (artifact ${ids.structure} v1)`);
+      expect(c.user).toContain('[FAKE] hook a');
+    }
+    expect(model.calls[0]!.user).toContain('LYRICS WRITTEN SO FAR\n(none yet: this is the first section)');
+    expect(model.calls[1]!.user).toContain('[FAKE] v1 bar 4');
+
+    // Ids and kinds come from the structure, not the model; one trace entry per call, prefixed with its section.
+    const body = o.body as unknown as LyricsV2 & { rulesApplied: { ref: string; how: string }[]; ungroundedChoices: string[] };
+    expect(body.sections.map((x) => [x.sectionId, x.kind, x.label])).toEqual([['v1', 'verse', 'Verse'], ['c1', 'chorus', 'Chorus']]);
+    expect(body.instrumental).toEqual([]);
     expect(body.sources).toEqual([{ role: 'structure', artifactId: ids.structure, schemaId: 'x3lius.song-structure/v1', version: 1 }]);
-    // The model saw the structure, including its selected hook, and was not asked to supply `sources`.
-    expect(model.calls[0]!.user).toContain(`SONG STRUCTURE (artifact ${ids.structure} v1)`);
-    expect(model.calls[0]!.user).toContain('[FAKE] hook a');
-    expect(Object.keys(model.calls[0]!.schema.properties as object)).not.toContain('sources');
+    expect(body.rulesApplied.map((x) => x.how.slice(0, 5))).toEqual(['[v1] ', '[c1] ']);
+    expect(body.ungroundedChoices.every((u) => /^\[(v1|c1)\] /.test(u))).toBe(true);
+
+    // Usage adds up across calls; the run log shows each section as it lands.
+    const [row] = await db.sql<{ tokens_used: number; output: { logs: { message: string }[] } }[]>`select tokens_used, output from agent_runs where id = ${r.runId}`;
+    expect(row!.tokens_used).toBe(2 * (FAKE_USAGE.input + FAKE_USAGE.output));
+    const logs = row!.output.logs.map((l) => l.message);
+    expect(logs).toContainEqual(expect.stringMatching(/^x3lius-lyrics: section v1 \(verse\) 1\/2: 4 bars in \d+ms$/));
+    expect(logs).toContainEqual(expect.stringMatching(/^x3lius-lyrics: section c1 \(chorus\) 2\/2: 4 bars in \d+ms$/));
   });
 
-  it('a section with no vocals may be listed as instrumental instead', async () => {
-    const r = await run(depsWith(lyricsReply((b) => {
-      b.sections = b.sections.slice(0, 1);
-      b.instrumental = ['c1'];
-    })), 'x3lius-lyrics', withStructure);
+  it('a section the model marks instrumental is listed as such, and later calls are told so', async () => {
+    const model = sectionReply('v1', (b) => {
+      b.instrumental = true;
+      b.bars = [];
+    });
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
     expect(r.status, r.error).toBe('success');
-    expect((out(r).body as unknown as LyricsV2).instrumental).toEqual(['c1']);
+    const body = out(r).body as unknown as LyricsV2;
+    expect(body.sections.map((x) => x.sectionId)).toEqual(['c1']);
+    expect(body.instrumental).toEqual(['v1']);
+    expect(model.calls[1]!.user).toContain('(v1, verse: instrumental)');
   });
 
   it.each([
-    ['a structure section left out', (b: { sections: Record<string, unknown>[] }) => { b.sections = b.sections.slice(0, 1); }, /structure section c1 has no lyrics and is not listed as instrumental/],
-    ['a section the structure does not have', (b: { sections: Record<string, unknown>[] }) => { b.sections[1]!.sectionId = 'x9'; }, /section x9 is not in the structure \(v1, c1\)/],
-    ['sections out of order', (b: { sections: Record<string, unknown>[] }) => { b.sections.reverse(); }, /sections are out of structure order: got c1, v1; expected v1, c1/],
-    ['a kind that contradicts the structure', (b: { sections: Record<string, unknown>[] }) => { b.sections[1]!.kind = 'verse'; }, /section c1 is verse; the structure says chorus/],
-    ['a section id used twice', (b: { sections: Record<string, unknown>[]; instrumental: string[] }) => { b.instrumental = ['v1']; }, /section id v1 appears more than once/],
-    ['a section with no bars', (b: { sections: Record<string, unknown>[] }) => { b.sections[0]!.bars = []; }, /section v1 has no bars/],
-    ['bars numbered out of order', (b: { sections: Record<string, unknown>[] }) => { (b.sections[1]!.bars as { n: number }[])[0]!.n = 9; }, /section c1: bars\[\]\.n must count 1, 2, 3/],
-  ])('refuses %s; nothing is written', async (_, edit, error) => {
-    const r = await run(depsWith(lyricsReply(edit)), 'x3lius-lyrics', withStructure);
+    ['a section marked instrumental that still has bars', (b: SectionReply) => { b.instrumental = true; }, /section c1: marked instrumental but has 4 bars/],
+    ['a sung section with no bars', (b: SectionReply) => { b.bars = []; }, /section c1 has no bars/],
+    ['bars numbered out of order', (b: SectionReply) => { b.bars[0]!.n = 9; }, /section c1: bars\[\]\.n must count 1, 2, 3/],
+    ['a reply off the per-section schema', (b: SectionReply) => { (b as unknown as Record<string, unknown>).sections = []; }, /section c1: .*violates schema x3lius\.lyrics-section-llm\/v2: \$\.sections is not allowed/],
+  ])('refuses %s, naming the section; nothing is written', async (_, edit, error) => {
+    const r = await run(depsWith(sectionReply('c1', edit)), 'x3lius-lyrics', withStructure);
     expect(r.status).toBe('error');
     expect(r.error).toMatch(error);
     expect(await artifactsOf(r.runId)).toHaveLength(0);
@@ -303,6 +326,15 @@ describe('whole-song lyrics (x3lius.lyrics/v2): written against the song structu
     const deps = depsWith(fakeModel());
     expect((await run(deps, 'x3lius-lyrics', { request: REQUEST, structureArtifactId: ids.genre })).error).toMatch(/is x3lius\.genre-style\/v1, expected x3lius\.song-structure\/v1/);
     expect((await run(deps, 'x3lius-lyrics', { request: REQUEST, structureArtifactId: 7 })).error).toMatch(/structureArtifactId must be an artifact id/);
+  });
+
+  it('a bare brief (no structure) is still one call writing the sections it asks for', async () => {
+    const model = fakeModel();
+    const r = await run(depsWith(model), 'x3lius-lyrics', { request: REQUEST });
+    expect(r.status, r.error).toBe('success');
+    expect(model.calls).toHaveLength(1);
+    expect(Object.keys(model.calls[0]!.schema.properties as object)).toContain('sections');
+    expect((out(r).body as unknown as LyricsV2).sources).toEqual([]);
   });
 
   it('the formula still renders a pre-v2 (x3lius.lyrics/v1) artifact', async () => {

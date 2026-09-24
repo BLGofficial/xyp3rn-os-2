@@ -28,6 +28,15 @@ export type Prepared = {
   readonly state: unknown;
 };
 
+/** What one model call returns to a spec: the schema-valid reply, its usage, the model that served it. */
+export type Completion = { readonly json: unknown; readonly usage: { readonly inputTokens: number; readonly outputTokens: number }; readonly model: string };
+
+/**
+ * One model call with the run's system prompt: the user message is the brief and the prepared
+ * sections, then `extra`; `schema` defaults to the spec's model schema.
+ */
+export type ModelCall = (extra: readonly string[], schema?: { readonly id: string; readonly schema: JsonSchema }) => Promise<Completion>;
+
 export type CreativeSpec = {
   /** Artifact schema id and schema: what write_artifact stores. */
   readonly schemaId: string;
@@ -46,6 +55,11 @@ export type CreativeSpec = {
   readonly admit?: (entry: ContextEntry, prepared: Prepared) => boolean;
   /** How excluded entries are described in the knowledge report, e.g. "scoped to another Suno version". */
   readonly exclusionReason?: string;
+  /**
+   * Drives the model calls itself and returns the combined reply (default: one call). The reply's
+   * rulesApplied still goes through the program's ref check. `log` writes a run-log line.
+   */
+  readonly generate?: (call: ModelCall, prepared: Prepared, log: (message: string) => Promise<void>) => Promise<Completion>;
   /** Model reply → artifact body, plus violations (default: the reply as-is). */
   readonly finalize?: (reply: Record<string, unknown>, prepared: Prepared, entries: readonly ContextEntry[]) => { readonly body: Record<string, unknown>; readonly violations: readonly string[] };
   /** Checks the schema subset can't express; returns violations. */
