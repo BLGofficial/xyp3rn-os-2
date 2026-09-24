@@ -26,7 +26,7 @@ const TRACEABILITY = {
 };
 
 export const SONG_STRUCTURE_SCHEMA_ID = 'x3lius.song-structure/v1';
-export const LYRICS_SCHEMA_ID = 'x3lius.lyrics/v1';
+export const LYRICS_V1_SCHEMA_ID = 'x3lius.lyrics/v1';
 export const COMPOSITION_SCHEMA_ID = 'x3lius.composition/v1';
 
 export const SONG_STRUCTURE_SCHEMA = obj({
@@ -41,11 +41,37 @@ export const SONG_STRUCTURE_SCHEMA = obj({
   ...TRACEABILITY,
 });
 
-export const LYRICS_SCHEMA = obj({
+const BAR = obj({ n: int('1-based bar number'), text: str('The words of this bar'), language: LANGUAGE, rhymeTag: str('Rhyme-scheme letter this bar ends on, e.g. A') });
+
+/** Phase 8's one-section lyrics. No agent writes it any more; kept so existing artifacts stay readable and revisable. */
+export const LYRICS_V1_SCHEMA = obj({
   section: obj({ kind: SECTION_KIND, label: str('e.g. "Verse 1"') }),
-  bars: arr(obj({ n: int('1-based bar number'), text: str('The words of this bar'), language: LANGUAGE, rhymeTag: str('Rhyme-scheme letter this bar ends on, e.g. A') })),
+  bars: arr(BAR),
   rhymeScheme: str('The pattern across the bars, e.g. AABB'),
   devices: arr(obj({ bar: int('Bar number'), device: str('Named technique, e.g. internal rhyme'), note: str('Where and how it is used') })),
+  ...TRACEABILITY,
+});
+
+// Whole-song lyrics (after the Phase 9 live run showed one verse reaching Suno with no chorus): every
+// section of the song structure in one reply. The model writes sections + instrumental
+// (LYRICS_LLM); code records which structure artifact they follow (sources).
+export const LYRICS_SCHEMA_ID = 'x3lius.lyrics/v2';
+export const LYRICS_LLM_SCHEMA_ID = 'x3lius.lyrics-llm/v2';
+const LYRICS_WRITTEN = {
+  sections: arr(obj({
+    sectionId: str('The id of the SONG STRUCTURE section this covers (e.g. v1); a short id of your own when no structure is given'),
+    kind: SECTION_KIND,
+    label: str('e.g. "Verse 1", "Chorus"'),
+    bars: arr(BAR),
+    rhymeScheme: str('The pattern across this section’s bars, e.g. AABB'),
+    devices: arr(obj({ bar: int('Bar number within this section'), device: str('Named technique, e.g. internal rhyme'), note: str('Where and how it is used') })),
+  }), 'In song order'),
+  instrumental: arr(str('Id of a SONG STRUCTURE section that has no vocals')),
+};
+export const LYRICS_LLM_SCHEMA = obj({ ...LYRICS_WRITTEN, ...TRACEABILITY });
+export const LYRICS_SCHEMA = obj({
+  ...LYRICS_WRITTEN,
+  sources: arr(obj({ role: { type: 'string', enum: ['structure'] }, artifactId: str(), schemaId: str(), version: int('Artifact version') }), 'The song structure followed; empty when none was given'),
   ...TRACEABILITY,
 });
 
@@ -93,6 +119,7 @@ export const SUNO_PROMPT_SCHEMA = obj({
 /** schema id → schema: what write_artifact accepts. */
 export const ARTIFACT_SCHEMAS: Readonly<Record<string, JsonSchema>> = {
   [SONG_STRUCTURE_SCHEMA_ID]: SONG_STRUCTURE_SCHEMA,
+  [LYRICS_V1_SCHEMA_ID]: LYRICS_V1_SCHEMA,
   [LYRICS_SCHEMA_ID]: LYRICS_SCHEMA,
   [COMPOSITION_SCHEMA_ID]: COMPOSITION_SCHEMA,
   [GENRE_STYLE_SCHEMA_ID]: GENRE_STYLE_SCHEMA,

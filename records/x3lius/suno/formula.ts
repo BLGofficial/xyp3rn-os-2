@@ -1,5 +1,6 @@
+import { readArtifact, sourceOf, withoutTrace, type ArtifactRow, type ArtifactSource } from '../creative/artifacts.ts';
 import {
-  GENRE_STYLE_SCHEMA_ID, LYRICS_SCHEMA_ID, SONG_STRUCTURE_SCHEMA_ID, SUNO_PROMPT_LLM_SCHEMA, SUNO_PROMPT_LLM_SCHEMA_ID,
+  GENRE_STYLE_SCHEMA_ID, LYRICS_SCHEMA_ID, LYRICS_V1_SCHEMA_ID, SONG_STRUCTURE_SCHEMA_ID, SUNO_PROMPT_LLM_SCHEMA, SUNO_PROMPT_LLM_SCHEMA_ID,
   SUNO_PROMPT_SCHEMA, SUNO_PROMPT_SCHEMA_ID,
 } from '../creative/schemas.ts';
 import { CLAIM_NAMESPACE, VOICE_MODULE, type ContextEntry, type CreativeSpec, type Prepared } from '../creative/types.ts';
@@ -18,27 +19,32 @@ import { CLAIM_NAMESPACE, VOICE_MODULE, type ContextEntry, type CreativeSpec, ty
 /** One command from a brief to a Suno-ready prompt: songwriting + lyrics + genre/style → formula. */
 export const SONG_TO_SUNO_WORKFLOW = 'records/x3lius/song-to-suno.workflow.yaml';
 
-type ArtifactRow = { readonly id: string; readonly schemaId: string; readonly version: number; readonly body: Record<string, unknown> };
-type LyricsBody = { readonly section: { readonly kind: string; readonly label: string }; readonly bars: readonly { readonly text: string }[] };
-type Source = { readonly role: 'lyrics' | 'structure' | 'genre-style'; readonly artifactId: string; readonly schemaId: string; readonly version: number };
+type LyricSection = { readonly kind: string; readonly label: string; readonly bars: readonly { readonly text: string }[] };
+type Source = ArtifactSource<'lyrics' | 'structure' | 'genre-style'>;
 type SunoState = { readonly sunoModel: string; readonly lyrics: string; readonly sources: readonly Source[] };
 
 const SUNO_MODEL = /^v\d+(\.\d+)?[a-z]*$/;
 const LIMIT_TOPIC = /^suno\.limit\.([a-z]+(?:-[a-z]+)*)-chars$/;
 
+/** A lyrics artifact's sections in song order: v2 holds the whole song, v1 (Phase 8) one section. */
+const sectionsOf = (a: { readonly schemaId: string; readonly body: unknown }): readonly LyricSection[] => {
+  if (a.schemaId !== LYRICS_V1_SCHEMA_ID) return (a.body as { sections: LyricSection[] }).sections;
+  const b = a.body as { section: { kind: string; label: string }; bars: LyricSection['bars'] };
+  return [{ ...b.section, bars: b.bars }];
+};
+
 /**
  * Renders lyrics artifacts into Suno's lyrics field: a `[Section label]` meta-tag, then one line
  * per bar; sections separated by a blank line. Formatting only — the words are the artifact's.
- * @param bodies - x3lius.lyrics/v1 bodies, in song order
+ * Sections a v2 artifact lists as instrumental carry no words and are not rendered.
+ * @param artifacts - x3lius.lyrics/v2 (or v1) artifacts with their schema ids, in song order
  * @returns the lyrics text submitted to Suno
  */
-export const renderLyrics = (bodies: readonly LyricsBody[]): string =>
-  bodies.map((b) => `[${b.section.label.trim() || b.section.kind}]\n${b.bars.map((x) => x.text).join('\n')}`).join('\n\n');
+export const renderLyrics = (artifacts: readonly { readonly schemaId: string; readonly body: unknown }[]): string =>
+  artifacts.flatMap(sectionsOf).map((s) => `[${s.label.trim() || s.kind}]\n${s.bars.map((x) => x.text).join('\n')}`).join('\n\n');
 
 /** A `suno-<version>` tag applies only to that version; anything else (model-agnostic, other tools) applies. */
 const appliesTo = (tag: string | null, sunoModel: string): boolean => !tag?.startsWith('suno-') || tag === `suno-${sunoModel}`;
-
-const withoutTrace = (body: Record<string, unknown>) => Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'rulesApplied' && k !== 'ungroundedChoices'));
 
 const prepare: CreativeSpec['prepare'] = async (ctx, input) => {
   const sunoModel = typeof input.sunoModel === 'string' ? input.sunoModel.toLowerCase() : '';
@@ -47,19 +53,14 @@ const prepare: CreativeSpec['prepare'] = async (ctx, input) => {
   if (!Array.isArray(lyricsIds) || lyricsIds.length === 0 || !lyricsIds.every((i) => typeof i === 'string')) {
     throw new Error(`x3lius-suno needs lyricsArtifactIds: the Phase 8 lyrics artifacts to render, in song order (or run ${SONG_TO_SUNO_WORKFLOW})`);
   }
-  const read = async (id: string, expected: string) => {
-    const a = (await ctx.useTool('read_artifact', { id })) as ArtifactRow;
-    if (a.schemaId !== expected) throw new Error(`artifact ${id} is ${a.schemaId}, expected ${expected}`);
-    return a;
-  };
-  const optional = async (key: string, expected: string) => (typeof input[key] === 'string' ? read(input[key] as string, expected) : null);
+  const optional = async (key: string, expected: string): Promise<ArtifactRow | null> =>
+    (typeof input[key] === 'string' ? readArtifact(ctx, input[key] as string, [expected]) : null);
 
-  const lyrics = await Promise.all((lyricsIds as string[]).map((id) => read(id, LYRICS_SCHEMA_ID)));
+  const lyrics = await Promise.all((lyricsIds as string[]).map((id) => readArtifact(ctx, id, [LYRICS_V1_SCHEMA_ID, LYRICS_SCHEMA_ID])));
   const structure = await optional('structureArtifactId', SONG_STRUCTURE_SCHEMA_ID);
   const genre = await optional('genreStyleArtifactId', GENRE_STYLE_SCHEMA_ID);
-  const rendered = renderLyrics(lyrics.map((l) => l.body as unknown as LyricsBody));
-  const source = (role: Source['role'], a: ArtifactRow): Source => ({ role, artifactId: a.id, schemaId: a.schemaId, version: a.version });
-  const sources = [...lyrics.map((l) => source('lyrics', l)), ...(structure ? [source('structure', structure)] : []), ...(genre ? [source('genre-style', genre)] : [])];
+  const rendered = renderLyrics(lyrics);
+  const sources: Source[] = [...lyrics.map((l) => sourceOf('lyrics', l)), ...(structure ? [sourceOf('structure', structure)] : []), ...(genre ? [sourceOf('genre-style', genre)] : [])];
 
   const request = typeof input.request === 'string' && input.request.trim() !== '' ? input.request : null;
   const state: SunoState = { sunoModel, lyrics: rendered, sources };

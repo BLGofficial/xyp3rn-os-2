@@ -2,10 +2,11 @@ import type { ClaimBundle, ContextBundle } from '../../../core/context-engine/co
 import type { LlmProgram } from '../../../core/llm/runner.ts';
 import { loadMusicSystem } from '../music-system.ts';
 import { SUNO_FORMULA_SPEC } from '../suno/formula.ts';
+import { LYRICS_SPEC } from './lyrics.ts';
 import {
-  COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, GENRE_STYLE_SCHEMA, GENRE_STYLE_SCHEMA_ID, LYRICS_SCHEMA, LYRICS_SCHEMA_ID,
-  SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
+  COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, GENRE_STYLE_SCHEMA, GENRE_STYLE_SCHEMA_ID, SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
 } from './schemas.ts';
+import { mixedScriptWords } from './script-check.ts';
 import { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE, type ContextEntry, type CreativeSpec, type Prepared } from './types.ts';
 
 export { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE } from './types.ts';
@@ -38,18 +39,7 @@ const SPECS: Readonly<Record<string, CreativeSpec>> = {
       ];
     },
   },
-  'x3lius-lyrics': {
-    schemaId: LYRICS_SCHEMA_ID,
-    schema: LYRICS_SCHEMA,
-    task: 'Write the lyric section the brief asks for (one verse if it does not say), bar by bar: the words of each bar, its language and the rhyme tag it ends on, then the rhyme scheme and the devices used.',
-    check: (b) => {
-      const bars = b.bars as { n: number }[];
-      return [
-        ...(bars.length === 0 ? ['bars is empty'] : []),
-        ...(bars.every((x, i) => x.n === i + 1) ? [] : ['bars[].n must count 1, 2, 3… in order']),
-      ];
-    },
-  },
+  'x3lius-lyrics': LYRICS_SPEC,
   'x3lius-composition': {
     schemaId: COMPOSITION_SCHEMA_ID,
     schema: COMPOSITION_SCHEMA,
@@ -213,7 +203,9 @@ const creativeProgram = (slug: string): LlmProgram => {
     const unknown = reply.rulesApplied.map((r) => r.ref).filter((r) => !given.has(r));
     if (unknown.length > 0) throw new Error(`${slug} reply cites refs it was not given: ${unknown.join(', ')}`);
     const { body, violations } = spec.finalize?.(reply, prepared, entries) ?? { body: reply, violations: [] };
-    const all = [...violations, ...(spec.check?.(body) ?? [])];
+    // Checked on the final body, so text code copies in from upstream (the Suno lyrics) is covered too.
+    const mixed = mixedScriptWords(body).map((w) => `mixed-script word "${w.word}" at ${w.path} (Latin and Cyrillic letters in one word)`);
+    const all = [...violations, ...(spec.check?.(body) ?? []), ...mixed];
     if (all.length > 0) throw new Error(`${slug} reply failed checks: ${all.join('; ')}`);
 
     const context = entries.map(contextRef);

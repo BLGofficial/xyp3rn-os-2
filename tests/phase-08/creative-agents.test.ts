@@ -58,11 +58,13 @@ type FakeCall = { url: string; system: string; user: string; schema: Json };
 const fakeBody = (schema: Json, cited: readonly string[]): Json => {
   const props = (schema.properties ?? {}) as Json;
   const common = { rulesApplied: cited.map((ref) => ({ ref, how: '[FAKE] cited to exercise traceability' })), ungroundedChoices: ['[FAKE] everything not covered by a cited rule'] };
-  if ('bars' in props) {
+  if ('instrumental' in props) {
     return {
-      section: { kind: 'verse', label: '[FAKE] Verse 1' },
-      bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] bar ${n}`, language: 'en', rhymeTag: n % 2 ? 'A' : 'B' })),
-      rhymeScheme: 'ABAB', devices: [{ bar: 2, device: '[FAKE] half-rhyme', note: '[FAKE]' }], ...common,
+      sections: [{
+        sectionId: 'v1', kind: 'verse', label: '[FAKE] Verse 1', rhymeScheme: 'ABAB', devices: [{ bar: 2, device: '[FAKE] half-rhyme', note: '[FAKE]' }],
+        bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] bar ${n}`, language: 'en', rhymeTag: n % 2 ? 'A' : 'B' })),
+      }],
+      instrumental: [], ...common,
     };
   }
   if ('sections' in props) {
@@ -179,7 +181,9 @@ describe('registry: three Creative agents replace their stubs under the same nam
 
   it.each(creative.map((c) => [c]))('%s: Creative, RECORDS, LLM-backed, context + artifact tools, routable by its Scope', (name) => {
     const a = registry.get(name)!;
-    expect(a).toMatchObject({ name, class: 'Creative', domain: 'RECORDS', tools: ['retrieve_context', 'retrieve_claims', 'write_artifact', 'log_message'] });
+    // Lyrics also reads the song-structure artifact it writes against (whole-song lyrics, x3lius.lyrics/v2).
+    const reads = name === 'x3lius-lyrics' ? ['read_artifact'] : [];
+    expect(a).toMatchObject({ name, class: 'Creative', domain: 'RECORDS', tools: ['retrieve_context', 'retrieve_claims', ...reads, 'write_artifact', 'log_message'] });
     expect(() => parseModelRef(a.model)).not.toThrow();
     expect(HANDLERS[name]).toBeUndefined();
     expect(() => parseScope(name, a.sections.Scope ?? '')).not.toThrow();
@@ -240,7 +244,7 @@ describe('x3lius-lyrics end to end (FAKE model, real runner, real context, real 
     const r = await run(depsWith(model), 'x3lius-lyrics');
     expect(r.status, r.error).toBe('success');
     const out = r.output as CreativeOutput;
-    expect(out).toMatchObject({ subdomain: 'x3lius-lyrics', status: 'generated', artifact: { version: 1, schemaId: 'x3lius.lyrics/v1' } });
+    expect(out).toMatchObject({ subdomain: 'x3lius-lyrics', status: 'generated', artifact: { version: 1, schemaId: 'x3lius.lyrics/v2' } });
     expect(out.knowledge).toMatchObject({ sparse: true, threshold: MIN_SCOPED_RULES, scopedRules: 0, perModule: { 'x3lius-lyrics': 0, 'x3lius-vocal-dna': 0 }, voiceClaims: 1 });
     expect(out.knowledge.reasons.join('\n')).toMatch(/x3lius-lyrics: 0 rules/);
 
@@ -250,9 +254,12 @@ describe('x3lius-lyrics end to end (FAKE model, real runner, real context, real 
     for (const d of claim!.value) expect(prompt).toContain(d);
     expect(prompt).toContain(`[canonical_prompts:${claim!.canonical_prompt_id}#x3lius.voice-reference]`);
     expect(model.calls[0]!.user).toContain(REQUEST);
+    // A bare brief (no structure artifact): the sections the brief asks for, following no structure.
+    expect(model.calls[0]!.user).not.toContain('SONG STRUCTURE');
+    expect(out.body.sources).toEqual([]);
 
     const [a] = await artifactsOf(r.runId);
-    expect(a).toMatchObject({ id: out.artifact.id, schema_id: 'x3lius.lyrics/v1', agent_name: 'x3lius-lyrics', version: 1, brief: REQUEST, model: registry.get('x3lius-lyrics')!.model });
+    expect(a).toMatchObject({ id: out.artifact.id, schema_id: 'x3lius.lyrics/v2', agent_name: 'x3lius-lyrics', version: 1, brief: REQUEST, model: registry.get('x3lius-lyrics')!.model });
     expect(a!.body).toEqual(out.body);
     expect(a!.knowledge).toMatchObject({ sparse: true });
     expect((a!.context_refs as { ref: string }[]).map((c) => c.ref)).toEqual(out.context.map((c) => c.ref));
@@ -307,7 +314,7 @@ describe('x3lius-lyrics end to end (FAKE model, real runner, real context, real 
   it('a prose / wrong-shape reply is refused; nothing is written', async () => {
     const r = await run(depsWith(fakeModel({ override: () => ({ verse: 'free text' }) })), 'x3lius-lyrics');
     expect(r.status).toBe('error');
-    expect(r.error).toMatch(/violates schema x3lius\.lyrics\/v1/);
+    expect(r.error).toMatch(/violates schema x3lius\.lyrics-llm\/v2/);
     expect(await artifactsOf(r.runId)).toHaveLength(0);
   });
 
@@ -351,6 +358,6 @@ describe('front door: pnpm ask → RECORDS → X3LIUS entrypoint → Creative ag
   it('a lyrics request is routed to x3lius-lyrics, which generates', async () => {
     const r = await runMusicSystem(depsWith(fakeModel()), { request: 'Write rhymes and lyric bars for X3LIUS' });
     expect(r, r.reason).toMatchObject({ status: 'success', selected: ['x3lius-lyrics'] });
-    expect(r.outputs['x3lius-lyrics']).toMatchObject({ status: 'generated', artifact: { schemaId: 'x3lius.lyrics/v1' } });
+    expect(r.outputs['x3lius-lyrics']).toMatchObject({ status: 'generated', artifact: { schemaId: 'x3lius.lyrics/v2' } });
   });
 });

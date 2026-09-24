@@ -22,12 +22,13 @@ const REF = /\[(canonical_prompts:[0-9a-f-]{36}(?:#[a-z0-9.-]+)?)\]/g;
 export const fakeBody = (schema: Json, cited: readonly string[]): Json => {
   const props = (schema.properties ?? {}) as Json;
   const common = { rulesApplied: cited.map((ref) => ({ ref, how: '[FAKE] cited to exercise traceability' })), ungroundedChoices: ['[FAKE] everything not covered by a cited rule'] };
-  if ('bars' in props) {
-    return {
-      section: { kind: 'verse', label: 'Verse 1' },
-      bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] bar ${n}`, language: 'en', rhymeTag: n % 2 ? 'A' : 'B' })),
-      rhymeScheme: 'ABAB', devices: [], ...common,
-    };
+  if ('instrumental' in props) {
+    // Whole-song lyrics (x3lius.lyrics/v2): covers the fake structure below (v1 verse, c1 chorus) in order.
+    const section = (sectionId: string, kind: string, label: string) => ({
+      sectionId, kind, label, rhymeScheme: 'AABB', devices: [],
+      bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] ${sectionId} bar ${n}`, language: 'en', rhymeTag: n <= 2 ? 'A' : 'B' })),
+    });
+    return { sections: [section('v1', 'verse', 'Verse 1'), section('c1', 'chorus', 'Chorus')], instrumental: [], ...common };
   }
   if ('sections' in props) {
     return {
