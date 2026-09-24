@@ -42,6 +42,10 @@ const snapshot = async (sql: Sql) => {
                   where relnamespace = 'public'::regnamespace and relkind = 'r'`),
     grants: await q(`select table_name, grantee, privilege_type from information_schema.role_table_grants
                      where table_schema = 'public'`),
+    columnGrants: await q(`select table_name, column_name, grantee, privilege_type
+                           from information_schema.column_privileges where table_schema = 'public'`),
+    policies: await q(`select tablename, policyname, cmd, roles::text, qual, with_check
+                       from pg_policies where schemaname = 'public'`),
   };
 };
 
@@ -51,7 +55,8 @@ const userObjects = async (sql: Sql) =>
       where relnamespace = 'public'::regnamespace and relkind in ('r', 'v', 'i', 'S')
     union all select 'type', typname from pg_type
       where typnamespace = 'public'::regnamespace and typtype = 'e'
-    union all select 'function', proname from pg_proc where pronamespace = 'public'::regnamespace`;
+    union all select 'function', proname from pg_proc where pronamespace = 'public'::regnamespace
+    union all select 'policy', policyname from pg_policies where schemaname = 'public'`;
 
 describe('migration plan', () => {
   it('pairs every migration with a rollback and reports every problem at once', () => {
@@ -66,8 +71,8 @@ describe('migration plan', () => {
     expect(message).toContain('rollback without migration: 20260101000001_orphan.down.sql');
   });
 
-  it('ships the canonical base and the research extension stub, both reversible', () => {
-    expect(plan().map((m) => m.name)).toEqual(['canonical_base', 'research_extension_stub']);
+  it('starts with the Phase 1 canonical base and research extension stub, all reversible', () => {
+    expect(plan().map((m) => m.name).slice(0, 2)).toEqual(['canonical_base', 'research_extension_stub']);
   });
 });
 

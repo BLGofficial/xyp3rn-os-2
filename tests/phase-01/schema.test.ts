@@ -265,12 +265,16 @@ describe('relations (polymorphic graph edges)', () => {
 });
 
 describe('RLS + grants (single-tenant: default deny, service_role bypass)', () => {
-  it('enables RLS on every public table and defines no policies', async () => {
+  it('enables RLS on every public table and no policy ever reaches anon/authenticated/public', async () => {
     const rls = await db.sql<{ t: string; on: boolean }[]>`
       select relname as t, relrowsecurity as on from pg_class
       where relnamespace = 'public'::regnamespace and relkind = 'r' order by 1`;
     expect(rls.filter((r) => !r.on).map((r) => r.t)).toEqual([]);
-    expect(await db.sql`select 1 from pg_policies where schemaname = 'public'`).toHaveLength(0);
+    // Policies exist only for named xyp_* component roles (Phase 2+), never for client-facing roles.
+    expect(
+      await db.sql`select 1 from pg_policies where schemaname = 'public'
+                   and roles && array['anon', 'authenticated', 'public']::name[]`,
+    ).toHaveLength(0);
   });
 
   it.each(['anon', 'authenticated'])('%s holds zero privileges on every public table, view and function', async (role) => {

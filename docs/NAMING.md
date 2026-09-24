@@ -57,6 +57,11 @@ Example: `supabase/migrations/20260924080000_canonical_base.sql` + `supabase/rol
 `xyp_<component>`, least-privilege, one per component that connects (F7).
 Example: `xyp_research` (INSERT-only on evidence/findings, no UPDATE/DELETE)
 
+### RLS policies
+
+`<role without xyp_ prefix>_<command>`, one policy per role per command. Policies are only ever granted to named `xyp_*` roles, never to `anon`, `authenticated` or `public`.
+Example: `ingest_bootstrap_select` on `sources` (`for select to xyp_ingest_bootstrap`)
+
 ### Tools
 
 `snake_case` `<verb>_<object>`. Each tool declares exactly one capability.

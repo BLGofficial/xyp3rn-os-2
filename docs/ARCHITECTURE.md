@@ -113,7 +113,7 @@ Phase 0 was told to stop and flag inconsistencies in the domain tree rather than
 - **PROPOSED**: my recommendation, which stands unless overridden.
 - **OPEN**: must be decided at the phase named.
 
-**F1. Phase 2 writes canonical before the gate exists.** RESOLVED (user: temporary bootstrap exception). Phase 2 writes `canonical_prompts`/`modules` through a dedicated `xyp_ingest_bootstrap` DB role, and every such row is marked `promoted_via = 'bootstrap'`. Phase 6D then:
+**F1. Phase 2 writes canonical before the gate exists.** RESOLVED (user: temporary bootstrap exception). Implemented in Phase 2 (`20260924090000_ingest_bootstrap_role.sql`). Phase 2 writes `canonical_prompts`/`modules` through a dedicated `xyp_ingest_bootstrap` DB role, and every such row is marked `promoted_via = 'bootstrap'`. Phase 6D then:
 
 - revokes that role's canonical grants;
 - fills in `knowledge_versions` rows for the bootstrap rows;

@@ -1,6 +1,6 @@
 # Schema
 
-Status: Phase 1, canonical base (Knowledge Layer). Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
+Status: Phase 1 canonical base (Knowledge Layer) + Phase 2 ingest role. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
 
 ## ERD
 
@@ -138,6 +138,21 @@ erDiagram
 
 1. If the Phase 16 UI reads from the browser with the anon key, it will need per-role policies. Recommendation: have the UI read server-side through a read-only `xyp_*` role, and keep the browser off the database.
 2. If an external portal for payees or collaborators ever exists (Phase 13 `rights_splits`), real per-row tenant RLS becomes necessary on the Records tables.
+
+## Phase 2 additions: `xyp_ingest_bootstrap`
+
+Migration `20260924090000_ingest_bootstrap_role.sql` adds the temporary pre-gate canonical writer (F1):
+
+| Table | SELECT | INSERT | UPDATE | DELETE/TRUNCATE |
+|---|---|---|---|---|
+| `sources`, `modules`, `canonical_prompts`, `tags`, `prompt_tags`, `relations`, `quality_reports` | yes | yes | — | — |
+| `ingestion_runs` | yes | yes | outcome columns only: `source_id`, `checksum_sha256`, `status`, `stats`, `error_detail`, `completed_at` | — |
+| `prompt_variants` | — | — | — | — |
+
+- **Role attributes:** NOLOGIN, not superuser, no BYPASSRLS. Services assume it with `SET LOCAL ROLE` inside a transaction.
+- **Row access:** it sees rows through per-role policies (`ingest_bootstrap_select` / `_insert` / `_update`), using `true` because the OS is single-tenant. The grants do the restricting.
+- **Rollback:** removes this database's grants and policies but not the role itself. Roles are cluster-wide, so dropping one is a manual operation.
+- **Phase 6D:** revokes its canonical INSERT.
 
 ## Adding a table (checklist, every phase)
 

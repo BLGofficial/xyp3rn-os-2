@@ -14,7 +14,8 @@
     "db:up": "node core/db/cli.ts up",
     "db:down": "node core/db/cli.ts down",
     "db:status": "node core/db/cli.ts status",
-    "db:seed:proof": "node supabase/seed/run-fk-proof.ts"
+    "db:seed:proof": "node supabase/seed/run-fk-proof.ts",
+    "ingest": "node knowledge/ingestion/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "postgres": "^3.4.9",
+    "unpdf": "^1.8.1",
     "yaml": "^2.9.1"
   }
 }
