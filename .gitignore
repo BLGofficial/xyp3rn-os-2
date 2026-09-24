@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+# Local Postgres cluster (Phase 1+) — rebuilt from migrations, never committed
+.local-db/
