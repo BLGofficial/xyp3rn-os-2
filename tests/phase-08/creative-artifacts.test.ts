@@ -79,6 +79,18 @@ describe('versioning is derived by the database', () => {
       await expectPgError(() => tx.savepoint((sp) => write(sp, run, null, 'lyrics')), '23514');
     });
   });
+
+  it('warnings (migration 20260924200000) default to an empty list and must be a list', async () => {
+    await withRollback(db.sql, async (tx) => {
+      const run = await openRun(tx);
+      const a = await write(tx, run);
+      const [row] = await tx<{ warnings: unknown }[]>`select warnings from creative_artifacts where id = ${a.id}`;
+      expect(row!.warnings).toEqual([]);
+      await expectPgError(() => tx.savepoint((sp) => sp`
+        insert into creative_artifacts (schema_id, agent_name, agent_run_id, brief, body, context_refs, knowledge, model, warnings)
+        values ('x3lius.lyrics/v1', 'x3lius-lyrics', ${run}, 'b', '{}', '[]', '{}', 'm', '{"kind":"mixed-script"}')`), '23514');
+    });
+  });
 });
 
 describe('insert-only for every role', () => {

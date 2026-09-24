@@ -78,4 +78,6 @@ export const LYRICS_SPEC: CreativeSpec = {
   prepare,
   finalize,
   check,
+  // Rendered into Suno's lyrics field as-is: each bar, and the label as the [label] meta-tag.
+  sunoTextPaths: [/^\$\.sections\[\d+\]\.bars\[\d+\]\.text$/, /^\$\.sections\[\d+\]\.label$/],
 };

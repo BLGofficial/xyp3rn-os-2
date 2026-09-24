@@ -111,4 +111,6 @@ export const SUNO_FORMULA_SPEC: CreativeSpec = {
   admit,
   exclusionReason: 'scoped to another Suno version',
   finalize,
+  // What suno-submitter sends. The lyrics are checked here too, so an older artifact can't pass one on.
+  sunoTextPaths: [/^\$\.(title|style|lyrics)$/, /^\$\.excludeStyles\[\d+\]$/],
 };

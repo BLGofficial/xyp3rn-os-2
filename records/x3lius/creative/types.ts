@@ -50,4 +50,10 @@ export type CreativeSpec = {
   readonly finalize?: (reply: Record<string, unknown>, prepared: Prepared, entries: readonly ContextEntry[]) => { readonly body: Record<string, unknown>; readonly violations: readonly string[] };
   /** Checks the schema subset can't express; returns violations. */
   readonly check?: (body: Record<string, unknown>) => string[];
+  /**
+   * JSON paths (of the final body) holding text Suno receives verbatim. A mixed-script word there
+   * refuses the run; anywhere else it is written as a warning on the artifact (F22, user decision).
+   * Default: none, for bodies Suno never sees directly.
+   */
+  readonly sunoTextPaths?: readonly RegExp[];
 };

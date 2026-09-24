@@ -6,7 +6,7 @@ import { LYRICS_SPEC } from './lyrics.ts';
 import {
   COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, GENRE_STYLE_SCHEMA, GENRE_STYLE_SCHEMA_ID, SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
 } from './schemas.ts';
-import { mixedScriptWords } from './script-check.ts';
+import { mixedScriptWords, type MixedScriptWord } from './script-check.ts';
 import { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE, type ContextEntry, type CreativeSpec, type Prepared } from './types.ts';
 
 export { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE } from './types.ts';
@@ -204,13 +204,18 @@ const creativeProgram = (slug: string): LlmProgram => {
     if (unknown.length > 0) throw new Error(`${slug} reply cites refs it was not given: ${unknown.join(', ')}`);
     const { body, violations } = spec.finalize?.(reply, prepared, entries) ?? { body: reply, violations: [] };
     // Checked on the final body, so text code copies in from upstream (the Suno lyrics) is covered too.
-    const mixed = mixedScriptWords(body).map((w) => `mixed-script word "${w.word}" at ${w.path} (Latin and Cyrillic letters in one word)`);
-    const all = [...violations, ...(spec.check?.(body) ?? []), ...mixed];
+    const explain = (w: MixedScriptWord) => `mixed-script word "${w.word}" at ${w.path} (Latin and Cyrillic letters in one word)`;
+    const toSuno = (w: MixedScriptWord) => (spec.sunoTextPaths ?? []).some((p) => p.test(w.path));
+    const mixed = mixedScriptWords(body);
+    const soft = mixed.filter((w) => !toSuno(w));
+    const all = [...violations, ...(spec.check?.(body) ?? []), ...mixed.filter(toSuno).map(explain)];
     if (all.length > 0) throw new Error(`${slug} reply failed checks: ${all.join('; ')}`);
+    const warnings = soft.map((w) => ({ kind: 'mixed-script', word: w.word, path: w.path }));
+    if (soft.length > 0) await ctx.useTool('log_message', { level: 'warn', message: `${slug}: written with warnings — ${soft.map(explain).join('; ')}` });
 
     const context = entries.map(contextRef);
     const written = (await ctx.useTool('write_artifact', {
-      schemaId: spec.schemaId, brief: prepared.brief, body, contextRefs: context, knowledge, model: ctx.agent.model,
+      schemaId: spec.schemaId, brief: prepared.brief, body, contextRefs: context, knowledge, model: ctx.agent.model, warnings,
     })) as { artifact_id: string; lineage_id: string; version: number };
 
     return {
@@ -220,6 +225,7 @@ const creativeProgram = (slug: string): LlmProgram => {
         artifact: { id: written.artifact_id, lineageId: written.lineage_id, version: written.version, schemaId: spec.schemaId },
         body,
         knowledge,
+        warnings,
         context,
         model: { ref: ctx.agent.model, served: res.model },
         usage: res.usage,

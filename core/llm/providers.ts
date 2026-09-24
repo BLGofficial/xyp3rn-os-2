@@ -135,6 +135,9 @@ const openAiCompatible = (provider: Exclude<Provider, 'anthropic'>): Transport =
   const choice = body.choices?.[0];
   const finish = choice?.finish_reason ?? null;
   if (finish === 'content_filter') throw new Error(`${provider} refused (content_filter)`);
+  // "error": the upstream provider abandoned the generation (seen live after 137s; the same request
+  // then completed), so it is retried like a 5xx. "length" is the request's own limit: never retried.
+  if (finish === 'error') throw new TransientProviderError(`${provider} reply incomplete (error)`);
   if (finish !== 'stop') throw new Error(`${provider} reply incomplete (${finish})`);
   return {
     provider, model: body.model ?? model, text: choice?.message?.content ?? '',

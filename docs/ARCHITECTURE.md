@@ -189,7 +189,8 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - The Anthropic base URL is pinned, not read from `ANTHROPIC_BASE_URL` (hosted dev containers set that variable for their own tooling).
 - Live-verified on OpenRouter with `nvidia/nemotron-3-ultra-550b-a55b:free` (Phase 8 addendum), which is now the creative agents' model (user decision). Anthropic and Groq are still verified against fakes only.
 - The schema is stated in the prompt as well as in `response_format`, because some routes drop the latter.
-- Model calls retry transient provider errors (408/429/5xx) twice with backoff. A completion changes no external state; Execution agents stay retry-free (Phase 4D).
+- Model calls retry transient provider errors twice with backoff: 408/429/5xx, and a 200 whose `finish_reason` is `error` (the upstream abandoned the generation; seen live). A completion changes no external state; Execution agents stay retry-free (Phase 4D).
+- The LLM step timeout is 600s (user decision): whole-song lyrics took 262s live, and a retry must fit.
 
 **F18. Canonical knowledge is too sparse for a distinct X3LIUS voice.** OPEN (flagged by Phase 8, as the guide requires).
 - The creative sub-domains and Vocal DNA hold 0 rules. The model's whole voice context is the guide's one claim, `x3lius.voice-reference` (4 descriptors).
@@ -216,6 +217,10 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - `x3lius.lyrics/v1` artifacts stay readable (the formula renders both) and revisable.
 - Whether the hook actually appears in the chorus is not code-checked (fuzzy); it is the Phase 12 Critic's.
 
-**F22. Mixed-script words are refused.** DECIDED (user, after the Phase 9 live run).
-- A word mixing Latin and Cyrillic letters (seen live: "Пeak", "phonк") is a homoglyph corruption. Every creative artifact body is checked before it is written, the rendered Suno lyrics included; a hit refuses the run.
+**F22. Mixed-script words: refused in text Suno receives, a warning elsewhere.** DECIDED (user, after the Phase 9 live runs).
+- A word mixing Latin and Cyrillic letters (seen live: "Пeak", "phonк", "Лieux") is a homoglyph corruption. Every creative artifact body is checked before it is written.
+- A hit in text Suno receives verbatim refuses the run, and nothing is written. That text is:
+  - lyric bars and section labels;
+  - the formula's title, style, excluded styles and lyrics. The rendered lyrics are checked too, so an older artifact can't pass a hit on.
+- A hit anywhere else (device notes, genre/style fields, songwriting text) is written as a warning in `creative_artifacts.warnings` and logged. That way a typo in metadata doesn't cost a 4-minute run.
 - Switching script between words is untouched: which languages a line uses is canonical knowledge.

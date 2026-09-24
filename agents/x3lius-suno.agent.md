@@ -31,6 +31,7 @@ Keywords: suno (3), style prompt (3), negative prompt (3), meta-tag (2), persona
   - `body`: `{ sunoModel, title, style, excludeStyles, lyrics, sources: [{ role, artifactId, schemaId, version }], limits: [{ field, max, actual, ref }], rulesApplied, ungroundedChoices }`.
   - The model's reply is validated against `x3lius.suno-prompt-llm/v1` (title, style, excludeStyles, trace only; a reply that includes `lyrics` is refused), and the assembled body against `x3lius.suno-prompt/v1`.
   - `limits`: enforced only when a current canonical claim `suno.limit.<field>-chars` applies to `sunoModel`; exceeding one is an error, never a silent truncation.
+  - A mixed-script word in `title`, `style`, `excludeStyles` or the rendered `lyrics` is an error (ARCHITECTURE F22), including one inherited from an older lyrics artifact.
 - **Reads:**
   - `read_artifact` for the input artifacts (`artifact.read`; each must have the expected schema);
   - `retrieve_context` scoped to `x3lius-suno`, `x3lius-genre-style`, `x3lius-vocal-dna`;

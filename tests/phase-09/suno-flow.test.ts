@@ -313,27 +313,60 @@ describe('whole-song lyrics (x3lius.lyrics/v2): written against the song structu
   });
 });
 
-describe('mixed-script words are refused before any artifact is written', () => {
-  it('a lyrics reply with a word mixing Latin and Cyrillic letters (seen live: "Пeak") is refused', async () => {
-    const model = fakeModel({ override: (schema, refs) => {
-      if (!('instrumental' in (schema.properties as object))) return undefined;
-      const b = fakeBody(schema, refs.slice(0, 1)) as { sections: { bars: { text: string }[] }[] };
-      b.sections[0]!.bars[0]!.text = 'Пeak слънцето никога не се връща';
+describe('mixed-script words: refused in text Suno receives, a warning on the artifact anywhere else', () => {
+  /** A FAKE model whose reply for the schema carrying `marker` gets `edit` applied. */
+  const editing = (marker: string, edit: (b: Record<string, unknown>) => void) => fakeModel({
+    override: (schema, refs) => {
+      if (!(marker in (schema.properties as object))) return undefined;
+      const b = fakeBody(schema, refs.slice(0, 1));
+      edit(b);
       return b;
-    } });
-    const r = await run(depsWith(model), 'x3lius-lyrics', { request: REQUEST });
-    expect(r.error).toMatch(/mixed-script word "Пeak" at \$\.sections\[0\]\.bars\[0\]\.text/);
+    },
+  });
+  type Section = { label: string; bars: { text: string }[]; devices: { bar: number; device: string; note: string }[] };
+
+  it.each([
+    ['a lyric bar (seen live: "Пeak")', (b: Record<string, unknown>) => { (b.sections as Section[])[0]!.bars[0]!.text = 'Пeak слънцето никога не се връща'; }, 'Пeak', '$.sections[0].bars[0].text'],
+    ['a section label (rendered as the Suno [label] tag)', (b: Record<string, unknown>) => { (b.sections as Section[])[1]!.label = 'Chorуs'; }, 'Chorуs', '$.sections[1].label'],
+  ])('lyrics: refused in %s; nothing is written', async (_, edit, word, path) => {
+    const r = await run(depsWith(editing('instrumental', edit)), 'x3lius-lyrics', { request: REQUEST });
+    expect(r.error).toContain(`mixed-script word "${word}" at ${path}`);
     expect(await artifactsOf(r.runId)).toHaveLength(0);
   });
 
-  it('a genre/style reply carrying one (seen live: "phonк") is refused', async () => {
-    const model = fakeModel({ override: (schema, refs) => ('primaryGenre' in (schema.properties as object) ? { ...fakeBody(schema, refs.slice(0, 1)), subgenres: ['industrial trap', 'phonк'] } : undefined) });
-    const r = await run(depsWith(model), 'x3lius-genre-style', { request: REQUEST });
-    expect(r.error).toMatch(/mixed-script word "phonк" at \$\.subgenres\[1\]/);
+  it('lyrics: in a device note (seen live: "Лieux") it is written, with the word recorded as a warning', async () => {
+    const r = await run(depsWith(editing('instrumental', (b) => {
+      (b.sections as Section[])[0]!.devices = [{ bar: 1, device: 'loanword', note: 'French loan Лieux opens the verse' }];
+    })), 'x3lius-lyrics', { request: REQUEST });
+    expect(r.status, r.error).toBe('success');
+    const warning = { kind: 'mixed-script', word: 'Лieux', path: '$.sections[0].devices[0].note' };
+    expect((r.output as { warnings: unknown[] }).warnings).toEqual([warning]);
+    const [a] = await db.sql<{ warnings: unknown[] }[]>`select warnings from creative_artifacts where agent_run_id = ${r.runId}`;
+    expect(a!.warnings).toEqual([warning]);
+    const [row] = await db.sql<{ output: { logs: { level: string; message: string }[] } }[]>`select output from agent_runs where id = ${r.runId}`;
+    expect(row!.output.logs).toContainEqual(expect.objectContaining({ level: 'warn', message: expect.stringContaining('mixed-script word "Лieux" at $.sections[0].devices[0].note') }));
+  });
+
+  it('genre/style: nothing in it reaches Suno verbatim (seen live: "phonк"), so it is a warning', async () => {
+    const r = await run(depsWith(editing('primaryGenre', (b) => { b.subgenres = ['industrial trap', 'phonк']; })), 'x3lius-genre-style', { request: REQUEST });
+    expect(r.status, r.error).toBe('success');
+    expect((r.output as { warnings: unknown[] }).warnings).toEqual([{ kind: 'mixed-script', word: 'phonк', path: '$.subgenres[1]' }]);
+  });
+
+  it('a clean artifact carries no warnings', async () => {
+    const r = await run(depsWith(fakeModel()), 'x3lius-genre-style', { request: REQUEST });
+    expect((r.output as { warnings: unknown[] }).warnings).toEqual([]);
+    const [a] = await db.sql<{ warnings: unknown[] }[]>`select warnings from creative_artifacts where agent_run_id = ${r.runId}`;
+    expect(a!.warnings).toEqual([]);
+  });
+
+  it('formula: refused in the style it writes; nothing is written', async () => {
+    const r = await run(depsWith(editing('excludeStyles', (b) => { b.style = 'dark phonк trap'; })), 'x3lius-suno', { request: REQUEST, sunoModel: 'v5', lyricsArtifactIds: [ids.lyrics] });
+    expect(r.error).toContain('mixed-script word "phonк" at $.style');
     expect(await artifactsOf(r.runId)).toHaveLength(0);
   });
 
-  it('an older lyrics artifact carrying one cannot reach a Suno prompt: the rendered lyrics are checked too', async () => {
+  it('formula: an older lyrics artifact carrying one cannot reach a Suno prompt (the rendered lyrics are checked)', async () => {
     const legacy = await insertLegacyLyrics(['Пeak слънцето никога не се връща']);
     const r = await run(depsWith(fakeModel()), 'x3lius-suno', { request: REQUEST, sunoModel: 'v5', lyricsArtifactIds: [legacy] });
     expect(r.error).toMatch(/mixed-script word "Пeak" at \$\.lyrics/);
