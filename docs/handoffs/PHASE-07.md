@@ -28,11 +28,11 @@ HANDOFF — Phase 7 complete
   - **Sub-domain agent naming:** each agent's name equals its module slug, which is also the placement tag. One name is the whole join, with no mapping table.
 - **Open flags:**
   - **F15:** Composition and Genre/Style have no building phase in the guide (`built_in: null`).
-  - **F16:** the Phase 3 global path still returns superseded versions; the scoped path doesn't.
+  - **F16:** the Phase 3 global path still returns superseded versions; the scoped path doesn't. *(Resolved after this handoff.)*
   - **The pending dev-DB candidate** (Phase 10 RVC/Applio claim) is tagged `x3lius`/`vocal-dna`, not `x3lius-vocal-dna`, so approving it lands it in `records-validated-rules`. Candidates are immutable, so to get it into Vocal DNA you'd re-propose it with the sub-domain tag.
   - **Rules promoted in 6D stay where they were written:** they aren't moved to sub-domains after the fact. A move means a new version.
 - **Next phase needs (8):**
   - **Songwriting and Lyrics agents:** replace the `x3lius-songwriting` and `x3lius-lyrics` stubs with real Creative-class agents of the same names, so the routing, scope and registry entries carry over. This needs `ANTHROPIC_API_KEY` in a new session.
   - **Style rules:** read them through `retrieve_context` with `scope.modules` set to the sub-domain (plus `x3lius-vocal-dna` for voice), never hardcoded; this is what the guide requires ("pulls style rules from canonical_prompts via Context Engine").
   - **Rules on the context path:** tag candidates `x3lius-songwriting` or `x3lius-lyrics` so they land there.
-  - **Resolve F16 first** so the global path can't serve a superseded rule. Decide F15 as well.
+  - **Resolve F16 first** so the global path can't serve a superseded rule. *(Done after this handoff: migration `20260924170000_global_current_versions.sql`.)* Decide F15 as well.

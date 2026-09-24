@@ -176,7 +176,7 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - Both are registered stubs with `built_in: null` in the manifest; their agents say so rather than claiming a phase.
 - Options: fold them into Phase 8 (songwriting) and Phase 9 (Suno style), or leave them as stubs until the user adds a phase.
 
-**F16. Global retrieval still returns superseded versions.** OPEN (Phase 8, before creative agents consume context).
-- The Phase 3 global path (`xyp_match_knowledge`) searches every embedded version, so a v1 and its v2 can both rank.
-- The Phase 7 scoped path returns current versions only.
-- Recommendation: apply the same current-version filter to the global path. That changes Phase 3 ranking output, so it is flagged rather than folded into Phase 7.
+**F16. Global retrieval returned superseded versions.** RESOLVED (user go, before Phase 8; migration `20260924170000_global_current_versions.sql`).
+- The Phase 3 global path (`xyp_match_knowledge`) searched every embedded version, so a v1 and its v2 could both rank.
+- It now applies the same current-version filter as the Phase 7 scoped path, scanning canonical prompts exactly. Sources keep their HNSW branch.
+- Proof: `tests/phase-07/propagation.test.ts` ("F16: …"), which was red before the migration.

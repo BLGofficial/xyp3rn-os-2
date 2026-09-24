@@ -1,6 +1,6 @@
 # Schema
 
-Status: through Phase 7 (X3LIUS module-scoped retrieval). The ERD shows the Phase 1 canonical base; later phases are described in their sections below. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
+Status: through Phase 7 (X3LIUS module-scoped retrieval) + F16 (current versions on the global path). The ERD shows the Phase 1 canonical base; later phases are described in their sections below. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
 
 ## ERD
 
@@ -251,6 +251,10 @@ Migration `20260924160000_subdomain_scope.sql`:
   - 11 gate-written `modules` rows (the parent plus ten sub-domains), admitted from `records/x3lius/music-system.manifest.yaml` by the `xyp-module-manifest-v1` normalizer.
   - `relations` edges `subdomain_of` (sub-domain → parent) and `derived_from` (module → manifest source).
 - **Placement:** the gate places a promoted rule in a sub-domain module when a candidate tag equals the slug of a module that has a `subdomain_of` edge. More than one such tag is refused before queueing.
+
+## F16 (pre-Phase 8): current versions on the global path
+
+Migration `20260924170000_global_current_versions.sql` redefines `xyp_match_knowledge`. Canonical prompts are searched over current versions only, as an exact scan of a MATERIALIZED set, the same as the scoped path. Sources are unversioned and are unchanged, still using HNSW. Exact cosine over a few thousand 384-dim rows takes milliseconds. Revisit with pgvector ≥ 0.8 iterative scans if the corpus grows large.
 
 ## Adding a table (checklist, every phase)
 

@@ -111,6 +111,7 @@ describe('the X3LIUS Music System module is gate-written canonical knowledge', (
 
 describe('propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-domain context path', () => {
   let v1: string;
+  let v2: string;
 
   it('the gate places the rule in the sub-domain module its tag names, and says so', async () => {
     const r = await approveAndPromote(await fixtureCandidate('Lead the Suno v4.5 style prompt with the vocal descriptor.', ['x3lius-suno']));
@@ -158,6 +159,12 @@ describe('propagation: a promoted rule tagged x3lius-suno reaches the Suno sub-d
     const ids = (await engine.retrieve(QUERY, { scope: { modules: ['x3lius-suno'] } })).items.filter((i) => i.slug === FIXTURE_SLUG).map((i) => i.ref.id);
     expect(ids).toEqual([r.canonicalPromptId]);
     expect(ids).not.toContain(v1);
+    v2 = r.canonicalPromptId!;
+  });
+
+  it('F16: the global (unscoped) path serves only the current version too', async () => {
+    const ids = (await engine.retrieve(QUERY)).items.filter((i) => i.slug === FIXTURE_SLUG).map((i) => i.ref.id);
+    expect(ids).toEqual([v2]);
   });
 
   it('a request no sub-domain matches is answered with clarify, never a default sub-domain', async () => {
