@@ -81,8 +81,8 @@ Assumptions the user did not correct:
 
 ### 5.1 Rules in force
 
-- The Critic reads the artifact through `read_artifact` and finds the producing sub-domain's `CreativeSpec` from `agent_name`.
-- It pulls the rules **in force now**, reusing the creative program's retrieval: the spec's modules through the scoped Context Engine, and its claim namespaces through `retrieve_claims`. A rule the Gate changes therefore reaches older output too.
+- The Critic reads the artifact through `read_artifact` and finds the producing sub-domain's `CreativeSpec` from the artifact's **schema id**, not its `agent_name`: a revised version is written by `x3lius-revision`. Only schema ids a current spec writes are supported; legacy `x3lius.lyrics/v1` artifacts are refused.
+- It pulls the rules **in force now**, querying with the artifact's stored `brief`, reusing the creative program's retrieval: the spec's modules through the scoped Context Engine, and its claim namespaces through `retrieve_claims`. A rule the Gate changes therefore reaches older output too.
 - **Applicability:** an entry with no model scope always applies. An entry scoped to a model applies only when the artifact body names that model (`sunoModel`), using the existing `appliesTo` and `scopeOf`. Every other scoped entry (for example RVC or `trace`) is out of scope for text artifacts.
 - **Mix reports** (`x3lius.mix-report/v1`) skip retrieval. Their rules are the report's own checks, each with its claim ref and version:
   - a raise/lower check becomes a code-found violation;
@@ -111,14 +111,15 @@ A rule with a code check has `method: 'code'`. Every other rule, including every
 
 ```
 artifact:           { id, schemaId, version, agent }
-previousCritiqueId: uuid | null
-rules:              [{ ref, version, kind: 'rule' | 'claim', method: 'code' | 'model' }]
-violations:         [{ key, ruleRef, ruleVersion, method, path, quote, expected, found }]
+previousCritiqueId?: uuid          # omitted on a first pass
+rules:              [{ ref, kind: 'rule' | 'claim', method: 'code' | 'model', version? }]
+violations:         [{ key, ruleRef, method, path, quote, expected, found, ruleVersion? }]
 resolved:           [key]   # keys of previousCritique.violations absent now
 unverified:         [{ ruleRef, path, quote, reason }]
 counts:             { checked, passed, violations }
 ```
 
+- `version` / `ruleVersion` are present only where the source states one (mix-report checks). A `canonical_prompts:<id>` ref already names one immutable canonical version. The JSON-schema subset has no null, so absent fields are omitted, not null.
 - `key = ruleRef + '@' + path` tracks the same violation across iterations.
 - `checked` = `rules.length`, and `passed` = the rules with no violation.
 - When `previousCritiqueId` is given, the Critic refuses unless that critique reviewed this artifact's parent.
@@ -135,7 +136,9 @@ counts:             { checked, passed, violations }
   - cites no key from the critique's `violations`;
   - is a no-op (the replacement equals the current value).
 - Partial fixes are allowed. Whether a violation is fixed is decided by the Critic on the next pass.
-- **Derived fields are recomputed, never edited.** A schema whose body stores measurements of other fields supplies a `rederive(body)` hook, which runs after the edits. Today that is only the Suno prompt, which recomputes `limits[].actual` from the edited text. Edits to a derived path are refused. The Suno code check itself measures the text fields directly and never trusts the stored `limits`.
+- **Derived fields are recomputed, never edited.** A schema whose body stores measurements of other fields supplies a `rederive(body)` hook, which runs after the edits. Today that is only the Suno prompt, which recomputes `limits[].actual` from the edited text. Edits to a derived path are refused. Derived paths are:
+  - `/sources`, `/rulesApplied` and `/ungroundedChoices` in every schema;
+  - `/limits`, `/sunoModel` and `/lyrics` in the Suno prompt. Its lyrics are rendered from the lyrics artifacts, so a lyrics violation there is fixed on the lyrics artifact by a human (it persists, so the stall rule escalates it). The Suno code check itself measures the text fields directly and never trusts the stored `limits`.
 - **Validation before writing** is the same as a creative write: the schema for the version's schema id, the spec's `check`, and F22's mixed-script rule (`sunoTextPaths` refuse, anything else becomes a warning).
 - **Write:** `write_artifact` with `parent_id` = the reviewed version and `critique_id`. `brief`, `context_refs` and `knowledge` are copied from the parent, and `model` is Revision's own. The edit is the difference between the parent and child bodies.
 - **Not in scope:** structural edits (adding or removing array items). A violation that needs one persists, the stall rule fires, and a human takes it (flag §10).
@@ -235,3 +238,14 @@ It stays a stub. A take is audio, and an honest score needs a `trace.analysis/v1
 - `docs/SCHEMA.md`: `critiques`, `critique_id`, and the escalation function.
 - `docs/ARCHITECTURE.md`: flag entries for D1–D5, the F14 note, and the take-scoring flag.
 - `README.md`: the Phase 12 checkbox.
+
+## 13. Consequences for earlier phases
+
+- **Evaluation was the last Phase 7 placeholder.** After Phase 12, every manifest sub-domain has a built agent.
+  - `subdomainStub` stays as the fallback handler for any sub-domain a future manifest adds.
+  - Its Phase 7 proofs (a placeholder returns its promoted rule; routing reaches it end to end) move to a registry double that presents `x3lius-evaluation` as a Knowledge placeholder, because no real one remains.
+  - The Phase 9 "still a stub" list becomes empty.
+- **`x3lius-revision` works inside the Evaluation sub-domain without being one**, like `x3lius-rvc-post` does for Vocal DNA. It joins the Phase 7 test's list of sub-domain members.
+- **A routed bare request to Evaluation is refused.** The Critic needs `{ artifactId }`, the same way Mix/Master needs an analysis.
+- **`read_artifact` returns more fields:** also `brief`, `parentId`, `critiqueId`, `contextRefs` and `knowledge`. The Critic queries rules with the brief, and Revision copies the brief, refs and knowledge into the new version.
+- **`write_artifact` takes an optional `critiqueId`.**
