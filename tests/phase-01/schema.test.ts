@@ -41,10 +41,10 @@ const expectEach = async (tx: Tx, stmts: readonly Stmt[], code: string) => {
 };
 
 describe('tables', () => {
-  it('creates exactly the nine canonical base tables in public', async () => {
+  it('creates the nine canonical base tables in public (later phases add their own)', async () => {
     const rows = await db.sql<{ t: string }[]>`
       select tablename as t from pg_tables where schemaname = 'public' order by 1`;
-    expect(rows.map((r) => r.t)).toEqual([...TABLES]);
+    expect(rows.map((r) => r.t)).toEqual(expect.arrayContaining([...TABLES]));
   });
 });
 
