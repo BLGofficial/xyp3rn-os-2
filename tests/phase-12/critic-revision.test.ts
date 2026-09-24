@@ -1,4 +1,6 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAgentRegistry } from '../../core/agent-registry/registry.ts';
@@ -16,10 +18,12 @@ import { writeEvidence } from '../../research-intelligence/evidence/engine.ts';
 import { registerResearchSource } from '../../research-intelligence/sources/verify.ts';
 import { proposeCandidate, recordFinding } from '../../research-intelligence/synthesis/findings.ts';
 import type { CriticOutput } from '../../records/x3lius/evaluation/critic.ts';
+import { evaluate } from '../../records/x3lius/evaluation/loop.ts';
 import type { RevisionOutput } from '../../records/x3lius/evaluation/revision.ts';
 import { MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/music-system.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 import { FAKE_KEYS, fakeModel } from '../helpers/fake-llm.ts';
+import { ANALYSIS, RUBRIC } from '../helpers/trace-fixture.ts';
 
 // Phase 12 proof (part 2): the Critic, Revision and the loop, on a throwaway DB holding the real
 // guide + X3LIUS manifest.
@@ -196,5 +200,85 @@ describe('Revision (x3lius-revision)', () => {
 
   it('refuses a bare request', async () => {
     expect((await run('x3lius-revision', { request: 'fix it' })).error).toMatch(/revises from one critique: input \{ critiqueId \}/);
+  });
+});
+
+describe('loop controller (the proof runs)', () => {
+  const escalation = (critiqueId: string) => db.sql<{ item_type: string; status: string; request: Json }[]>`
+    select item_type::text, status::text, request from approval_queue where item_type = 'critique_escalation' and item_id = ${critiqueId}`;
+  const text = (a: Json, s: number, b: number) => String((((a.sections as Json[])[s]!.bars as Json[])[b]!).text);
+  /** Critic: one violation per verse bar 0–3 still holding [FAKE] text. */
+  const fakeBars = (a: Json): Reported[] => [0, 1, 2, 3]
+    .filter((b) => text(a, 0, b).startsWith('[FAKE]'))
+    .map((b) => ({ ruleRef: `canonical_prompts:${rules.lyrics}`, path: `/sections/0/bars/${b}/text`, quote: text(a, 0, b), expected: 'a place in the city', found: 'no place' }));
+
+  it('PROOF 1 — converges: a Suno prompt with a code-found and a model-found violation, fixed by one revision', async () => {
+    const model = scripted({
+      critic: (a) => (String(a.style).includes('style prompt') ? [{ ruleRef: `canonical_prompts:${rules.suno}`, path: '/style', quote: '[FAKE] style prompt', expected: 'the vocal descriptor first', found: 'a placeholder' }] : []),
+      revise: (vs) => [{ path: '/style', replacement: 'male vox', violationKeys: vs.map((x) => x.key) }],
+    });
+    const r = await evaluate(depsWith(model), prompts.loop, { timeoutMs: 60_000 });
+    expect(r).toMatchObject({ outcome: 'converged', revisions: 1, counts: [2, 0] });
+    expect(r.escalationId).toBeUndefined();
+    const [, second] = await Promise.all(r.critiqueIds.map((id) => db.sql<{ body: { resolved: string[]; previousCritiqueId: string } }[]>`select body from critiques where id = ${id}`.then((x) => x[0]!.body)));
+    expect(second!.previousCritiqueId).toBe(r.critiqueIds[0]);
+    expect(second!.resolved.sort()).toEqual([`${rules.styleLimit}@/style`, `canonical_prompts:${rules.suno}@/style`].sort());
+    expect(await escalation(r.critiqueIds.at(-1)!)).toEqual([]);
+  });
+
+  it('PROOF 2 — hits the iteration cap: 4 violations, one fixed per revision, escalated after 3', async () => {
+    const l = await lyrics();
+    const model = scripted({
+      critic: fakeBars,
+      revise: (vs) => [{ path: vs[0]!.path, replacement: `Neon rain on Canal Street, ${vs[0]!.path.split('/')[4]}`, violationKeys: [vs[0]!.key] }],
+    });
+    const r = await evaluate(depsWith(model), l.id, { timeoutMs: 60_000 });
+    expect(r).toMatchObject({ outcome: 'iteration_cap', revisions: 3, counts: [4, 3, 2, 1] });
+    expect(r.artifactIds).toHaveLength(4);
+    const [row] = await escalation(r.critiqueIds.at(-1)!);
+    expect(row).toMatchObject({ item_type: 'critique_escalation', status: 'pending', request: { reason: 'iteration_cap', revisions: 3, maxRevisions: 3, counts: [4, 3, 2, 1], critiqueIds: r.critiqueIds, artifactIds: r.artifactIds } });
+    expect(r.escalationId).toBeDefined();
+  });
+
+  it('stalls: a revision that does not reduce the violations escalates early', async () => {
+    const l = await lyrics();
+    const model = scripted({
+      critic: (a) => [{ ruleRef: `canonical_prompts:${rules.lyrics}`, path: '/sections/0/bars/0/text', quote: text(a, 0, 0), expected: 'a place', found: 'none' }],
+      revise: (vs, a) => [{ path: vs[0]!.path, replacement: `${text(a, 0, 0)} again`, violationKeys: [vs[0]!.key] }],
+    });
+    const r = await evaluate(depsWith(model), l.id, { timeoutMs: 60_000 });
+    expect(r).toMatchObject({ outcome: 'stall', revisions: 1, counts: [1, 1] });
+    expect((await escalation(r.critiqueIds.at(-1)!))[0]?.request).toMatchObject({ reason: 'stall' });
+  });
+
+  it('escalates a refused revision, with the error, and writes no version', async () => {
+    const l = await lyrics();
+    const model = scripted({ critic: fakeBars, revise: (vs) => [{ path: '/sections/1/bars/0/text', replacement: 'Canal Street', violationKeys: [vs[0]!.key] }] });
+    const r = await evaluate(depsWith(model), l.id, { timeoutMs: 60_000 });
+    expect(r).toMatchObject({ outcome: 'revision_failed', revisions: 0, counts: [4], artifactIds: [l.id] });
+    expect(r.error).toMatch(/is not at or inside a field a violation points to/);
+    expect((await escalation(r.critiqueIds[0]!))[0]?.request).toMatchObject({ reason: 'revision_failed', error: expect.stringMatching(/revision refused/) });
+  });
+
+  it('a mix report is studio work: critiqued by code, escalated, never revised', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'phase12-'));
+    const path = join(dir, 'mix-rubric.yaml');
+    writeFileSync(path, RUBRIC());
+    const ing = await ingestSource(db.sql, { kind: 'file', path, origin: 'first_party' });
+    expect(ing.status, ing.error).toBe('success');
+    const report = await run('x3lius-mix-master', { analysis: ANALYSIS });
+    expect(report.status, report.error).toBe('success');
+    const model = scripted({});
+    const r = await evaluate(depsWith(model), (report.output as Written).artifact.id, { timeoutMs: 60_000 });
+    expect(r).toMatchObject({ outcome: 'studio_work', revisions: 0, counts: [3] });
+    expect(model.calls).toEqual([]); // code only: no model call
+    expect((await escalation(r.critiqueIds[0]!))[0]?.request).toMatchObject({ reason: 'studio_work' });
+    expect((await run('x3lius-revision', { critiqueId: r.critiqueIds[0] })).error).toMatch(/studio work/);
+  });
+
+  it('refuses a malformed id, an unknown id, and a version that is not its lineage’s latest, before any run', async () => {
+    await expect(evaluate(depsWith(), 'not-a-uuid')).rejects.toThrow(/is not an artifact id \(a uuid\)/);
+    await expect(evaluate(depsWith(), randomUUID())).rejects.toThrow(/no artifact/);
+    await expect(evaluate(depsWith(), prompts.loop)).rejects.toThrow(/the latest version of its lineage is .* Evaluate that one/);
   });
 });
