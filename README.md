@@ -23,7 +23,10 @@ pnpm agents:validate            # Agent Registry: validate agents/*.agent.md
 pnpm dispatch health-check '{"ping":"xyp"}'   # run an agent end to end, print its agent_runs row
 pnpm route "your request"       # domain routing decision with evidence
 pnpm ask "your request"         # front door: route → plan → run the domain entrypoint
-pnpm research <cmd> '<json>'    # 6C engines by hand: observation, finding, candidate, eligibility, resolve, experiment:*
+pnpm research <cmd> '<json>'    # 6C engines by hand: observation, cite, finding, candidate, eligibility, resolve, experiment:*
+pnpm gate run <candidateId>     # 6D Promotion Gate: the nine-step state machine, the only canonical writer
+pnpm gate queue                 # pending human approvals with the gate's reasons
+pnpm gate decide <approvalId> approve|reject "<approver>" "<reason>"   # operator decision, then re-run the gate
 pnpm workflow core/workflows/retrieve-and-summarize.workflow.yaml '{"query":"..."}'
 pnpm test        # vitest: phase proofs + unit tests (DB tests use throwaway databases)
 pnpm typecheck   # tsc --noEmit

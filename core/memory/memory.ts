@@ -10,7 +10,7 @@ import type { RankLimits } from '../context-engine/rank.ts';
  *
  * - LONG-TERM (LongTermMemory): the Phase 3 Context Engine over canonical knowledge. Read-only
  *   by construction — no write method exists. Knowledge enters long-term memory only through
- *   ingestion (bootstrap) or the Phase 6D Promotion Gate, never from a workflow.
+ *   the Phase 6D Promotion Gate (first-party admission or a promoted candidate), never from a workflow.
  */
 
 export type RunMemory = {

@@ -1,6 +1,6 @@
 # Schema
 
-Status: Phase 1 canonical base (Knowledge Layer) + Phase 2 ingest role + Phase 3 embeddings. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
+Status: through Phase 6D (Knowledge Promotion Gate). The ERD shows the Phase 1 canonical base; later phases are described in their sections below. Source of truth: `supabase/migrations/`. This doc explains the migrations and must not contradict them.
 
 ## ERD
 
@@ -117,8 +117,10 @@ erDiagram
 
 - **Foreign keys are `ON DELETE RESTRICT`.** History is permanent, so deleting a parent that knowledge still references fails loudly. The only exception is `prompt_tags`, whose join rows cascade.
 - **Sources are content-addressed.** `sources.checksum_sha256` is UNIQUE. This is the race fix for Phase 2: two concurrent ingestions of the same bytes collapse to one row through `ON CONFLICT`, instead of relying on a check-then-insert in application code.
-- **Canonical rows are versioned by `(slug, version)`, not unique by slug alone.** Phase 6D appends a new version and a `knowledge_versions` row instead of overwriting. Deciding which version is "current" is 6D's job.
-- **`promoted_via` records provenance.** `bootstrap` rows were written by Phase 2 before the gate existed (F1), and a CHECK constraint requires them to carry `source_id`. `gate` rows trace their origin through `knowledge_versions` → `knowledge_candidates` (6D), so their `source_id` may be null.
+- **Canonical rows are versioned by `(slug, version)`, not unique by slug alone.** The gate (6D) appends a new version and a `knowledge_versions` row instead of overwriting. The newest version of a slug is current (`canonical_claims` and the Context Engine read it that way).
+- **`promoted_via` records provenance.**
+  - `bootstrap` rows were written by Phase 2 before the gate existed (F1). A CHECK constraint requires them to carry `source_id`.
+  - `gate` rows trace their origin through `knowledge_versions` → `promotion_runs`, and from there to either the candidate chain or the first-party source. Candidate-promoted rows have a null `source_id`; first-party admissions keep theirs.
 - **Quality reports are immutable and self-explaining.** `criteria` must be a non-empty array, so a score cannot exist without the inputs that produced it. Each report targets exactly one of a source or a canonical prompt.
 - **`relations` is polymorphic.** Ids are `text`, so file-backed entities such as an agent named `health-check` fit alongside uuids.
   - On insert or update, a trigger checks that table-backed endpoints exist and that file-backed names are kebab-case. Otherwise it raises `23503`.
@@ -215,6 +217,26 @@ Migration `20260924140000_research_engines.sql`:
 - **Detection in the database:** `xyp_detect_contradictions()` (SECURITY DEFINER) runs AFTER INSERT on every finding and every candidate. A conflict is the same topic, an overlapping model scope (equal tags, or either side `model-agnostic`) and a different value. Different model versions never conflict. Research roles have no INSERT on `contradictions`, so they can neither fabricate nor suppress one.
 - **`knowledge_candidate_eligibility` view:** a candidate is blocked while any open contradiction touches it, either through its own finding or by naming it as the target.
 - **`xyp_verifier` role:** can UPDATE only `status`, `resolution` and `resolved_at` on `contradictions`, and can insert experiments and experiment runs. It cannot insert findings, evidence or contradictions.
+
+## Phase 6D additions: Knowledge Promotion Gate (`xyp_promotion`), F1 closed
+
+Migration `20260924150000_promotion_gate.sql`:
+
+- **`xyp_promotion`** is the gate's service account and the only role with INSERT on `canonical_prompts`, `modules` and `knowledge_versions`. No role holds UPDATE on a canonical content column or DELETE/TRUNCATE on these tables; `xyp_embedder` keeps UPDATE on the five derived embedding columns only. A catalog test (`tests/phase-06d/canonical-grants.test.ts`) enumerates every role in the cluster to prove it.
+- **History is required:** a deferred constraint trigger (`xyp_canonical_requires_history`) fails any transaction that commits a canonical row without its `knowledge_versions` row. This holds even for `xyp_promotion`.
+- **F1 closed:**
+  - `xyp_ingest_bootstrap` loses all canonical and graph grants and keeps only `sources` and `ingestion_runs`.
+  - `service_role` loses INSERT/UPDATE/DELETE/TRUNCATE on `canonical_prompts`, `modules` and `knowledge_versions`.
+  - Every pre-gate row is backfilled into `knowledge_versions` with `approval.mode = 'bootstrap'`.
+  - New ingestion is admitted by the gate (`promoted_via = 'gate'`, `approval.mode = 'first-party-ingest'`), first-party origin only.
+- **`knowledge_candidate_status`** gains `pending_approval`. A trigger enforces the state machine: `proposed → pending_approval | promoted | rejected`, then `pending_approval → promoted | rejected`. `promoted` and `rejected` are terminal.
+- **`approval_queue`** (Governance-owned, F8) holds one row per item (`knowledge_candidate`, `critique_escalation`).
+  - The gate may insert only `pending` rows.
+  - A decision is written only by `xyp_decide_approval()` (SECURITY DEFINER, EXECUTE held by `service_role` alone) and is sealed once made.
+- **`promotion_runs`** is append-only: one row per gate run, with every evaluated step and its reason, the outcome, the confidence and the threshold.
+- **`regression_queue`** lists the checks a promotion owes (`retrieval`, `contradiction-guard`). It is consumed by the Phase 13 regression runner.
+- **Deferred FKs:** `knowledge_versions.promotion_run_id` and `regression_queue.promotion_run_id` are deferred, so the run record is written last with the ids it produced.
+- **Rollback:** refuses while first-party gate versions exist, because history is permanent.
 
 ## Adding a table (checklist, every phase)
 

@@ -8,6 +8,8 @@ import { ingestSource } from './ingest.ts';
 //   node knowledge/ingestion/cli.ts --file <path>  --origin first_party|third_party
 //   node knowledge/ingestion/cli.ts --url <url>    --origin ...
 //   node knowledge/ingestion/cli.ts --manual <text> --title <title> --origin ...
+// Since 6D only --origin first_party is admitted (Promotion Gate, first-party admission); third_party
+// is recorded as an error run — third-party material enters as research evidence instead.
 // Exits 1 when the run ends in error (the run row still records why).
 
 const { values } = parseArgs({

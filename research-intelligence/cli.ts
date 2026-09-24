@@ -4,12 +4,13 @@ import { candidateEligibility, resolveContradiction } from './contradictions/eng
 import { asRole, RESEARCH_ROLE } from './db.ts';
 import { writeEvidence } from './evidence/engine.ts';
 import { designExperiment, experimentResult, recordTrial } from './experiments/engine.ts';
-import { registerResearchSource } from './sources/verify.ts';
+import { citeIngestedSource, registerResearchSource } from './sources/verify.ts';
 import { proposeCandidate, recordFinding } from './synthesis/findings.ts';
 
 // Human-in-the-loop access to the 6C engines (until LLM specialists run), same rules as agents:
 //   pnpm research open        '{"projectSlug":"…","question":"…"}'
 //   pnpm research observation '{"researchRunId":"…","uri":"studio:…","title":"…","note":"…","claim":"…","model_tag":"…","confidence":0.7,"confidence_inputs":{…},"claim_topic"?:"…","claim_value"?:…}'
+//   pnpm research cite        '{"researchRunId":"…","sourceId":"…","excerpt":"<verbatim passage>","claim":"…","model_tag":"…","confidence":0.9,"confidence_inputs":{…},"claim_topic"?:"…","claim_value"?:…}'
 //   pnpm research finding     '{"researchRunId":"…","claim":"…","claim_topic":"…","claim_value":…,"model_tag":"…","evidenceIds":["…"]}'
 //   pnpm research candidate   '{"findingId":"…","proposed_kind":"canonical_prompt","target_slug":"…","title":"…","body":"…","domain":"RECORDS"}'
 //   pnpm research eligibility <candidateId>
@@ -45,6 +46,14 @@ try {
       const { researchRunId, uri: _u, title: _t, note: _n, ...ev } = a;
       const evidenceId = await writeEvidence(sql, { researchRunId, agentRunId: null, specialist: 'human:studio' }, { ...ev, research_source_id: src.id });
       out = { researchSourceId: src.id, reliability: src.reliability, evidenceId };
+      break;
+    }
+    case 'cite': {
+      const a = json(arg1) as { researchRunId: string; sourceId: string; excerpt: string } & Record<string, unknown>;
+      const src = await citeIngestedSource(sql, { researchRunId: a.researchRunId, sourceId: a.sourceId, excerpt: a.excerpt });
+      const { researchRunId, sourceId: _s, excerpt: _e, ...ev } = a;
+      const evidenceId = await writeEvidence(sql, { researchRunId, agentRunId: null, specialist: 'human:operator' }, { ...ev, research_source_id: src.id });
+      out = { researchSourceId: src.id, reliability: src.reliability, citedIn: src.citedIn, evidenceId };
       break;
     }
     case 'finding':

@@ -117,3 +117,38 @@ export const registerResearchSource = async (sql: Sql, input: RegisterSourceInpu
     return { id: existing!.id, deduplicated: true, reliability: Number(existing!.reliability), class: rel.class };
   });
 };
+
+const squash = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+/**
+ * Cites an already-ingested Knowledge Layer document (F9) as a research source. The excerpt must
+ * appear verbatim (whitespace-insensitive: PDF line wraps) in canonical text derived from that
+ * source, so a citation can quote the document but never put words in its mouth.
+ * @param sql - pool allowed to SET ROLE xyp_research
+ * @param input - research run, the `sources` row, and the quoted passage
+ * @returns the research source (first_party reliability) and the canonical slugs quoting it
+ * @throws Error for an unknown source or an excerpt the document doesn't contain
+ */
+export const citeIngestedSource = async (
+  sql: Sql,
+  input: { readonly researchRunId: string; readonly sourceId: string; readonly excerpt: string },
+) => {
+  const excerpt = squash(input.excerpt);
+  if (excerpt === '') throw new Error('a citation needs an excerpt');
+  const { src, citedIn } = await asRole(sql, RESEARCH_ROLE, async (tx) => {
+    const [s] = await tx<{ uri: string; title: string; checksum_sha256: string }[]>`
+      select uri, title, checksum_sha256 from sources where id = ${input.sourceId}`;
+    if (!s) throw new Error(`unknown source ${input.sourceId}`);
+    const hits = await tx<{ slug: string }[]>`
+      select distinct slug from canonical_prompts
+      where source_id = ${input.sourceId} and position(${excerpt} in regexp_replace(body, '[[:space:]]+', ' ', 'g')) > 0
+      order by slug`;
+    return { src: s, citedIn: hits.map((h) => h.slug) };
+  });
+  if (citedIn.length === 0) throw new Error(`excerpt not found verbatim in ${src.uri}: "${excerpt}"`);
+  const reg = await registerResearchSource(sql, {
+    researchRunId: input.researchRunId, kind: 'ingested', uri: src.uri, title: src.title,
+    contentSha256: src.checksum_sha256, excerpt, sourceId: input.sourceId,
+  });
+  return { ...reg, citedIn };
+};

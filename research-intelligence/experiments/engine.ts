@@ -26,7 +26,7 @@ export const stubScorer: TrialScorer = {
 /**
  * Designs an experiment for a candidate.
  * @param sql - pool allowed to SET ROLE xyp_verifier
- * @param input - candidate, hypothesis, the two variants, trials per variant
+ * @param input - candidate, hypothesis, variantA = control (current practice), variantB = the candidate rule, trials per variant
  * @returns experiment id (status 'planned')
  */
 export const designExperiment = async (
@@ -73,11 +73,43 @@ export const recordTrial = async (
   });
 
 /**
- * Summarizes an experiment. `validated` is true only when every trial has a real score from a
- * real scorer — never for stub-scored trials.
+ * Summarizes an experiment's trials — shared by experimentResult and the Promotion Gate's
+ * controlled-test/evaluation steps (6D). Convention: variant a = control (current practice),
+ * variant b = the candidate rule. `validated` needs a complete experiment whose every trial has
+ * a real score from a real scorer — never stub-scored trials.
+ * @param exp - experiment status and trials per variant
+ * @param runs - its experiment_runs rows
+ * @returns trial counts, scorers used, validated flag with the reason, per-variant mean scores
+ */
+export const summarizeExperiment = (
+  exp: { readonly status: string; readonly n_per_variant: number },
+  runs: ReadonlyArray<{ readonly variant: 'a' | 'b'; readonly score: number | null; readonly scored_by: string }>,
+) => {
+  const scoredBy = [...new Set(runs.map((r) => r.scored_by))].sort();
+  const allScored = runs.length > 0 && runs.every((r) => r.score !== null) && !scoredBy.includes(STUB_SCORER);
+  const of = (v: 'a' | 'b') => runs.filter((r) => r.variant === v);
+  const mean = (rs: ReadonlyArray<{ readonly score: number | null }>) =>
+    rs.length === 0 ? null : rs.reduce((acc, r) => acc + (r.score ?? 0), 0) / rs.length;
+  const complete = exp.status === 'complete';
+  return {
+    status: exp.status,
+    trials: { a: of('a').length, b: of('b').length },
+    scoredBy,
+    validated: complete && allScored,
+    reason: !allScored
+      ? 'not validated: trials scored by stub (no evaluator until Phase 12)'
+      : complete
+        ? 'all trials scored'
+        : `not validated: experiment ${exp.status}, ${runs.length}/${exp.n_per_variant * 2} trials`,
+    means: allScored ? { a: mean(of('a')), b: mean(of('b')) } : null,
+  };
+};
+
+/**
+ * Summarizes an experiment (see summarizeExperiment).
  * @param sql - pool allowed to SET ROLE xyp_verifier
  * @param experimentId - experiments.id
- * @returns status, trial counts, scorers used, validated flag with the reason
+ * @returns status, trial counts, scorers used, validated flag with the reason, mean scores
  */
 export const experimentResult = async (sql: Sql, experimentId: string) =>
   asRole(sql, VERIFIER_ROLE, async (tx) => {
@@ -86,13 +118,5 @@ export const experimentResult = async (sql: Sql, experimentId: string) =>
     if (!exp) throw new Error(`unknown experiment ${experimentId}`);
     const runs = await tx<{ variant: 'a' | 'b'; score: string | null; scored_by: string }[]>`
       select variant::text, score, scored_by from experiment_runs where experiment_id = ${experimentId}`;
-    const scoredBy = [...new Set(runs.map((r) => r.scored_by))].sort();
-    const allScored = runs.length > 0 && runs.every((r) => r.score !== null) && !scoredBy.includes(STUB_SCORER);
-    return {
-      status: exp.status,
-      trials: { a: runs.filter((r) => r.variant === 'a').length, b: runs.filter((r) => r.variant === 'b').length },
-      scoredBy,
-      validated: exp.status === 'complete' && allScored,
-      reason: allScored ? 'all trials scored' : 'not validated: trials scored by stub (no evaluator until Phase 12)',
-    };
+    return summarizeExperiment(exp, runs.map((r) => ({ ...r, score: r.score === null ? null : Number(r.score) })));
   });

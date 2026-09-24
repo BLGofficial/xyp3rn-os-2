@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decideVersion } from './write-normalized.ts';
 
-describe('decideVersion (bootstrap canonical writes never overwrite in place)', () => {
+describe('decideVersion (canonical writes never overwrite in place)', () => {
   it('inserts version 1 for a slug never seen', () => {
     expect(decideVersion(undefined)).toEqual({ action: 'insert', version: 1 });
   });

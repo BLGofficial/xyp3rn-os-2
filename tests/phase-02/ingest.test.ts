@@ -77,11 +77,12 @@ describe('ingestion of the real build guide', () => {
 
     expect(await count(db.sql, 'modules')).toBe(19);
     expect(await count(db.sql, 'canonical_prompts')).toBe(31);
-    // F1: every canonical row is marked bootstrap and traces to the source
+    // Since 6D (F1 closed): every canonical row is written by the gate's first-party admission
+    // and still traces to the source.
     expect(
-      await db.sql`select 1 from canonical_prompts where promoted_via <> 'bootstrap' or source_id is null`,
+      await db.sql`select 1 from canonical_prompts where promoted_via <> 'gate' or source_id is null`,
     ).toHaveLength(0);
-    expect(await db.sql`select 1 from modules where promoted_via <> 'bootstrap' or source_id is null`).toHaveLength(0);
+    expect(await db.sql`select 1 from modules where promoted_via <> 'gate' or source_id is null`).toHaveLength(0);
     expect(await db.sql`select 1 from relations_dangling`).toHaveLength(0);
 
     const [run] = await db.sql<{ status: string; completed_at: Date | null }[]>`

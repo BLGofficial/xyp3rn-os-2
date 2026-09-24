@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { asRole, createTestDb, expectPgError, type TestDb } from '../helpers/db.ts';
 
 // Phase 2 proof: the bootstrap ingest role can append knowledge but can't rewrite or delete it.
-// 6D revokes its canonical INSERT entirely (F1); until then this is the only non-gate writer.
+// 6D revoked its canonical INSERT entirely (F1 closed): it now only registers sources and runs.
 
 const ROLE = 'xyp_ingest_bootstrap';
 const HASH = 'a'.repeat(64);
@@ -56,15 +56,6 @@ describe(`${ROLE}`, () => {
     const mine = await db.sql<{ t: string }[]>`
       select distinct tablename as t from pg_policies where schemaname = 'public' and ${ROLE} = any (roles)
       order by 1`;
-    expect(mine.map((r) => r.t)).toEqual([
-      'canonical_prompts',
-      'ingestion_runs',
-      'modules',
-      'prompt_tags',
-      'quality_reports',
-      'relations',
-      'sources',
-      'tags',
-    ]);
+    expect(mine.map((r) => r.t)).toEqual(['ingestion_runs', 'sources']);
   });
 });
