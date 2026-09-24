@@ -24,13 +24,15 @@ Keywords: lyric (3), rhyme (3), wordplay (3), bar (2), punchline (2), flow (1)
   - `records/x3lius/song-to-suno.workflow.yaml` passes the structure the songwriting step wrote.
   - A bare `{ request }` (routed here by the X3LIUS Music System entrypoint, or dispatched directly) writes the sections the brief asks for, following no structure.
 - **Outputs:** `{ subdomain, status: "generated", artifact: { id, lineageId, version, schemaId: "x3lius.lyrics/v2" }, body, knowledge, warnings, context, model: { ref, served }, usage }`.
-  - `body`: `{ sections: [{ sectionId, kind, label, bars: [{ n, text, language, rhymeTag }], rhymeScheme, devices: [{ bar, device, note }] }], instrumental: [sectionId], sources: [{ role: "structure", artifactId, schemaId, version }], rulesApplied: [{ ref, how }], ungroundedChoices: [string] }`.
+  - `body`: `{ sections: [{ sectionId, kind, label, bars: [{ n, text, language, rhymeTag }], rhymeScheme, devices: [{ bar, device, note }], directions: [string] }], instrumental: [sectionId], sources: [{ role: "structure", artifactId, schemaId, version }], rulesApplied: [{ ref, how }], ungroundedChoices: [string] }`.
   - With a structure:
-    - Each call replies against `x3lius.lyrics-section-llm/v2`: `instrumental`, `label`, `bars`, `rhymeScheme`, `devices`, trace.
+    - Each call replies against `x3lius.lyrics-section-llm/v2`: `instrumental`, `bars`, `rhymeScheme`, `devices`, `directions`, trace.
     - Each call sees the structure and the lyrics written so far, under `WRITE NOW: section <id> (<kind>, <bars> bars): <purpose>`.
     - Code sets `sectionId` and `kind` from the structure and records it in `sources`. So every structure section appears once, in order, written or in `instrumental`.
     - Each call's trace is kept, prefixed `[<sectionId>]`. A section marked instrumental may not have bars.
-    - A section whose lines or label have a mixed-script word is asked for once more, with a `CORRECTION` naming each word and its bar. Still mixed means the run fails.
+    - A section whose lines have a mixed-script word is asked for once more, with a `CORRECTION` naming each word and its bar. Still mixed means the run fails.
+  - `label`, the section tag Suno sees, comes from code, not the model: verses numbered in song order ("Verse 1", "Verse 2"), every other kind by name ("Pre-Chorus", "Chorus", "Outro"). The model wrote section ids as tags live.
+  - `bars` hold only the words that are sung or spoken. Production or performance notes go in `directions`, which are stored on the artifact and never rendered into Suno's lyrics. Seen live: an outro whose "Synth decays… concrete breath fades" was a sung line. This is asked for in the prompt; code cannot check it reliably.
   - Without a structure: one call replies against `x3lius.lyrics-llm/v2`.
   - In both cases every section's bars are numbered 1..n in order, and no section id repeats.
   - Mixed-script words (Latin and Cyrillic letters in one word, a homoglyph corruption; ARCHITECTURE F22):

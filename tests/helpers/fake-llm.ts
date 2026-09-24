@@ -27,17 +27,17 @@ export const fakeBody = (schema: Json, cited: readonly string[], user = ''): Jso
     // One section of lyrics written against a structure (x3lius.lyrics-section-llm/v2): the section named under WRITE NOW.
     const [, id = 's', kind = 'verse'] = /WRITE NOW: section (\S+) \(([a-z-]+)/.exec(user) ?? [];
     return {
-      instrumental: false, label: kind[0]!.toUpperCase() + kind.slice(1), rhymeScheme: 'AABB', devices: [],
+      instrumental: false, rhymeScheme: 'AABB', devices: [], directions: [],
       bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] ${id} bar ${n}`, language: 'en', rhymeTag: n <= 2 ? 'A' : 'B' })), ...common,
     };
   }
   if ('instrumental' in props) {
     // Whole-song lyrics (x3lius.lyrics/v2): covers the fake structure below (v1 verse, c1 chorus) in order.
-    const section = (sectionId: string, kind: string, label: string) => ({
-      sectionId, kind, label, rhymeScheme: 'AABB', devices: [],
+    const section = (sectionId: string, kind: string) => ({
+      sectionId, kind, rhymeScheme: 'AABB', devices: [], directions: [],
       bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] ${sectionId} bar ${n}`, language: 'en', rhymeTag: n <= 2 ? 'A' : 'B' })),
     });
-    return { sections: [section('v1', 'verse', 'Verse 1'), section('c1', 'chorus', 'Chorus')], instrumental: [], ...common };
+    return { sections: [section('v1', 'verse'), section('c1', 'chorus')], instrumental: [], ...common };
   }
   if ('sections' in props) {
     return {

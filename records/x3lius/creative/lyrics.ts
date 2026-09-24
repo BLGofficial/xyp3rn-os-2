@@ -18,12 +18,25 @@ import type { Completion, CreativeSpec } from './types.ts';
  */
 
 type Bar = { readonly n: number; readonly text: string };
-type Section = { readonly sectionId: string; readonly kind: string; readonly label: string; readonly bars: readonly Bar[]; readonly rhymeScheme: string; readonly devices: readonly unknown[] };
+type Section = { readonly sectionId: string; readonly kind: string; readonly bars: readonly Bar[]; readonly rhymeScheme: string; readonly devices: readonly unknown[]; readonly directions: readonly string[] };
 type SectionReply = Omit<Section, 'sectionId' | 'kind'> & { readonly instrumental: boolean; readonly rulesApplied: readonly { readonly ref: string; readonly how: string }[]; readonly ungroundedChoices: readonly string[] };
 type StructureSection = { readonly id: string; readonly kind: string; readonly bars: number; readonly purpose: string };
 type LyricsState = { readonly structure: { readonly source: ArtifactSource<'structure'>; readonly sections: readonly StructureSection[] } | null };
 
 const SECTION_SCHEMA = { id: LYRICS_SECTION_LLM_SCHEMA_ID, schema: LYRICS_SECTION_LLM_SCHEMA };
+
+/**
+ * The section tags Suno sees, from the section kinds: verses numbered in song order ("Verse 1",
+ * "Verse 2"), every other kind by its name ("Pre-Chorus", "Chorus"). Code, not the model, because
+ * the model wrote section ids as tags live ([v1], [pre1], [outro]).
+ * @param kinds - section kinds in song order
+ * @returns one label per kind
+ */
+export const sectionLabels = (kinds: readonly string[]): string[] => {
+  let verses = 0;
+  const name = (kind: string) => kind.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('-');
+  return kinds.map((k) => (k === 'verse' ? `Verse ${++verses}` : name(k)));
+};
 
 const prepare: CreativeSpec['prepare'] = async (ctx, input) => {
   const request = input.request;
@@ -44,19 +57,16 @@ const prepare: CreativeSpec['prepare'] = async (ctx, input) => {
 const writtenSoFar = (done: readonly (Section | StructureSection)[]): string =>
   `LYRICS WRITTEN SO FAR\n${done.length === 0
     ? '(none yet: this is the first section)'
-    : done.map((s) => ('sectionId' in s ? `[${s.label}] (${s.sectionId})\n${s.bars.map((b) => b.text).join('\n')}` : `(${s.id}, ${s.kind}: instrumental)`)).join('\n\n')}`;
+    : done.map((s) => ('sectionId' in s ? `(${s.sectionId}, ${s.kind})\n${s.bars.map((b) => b.text).join('\n')}` : `(${s.id}, ${s.kind}: instrumental)`)).join('\n\n')}`;
 
-/** Mixed-script words in the text of one section that reaches Suno: its lines and its label. */
-const sunoTextFaults = (r: SectionReply): string[] => [
-  ...mixedScriptWords(r.label).map((w) => `"${w.word}" (label)`),
-  ...r.bars.flatMap((b) => mixedScriptWords(b.text).map((w) => `"${w.word}" (bar ${b.n})`)),
-];
+/** Mixed-script words in the text of one section that reaches Suno: its lines (the label is code's). */
+const sunoTextFaults = (r: SectionReply): string[] =>
+  r.bars.flatMap((b) => mixedScriptWords(b.text).map((w) => `"${w.word}" (bar ${b.n})`));
 
 const correction = (id: string, faults: readonly string[], r: SectionReply): string => [
   'CORRECTION',
   `Your previous reply for section ${id} mixed Latin and Cyrillic letters inside a word: ${faults.join(', ')}.`,
-  'Write this section again with every word in a single alphabet, changing only what that needs. Your previous label and lines:',
-  `[${r.label}]`,
+  'Write this section again with every word in a single alphabet, changing only what that needs. Your previous lines:',
   ...r.bars.map((b) => b.text),
 ].join('\n');
 
@@ -96,7 +106,7 @@ const generate: CreativeSpec['generate'] = async (call, p, log) => {
       if (still.length > 0) throw new Error(`section ${s.id}: mixed-script word ${still.join(', ')} is still there after one correction`);
     }
     if (r.instrumental && r.bars.length > 0) throw new Error(`section ${s.id}: marked instrumental but has ${r.bars.length} bars`);
-    done.push(r.instrumental ? s : { sectionId: s.id, kind: s.kind, label: r.label, bars: r.bars, rhymeScheme: r.rhymeScheme, devices: r.devices });
+    done.push(r.instrumental ? s : { sectionId: s.id, kind: s.kind, bars: r.bars, rhymeScheme: r.rhymeScheme, devices: r.devices, directions: r.directions });
     traces.push({
       rulesApplied: r.rulesApplied.map((x) => ({ ref: x.ref, how: `[${s.id}] ${x.how}` })),
       ungroundedChoices: r.ungroundedChoices.map((u) => `[${s.id}] ${u}`),
@@ -117,8 +127,11 @@ const generate: CreativeSpec['generate'] = async (call, p, log) => {
 
 const finalize: CreativeSpec['finalize'] = (reply, p) => {
   const { structure } = p.state as LyricsState;
+  const written = reply.sections as Section[];
+  const labels = sectionLabels(written.map((s) => s.kind));
+  const sections = written.map(({ sectionId, kind, ...rest }, i) => ({ sectionId, kind, label: labels[i]!, ...rest }));
   return {
-    body: { sections: reply.sections, instrumental: reply.instrumental, sources: structure ? [structure.source] : [], rulesApplied: reply.rulesApplied, ungroundedChoices: reply.ungroundedChoices },
+    body: { sections, instrumental: reply.instrumental, sources: structure ? [structure.source] : [], rulesApplied: reply.rulesApplied, ungroundedChoices: reply.ungroundedChoices },
     violations: [],
   };
 };
@@ -143,6 +156,7 @@ export const LYRICS_SPEC: CreativeSpec = {
     'When a SONG STRUCTURE is given, each reply is one section: the one under WRITE NOW, consistent with LYRICS WRITTEN SO FAR. Set instrumental to true, with no bars, if that section has no vocals; where the song carries its hook, use the hook the structure selected.',
     'Without a structure, write the sections the brief asks for (one verse if it does not say) in one reply.',
     'For each section, bar by bar: the words of each bar, its language and the rhyme tag it ends on; then the section’s rhyme scheme and the devices used.',
+    'The bars hold only the words that are sung or spoken; production or performance notes (instruments, effects, a fade) go in directions, never in bars.',
   ].join(' '),
   prepare,
   generate,

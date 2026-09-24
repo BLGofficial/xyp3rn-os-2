@@ -19,6 +19,7 @@ import { registerResearchSource } from '../../research-intelligence/sources/veri
 import { proposeCandidate, recordFinding } from '../../research-intelligence/synthesis/findings.ts';
 import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { loadMusicSystem, MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/music-system.ts';
+import { sectionLabels } from '../../records/x3lius/creative/lyrics.ts';
 import { renderLyrics, SONG_TO_SUNO_WORKFLOW } from '../../records/x3lius/suno/formula.ts';
 import { STUB_SCORER } from '../../records/x3lius/suno/score-hook.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
@@ -51,7 +52,7 @@ const run = (deps: DispatchDeps, agent: string, input: unknown) => dispatch(deps
 
 type Out = { artifact: { id: string; schemaId: string }; body: Record<string, unknown>; knowledge: { perModule: Record<string, number>; sparse: boolean }; context: { kind: string; slug: string | null }[] };
 const out = (r: { output?: unknown }) => r.output as Out;
-type LyricsV2 = { sections: { sectionId: string; kind: string; label: string; bars: { text: string }[] }[]; instrumental: string[]; sources: unknown[] };
+type LyricsV2 = { sections: { sectionId: string; kind: string; label: string; bars: { text: string }[]; directions: string[] }[]; instrumental: string[]; sources: unknown[] };
 const artifactsOf = (runId: string) => db.sql<{ id: string }[]>`select id from creative_artifacts where agent_run_id = ${runId}`;
 
 /** Writes a pre-v2 lyrics artifact (x3lius.lyrics/v1, one section) the way Phase 8 did, so the formula's legacy path is tested. */
@@ -195,7 +196,7 @@ describe('the Suno Prompt-Formula agent (x3lius-suno)', () => {
     expect(o.body.lyrics).toBe(renderLyrics([{ schemaId: lyricsRow!.schema_id, body: lyricsRow!.body }]));
     // Every section, in song order: a [label] meta-tag, one line per bar, a blank line between sections.
     const [v1, c1] = lyricsRow!.body.sections;
-    expect(o.body.lyrics).toBe(`[Verse]\n${v1!.bars.map((b) => b.text).join('\n')}\n\n[Chorus]\n${c1!.bars.map((b) => b.text).join('\n')}`);
+    expect(o.body.lyrics).toBe(`[Verse 1]\n${v1!.bars.map((b) => b.text).join('\n')}\n\n[Chorus]\n${c1!.bars.map((b) => b.text).join('\n')}`);
     expect(Object.keys((model.calls[0]!.schema.properties as object))).not.toContain('lyrics');
 
     const prompt = model.calls[0]!.system;
@@ -246,7 +247,7 @@ describe('the Suno Prompt-Formula agent (x3lius-suno)', () => {
 });
 
 describe('whole-song lyrics (x3lius.lyrics/v2): one model call per structure section, one artifact', () => {
-  type SectionReply = { instrumental: boolean; label: string; bars: { n: number; text: string }[]; devices: { bar: number; device: string; note: string }[] };
+  type SectionReply = { instrumental: boolean; bars: { n: number; text: string }[]; devices: { bar: number; device: string; note: string }[]; directions: string[] };
   /** A FAKE model whose per-section reply for section `id` gets `edit` applied. */
   const sectionReply = (id: string, edit: (b: SectionReply) => void) => fakeModel({
     override: (schema, refs, user) => {
@@ -270,7 +271,8 @@ describe('whole-song lyrics (x3lius.lyrics/v2): one model call per structure sec
 
     // The fake structure has two sections (v1 verse, c1 chorus): two calls, each on the per-section schema.
     expect(model.calls).toHaveLength(2);
-    for (const c of model.calls) expect(Object.keys(c.schema.properties as object).sort()).toEqual(['bars', 'devices', 'instrumental', 'label', 'rhymeScheme', 'rulesApplied', 'ungroundedChoices']);
+    // No label: code derives it from the structure, so a section id can never reach Suno as a tag.
+    for (const c of model.calls) expect(Object.keys(c.schema.properties as object).sort()).toEqual(['bars', 'devices', 'directions', 'instrumental', 'rhymeScheme', 'rulesApplied', 'ungroundedChoices']);
     expect(model.calls[0]!.user).toContain('WRITE NOW: section v1 (verse, 16 bars)');
     expect(model.calls[1]!.user).toContain('WRITE NOW: section c1 (chorus, 8 bars)');
     // Every call carries the structure (with its selected hook); the second also carries the first section's words.
@@ -283,7 +285,7 @@ describe('whole-song lyrics (x3lius.lyrics/v2): one model call per structure sec
 
     // Ids and kinds come from the structure, not the model; one trace entry per call, prefixed with its section.
     const body = o.body as unknown as LyricsV2 & { rulesApplied: { ref: string; how: string }[]; ungroundedChoices: string[] };
-    expect(body.sections.map((x) => [x.sectionId, x.kind, x.label])).toEqual([['v1', 'verse', 'Verse'], ['c1', 'chorus', 'Chorus']]);
+    expect(body.sections.map((x) => [x.sectionId, x.kind, x.label])).toEqual([['v1', 'verse', 'Verse 1'], ['c1', 'chorus', 'Chorus']]);
     expect(body.instrumental).toEqual([]);
     expect(body.sources).toEqual([{ role: 'structure', artifactId: ids.structure, schemaId: 'x3lius.song-structure/v1', version: 1 }]);
     expect(body.rulesApplied.map((x) => x.how.slice(0, 5))).toEqual(['[v1] ', '[c1] ']);
@@ -337,7 +339,6 @@ describe('whole-song lyrics (x3lius.lyrics/v2): one model call per structure sec
 
   it.each([
     ['a lyric line (seen live: "горниotope")', (b: SectionReply) => { b.bars[2]!.text = 'горниotope над града'; }, '"горниotope" (bar 3)'],
-    ['the section label', (b: SectionReply) => { b.label = 'Chorуs'; }, '"Chorуs" (label)'],
   ])('a mixed-script word in %s gets that section re-asked once with the words named; the fixed reply is kept', async (_, edit, named) => {
     const model = firstReplies('c1', 1, edit);
     const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
@@ -387,13 +388,38 @@ describe('whole-song lyrics (x3lius.lyrics/v2): one model call per structure sec
     expect((await run(deps, 'x3lius-lyrics', { request: REQUEST, structureArtifactId: 7 })).error).toMatch(/structureArtifactId must be an artifact id/);
   });
 
-  it('a bare brief (no structure) is still one call writing the sections it asks for', async () => {
+  it('a bare brief (no structure) is still one call writing the sections it asks for; labels still come from code', async () => {
     const model = fakeModel();
     const r = await run(depsWith(model), 'x3lius-lyrics', { request: REQUEST });
     expect(r.status, r.error).toBe('success');
     expect(model.calls).toHaveLength(1);
     expect(Object.keys(model.calls[0]!.schema.properties as object)).toContain('sections');
-    expect((out(r).body as unknown as LyricsV2).sources).toEqual([]);
+    const body = out(r).body as unknown as LyricsV2;
+    expect(body.sources).toEqual([]);
+    expect(body.sections.map((x) => x.label)).toEqual(['Verse 1', 'Chorus']);
+  });
+
+  it('section labels (the Suno [tags]) come from the section kinds: verses numbered in order, every other kind by name', () => {
+    // The live structure from proof §7 (whose labels reached Suno as [v1], [pre1], [outro] when the model wrote them).
+    expect(sectionLabels(['intro', 'verse', 'pre-chorus', 'chorus', 'verse', 'pre-chorus', 'chorus', 'bridge', 'chorus', 'outro'])).toEqual(
+      ['Intro', 'Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Pre-Chorus', 'Chorus', 'Bridge', 'Chorus', 'Outro'],
+    );
+    expect(sectionLabels(['hook', 'post-chorus', 'breakdown', 'verse'])).toEqual(['Hook', 'Post-Chorus', 'Breakdown', 'Verse 1']);
+  });
+
+  it('stage directions go in directions: kept on the artifact, never in the lyrics Suno sings', async () => {
+    // Seen live (proof §7): the outro's "Synth decays... concrete breath fades" was written as a sung line.
+    const model = firstReplies('c1', 1, (b) => { b.directions = ['[FAKE] synth decays, city ambience swallows the mix']; });
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status, r.error).toBe('success');
+    expect(model.calls[0]!.system).toContain('bars hold only the words that are sung or spoken');
+    const body = out(r).body as unknown as LyricsV2;
+    expect(body.sections.map((x) => x.directions)).toEqual([[], ['[FAKE] synth decays, city ambience swallows the mix']]);
+    // v4.5: an earlier test promotes a [FIXTURE] 12-char style limit for v5.
+    const suno = await run(depsWith(fakeModel()), 'x3lius-suno', { request: REQUEST, sunoModel: 'v4.5', lyricsArtifactIds: [out(r).artifact.id] });
+    expect(suno.status, suno.error).toBe('success');
+    expect(out(suno).body.lyrics).not.toContain('synth decays');
+    expect(out(suno).body.lyrics).toBe(`[Verse 1]\n${body.sections[0]!.bars.map((b) => b.text).join('\n')}\n\n[Chorus]\n${body.sections[1]!.bars.map((b) => b.text).join('\n')}`);
   });
 
   it('the formula still renders a pre-v2 (x3lius.lyrics/v1) artifact', async () => {
@@ -414,11 +440,10 @@ describe('mixed-script words: refused in text Suno receives, a warning on the ar
       return b;
     },
   });
-  type Section = { label: string; bars: { text: string }[]; devices: { bar: number; device: string; note: string }[] };
+  type Section = { bars: { text: string }[]; devices: { bar: number; device: string; note: string }[] };
 
   it.each([
     ['a lyric bar (seen live: "Пeak")', (b: Record<string, unknown>) => { (b.sections as Section[])[0]!.bars[0]!.text = 'Пeak слънцето никога не се връща'; }, 'Пeak', '$.sections[0].bars[0].text'],
-    ['a section label (rendered as the Suno [label] tag)', (b: Record<string, unknown>) => { (b.sections as Section[])[1]!.label = 'Chorуs'; }, 'Chorуs', '$.sections[1].label'],
   ])('lyrics: refused in %s; nothing is written', async (_, edit, word, path) => {
     const r = await run(depsWith(editing('instrumental', edit)), 'x3lius-lyrics', { request: REQUEST });
     expect(r.error).toContain(`mixed-script word "${word}" at ${path}`);

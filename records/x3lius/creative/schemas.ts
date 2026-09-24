@@ -60,19 +60,19 @@ export const LYRICS_V1_SCHEMA = obj({
 export const LYRICS_SCHEMA_ID = 'x3lius.lyrics/v2';
 export const LYRICS_LLM_SCHEMA_ID = 'x3lius.lyrics-llm/v2';
 export const LYRICS_SECTION_LLM_SCHEMA_ID = 'x3lius.lyrics-section-llm/v2';
+// No label here: code derives each section's Suno tag from its kind (the model wrote section ids
+// as tags live). Directions give production notes a place outside the sung bars (seen live too).
 const SECTION_WRITTEN = {
-  label: str('e.g. "Verse 1", "Chorus"'),
-  bars: arr(BAR),
+  bars: arr(BAR, 'Only the words that are sung or spoken'),
   rhymeScheme: str('The pattern across this section’s bars, e.g. AABB'),
   devices: arr(obj({ bar: int('Bar number within this section'), device: str('Named technique, e.g. internal rhyme'), note: str('Where and how it is used') })),
+  directions: arr(str('A production or performance note for this section (instruments, effects, a fade): never sung, so never a bar')),
 };
+const SECTION_ID = str('The id of the SONG STRUCTURE section this covers (e.g. v1); a short id of your own when no structure is given');
+const INSTRUMENTAL = arr(str('Id of a SONG STRUCTURE section that has no vocals'));
 const LYRICS_WRITTEN = {
-  sections: arr(obj({
-    sectionId: str('The id of the SONG STRUCTURE section this covers (e.g. v1); a short id of your own when no structure is given'),
-    kind: SECTION_KIND,
-    ...SECTION_WRITTEN,
-  }), 'In song order'),
-  instrumental: arr(str('Id of a SONG STRUCTURE section that has no vocals')),
+  sections: arr(obj({ sectionId: SECTION_ID, kind: SECTION_KIND, ...SECTION_WRITTEN }), 'In song order'),
+  instrumental: INSTRUMENTAL,
 };
 export const LYRICS_LLM_SCHEMA = obj({ ...LYRICS_WRITTEN, ...TRACEABILITY });
 export const LYRICS_SECTION_LLM_SCHEMA = obj({
@@ -81,7 +81,13 @@ export const LYRICS_SECTION_LLM_SCHEMA = obj({
   ...TRACEABILITY,
 });
 export const LYRICS_SCHEMA = obj({
-  ...LYRICS_WRITTEN,
+  sections: arr(obj({
+    sectionId: SECTION_ID,
+    kind: SECTION_KIND,
+    label: str('The section tag Suno sees, derived by code from the kind, e.g. "Verse 1", "Chorus"'),
+    ...SECTION_WRITTEN,
+  }), 'In song order'),
+  instrumental: INSTRUMENTAL,
   sources: arr(obj({ role: { type: 'string', enum: ['structure'] }, artifactId: str(), schemaId: str(), version: int('Artifact version') }), 'The song structure followed; empty when none was given'),
   ...TRACEABILITY,
 });

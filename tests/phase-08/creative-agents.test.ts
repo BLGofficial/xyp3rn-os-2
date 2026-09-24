@@ -61,7 +61,7 @@ const fakeBody = (schema: Json, cited: readonly string[]): Json => {
   if ('instrumental' in props) {
     return {
       sections: [{
-        sectionId: 'v1', kind: 'verse', label: '[FAKE] Verse 1', rhymeScheme: 'ABAB', devices: [{ bar: 2, device: '[FAKE] half-rhyme', note: '[FAKE]' }],
+        sectionId: 'v1', kind: 'verse', rhymeScheme: 'ABAB', devices: [{ bar: 2, device: '[FAKE] half-rhyme', note: '[FAKE]' }], directions: [],
         bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] bar ${n}`, language: 'en', rhymeTag: n % 2 ? 'A' : 'B' })),
       }],
       instrumental: [], ...common,

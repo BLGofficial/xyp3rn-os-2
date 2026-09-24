@@ -223,6 +223,8 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - A bare brief with no structure is still one call.
 - `x3lius.lyrics/v1` artifacts stay readable (the formula renders both) and revisable.
 - Whether the hook actually appears in the chorus is not code-checked (fuzzy); it is the Phase 12 Critic's.
+- Section tags are code's (user decision, after the model wrote ids as tags live: `[v1]`, `[pre1]`). Verses are numbered in song order and every other kind gets its name (`sectionLabels`). This is a rendering convention in code until a canonical Suno rule says otherwise.
+- The sung bars hold words only. Production and performance notes go in each section's `directions`, stored on the artifact and never sent to Suno. The model wrote an outro's stage directions as sung lines live. This is asked for in the prompt, not code-checked.
 
 **F22. Mixed-script words: refused in text Suno receives, a warning elsewhere.** DECIDED (user, after the Phase 9 live runs).
 - A word mixing Latin and Cyrillic letters (seen live: "Пeak", "phonк", "Лieux") is a homoglyph corruption. Every creative artifact body is checked before it is written.
@@ -231,7 +233,7 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
   - the formula's title, style, excluded styles and lyrics. The rendered lyrics are checked too, so an older artifact can't pass a hit on.
 - A hit anywhere else (device notes, genre/style fields, songwriting text) is written as a warning in `creative_artifacts.warnings` and logged. That way a typo in metadata doesn't cost a 4-minute run.
 - Per-section repair (user decision, after "горниotope"-style hits in 4 of 4 long live outputs):
-  - Whole-song lyrics check each section's lines and label as soon as its call returns.
+  - Whole-song lyrics check each section's lines as soon as its call returns (labels are code's).
   - On a hit, that one section is asked for once more, with the words named. Still mixed means the run fails, naming the section.
   - Every creative prompt also asks for one alphabet per word.
 - Switching script between words is untouched: which languages a line uses is canonical knowledge.
