@@ -21,6 +21,8 @@ pnpm embed       # Phase 3: gte-small embeddings (model downloads to .local-mode
 pnpm context "your question"   # ranked, traceable context bundle
 pnpm agents:validate            # Agent Registry: validate agents/*.agent.md
 pnpm dispatch health-check '{"ping":"xyp"}'   # run an agent end to end, print its agent_runs row
+pnpm route "your request"       # domain routing decision with evidence
+pnpm workflow core/workflows/retrieve-and-summarize.workflow.yaml '{"query":"..."}'
 pnpm test        # vitest: phase proofs + unit tests (DB tests use throwaway databases)
 pnpm typecheck   # tsc --noEmit
 ```
@@ -34,4 +36,5 @@ Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 - [x] Phase 2: Knowledge ingestion + normalization
 - [x] Phase 3: Retrieval / context engine
 - [x] Phase 4: Agent runtime + registry (4A–4E)
-- [ ] Phase 5: Workflow / orchestration engine
+- [x] Phase 5: Workflow / orchestration engine
+- [ ] Phase 6: AI Music Research Intelligence (6A–6D)

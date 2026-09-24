@@ -186,6 +186,14 @@ Migration `20260924110000_agent_runs.sql` adds the generic execution log. Its co
   - `error` rows must carry `error_detail`.
 - **Nullable identity:** `class` and `domain` stay null only when the agent could not be resolved, so failed dispatches are still logged. `agent_name` is free text for the same reason.
 
+## Phase 5 additions: `workflow_runs`
+
+Migration `20260924120000_workflow_runs.sql` adds `workflow_runs`. Its columns are `workflow_name`, `spec_sha256` plus a `spec` snapshot, `input`, `output`, `status (running|success|error)`, `failed_step`, `skipped_steps`, `error_detail`, `created_at` and `completed_at`.
+
+- **Seal:** the `trg_workflow_runs_seal` trigger seals a run once it leaves `running`.
+- **Error rows:** an `error` row must name `failed_step` and carry `error_detail`.
+- **Step linkage:** `agent_runs` gains `workflow_run_id` (FK, restrict) and `step_id`. They are set together at insert (pair CHECK) and can't be updated, because neither is in `xyp_runtime`'s UPDATE grant.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

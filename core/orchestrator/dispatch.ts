@@ -73,14 +73,14 @@ const missingReason = (registry: AgentRegistry, name: string): string => {
  * @param deps - DB pool, registries, deterministic handlers, optional LLM runner
  * @param agentName - registry name
  * @param input - JSON input stored immutably on the run row
- * @param options - `timeoutMs` (default 30000)
+ * @param options - `timeoutMs` (default 30000); `workflowRunId` + `stepId` when run as a workflow step
  * @returns run id, final status, output or error, measured latency
  */
 export const dispatch = async (
   deps: DispatchDeps,
   agentName: string,
   input: unknown,
-  options: { readonly timeoutMs?: number } = {},
+  options: { readonly timeoutMs?: number; readonly workflowRunId?: string; readonly stepId?: string } = {},
 ): Promise<DispatchResult> => {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const started = performance.now();
@@ -89,8 +89,9 @@ export const dispatch = async (
   const log = (level: RunLog['level'], message: string) => logs.push({ level, message, at: new Date().toISOString() });
 
   const [opened] = await asRuntime(deps.sql, (tx) => tx<{ id: string }[]>`
-    insert into agent_runs (agent_name, class, domain, input)
-    values (${agentName}, ${agent?.class ?? null}, ${agent?.domain ?? null}, ${tx.json((input ?? null) as postgres.JSONValue)})
+    insert into agent_runs (agent_name, class, domain, input, workflow_run_id, step_id)
+    values (${agentName}, ${agent?.class ?? null}, ${agent?.domain ?? null}, ${tx.json((input ?? null) as postgres.JSONValue)},
+            ${options.workflowRunId ?? null}, ${options.stepId ?? null})
     returning id`);
   const runId = opened!.id;
   const elapsed = () => Math.round(performance.now() - started);

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAgentRegistry } from '../../core/agent-registry/registry.ts';
 import { dispatch } from '../../core/orchestrator/dispatch.ts';
 import { HANDLERS } from '../../core/runtime/handlers.ts';
-import { TOOLS } from '../../core/runtime/tools.ts';
+import { createRuntimeTools } from '../../core/runtime/tools.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 
 // Phase 4E: nothing stubbed — the real agents/ directory, the real handler map, the real tool
@@ -34,7 +34,7 @@ describe('health-check through the full real path', () => {
   it('registry → authorization → execution → one sealed success row, read back via SQL', async () => {
     const registry = createAgentRegistry({ dir: AGENTS_DIR });
     const input = { ping: 'xyp3rn', from: 'phase-04e' };
-    const result = await dispatch({ sql: db.sql, registry, tools: TOOLS, handlers: HANDLERS }, 'health-check', input);
+    const result = await dispatch({ sql: db.sql, registry, tools: createRuntimeTools({ sql: db.sql }), handlers: HANDLERS }, 'health-check', input);
     expect(result.status).toBe('success');
 
     const [row] = await db.sql<{ agent_name: string; class: string; domain: string; input: unknown; output: { result: { echo: unknown; timestamp: string }; logs: { level: string; message: string }[] }; status: string; tokens_used: number; latency_ms: number; completed_at: Date }[]>`

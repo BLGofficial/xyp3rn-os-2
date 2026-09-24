@@ -62,6 +62,11 @@ Example: `xyp_research` (INSERT-only on evidence/findings, no UPDATE/DELETE)
 `<role without xyp_ prefix>_<command>`, one policy per role per command. Policies are only ever granted to named `xyp_*` roles, never to `anon`, `authenticated` or `public`.
 Example: `ingest_bootstrap_select` on `sources` (`for select to xyp_ingest_bootstrap`)
 
+### Workflow specs
+
+`<domain-dir>/workflows/<kebab-name>.workflow.yaml`. The `name` inside must be kebab-case. Step ids are lowercase (`[a-z][a-z0-9_-]*`).
+Example: `core/workflows/retrieve-and-summarize.workflow.yaml` with steps `retrieve` → `summarize`
+
 ### Tools
 
 `snake_case` `<verb>_<object>`. Each tool declares exactly one capability.

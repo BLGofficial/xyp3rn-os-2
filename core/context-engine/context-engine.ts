@@ -19,7 +19,10 @@ export type ContextItem = {
   readonly ref: EntityRef;
   readonly slug: string | null;
   readonly title: string;
+  /** Display excerpt (first 280 chars). */
   readonly snippet: string;
+  /** Full row text (prompt body, module description, source title) for downstream agents. */
+  readonly text: string;
   readonly domain: Domain | null;
   readonly score: number;
   readonly reasons: readonly Reason[];
@@ -168,6 +171,7 @@ export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine
           slug: row.slug,
           title: row.title,
           snippet: row.text.length > SNIPPET_CHARS ? `${row.text.slice(0, SNIPPET_CHARS)}…` : row.text,
+          text: row.text,
           domain: row.domain,
           score: it.score,
           reasons: it.reasons,

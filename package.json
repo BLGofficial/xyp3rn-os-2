@@ -19,7 +19,9 @@
     "embed": "node knowledge/vector-retrieval/cli.ts",
     "context": "node core/context-engine/cli.ts",
     "agents:validate": "node core/agent-registry/cli.ts",
-    "dispatch": "node core/orchestrator/cli.ts"
+    "dispatch": "node core/orchestrator/cli.ts",
+    "route": "node core/orchestrator/route-cli.ts",
+    "workflow": "node core/workflow-engine/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

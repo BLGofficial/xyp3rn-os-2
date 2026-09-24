@@ -1,0 +1,32 @@
+HANDOFF — Phase 5 complete
+
+- **Built:**
+  - **Workflow Engine** (`core/workflow-engine/*`): a YAML spec with `{ $from: input.x | steps.<id>.output… }` data passing. The whole spec is validated before anything runs (unknown agent or step, cycle, a reference to data no upstream step produces, undeclared input, unknown keys), with every error reported at once. Execution is `runWorkflow()`: one `agent_runs` row per step, linked by `workflow_run_id` + `step_id`.
+  - **`workflow_runs`** (migration `20260924120000_workflow_runs.sql`), sealed once finished.
+  - **Keyword router** (`core/orchestrator/router.ts`) with an **Orchestrator entry** (`orchestrate.ts`) that classifies before dispatching.
+  - **Memory service** (`core/memory/memory.ts`).
+  - **`retrieve_context` tool** (capability `context.read`).
+  - Two new real agents, `context-retriever` and `extractive-summarizer`, plus `core/workflows/retrieve-and-summarize.workflow.yaml`.
+  - CLIs: `pnpm route`, `pnpm workflow`.
+  - **Proof** (`docs/proofs/PHASE-05-workflow.txt`): the real 2-step run gives status success, 2 linked `agent_runs` rows, and 5 verbatim cited sentences over the ingested build guide.
+- **Key decisions:**
+  - The user chose YAML with `$from` references, keyword rules for routing, and an extractive summarizer labelled as such.
+  - **Router:** routes only to the 4 F5 targets. Keywords are weighted 3/2/1 and matched as whole words with an optional plural "s". A request is ambiguous when the top two domains are within 2 points, and unroutable when nothing matches. There is never a default domain.
+  - **Memory boundary:** short-term memory lasts one run, is write-once per step and never persisted (its only trace is `agent_runs`). Long-term memory is the Context Engine behind a facade that has no write method.
+  - **Failure:** a failing step fails the whole run, which records `failed_step`, `error_detail` and `skipped_steps` and prints a loud stderr line. There is no partial success.
+- **Deviations from spec:**
+  - **Phase 3 change:** context items now also carry the full row `text`. The 280-character snippet produced truncated, header-polluted summaries, and Phase 8 agents need full rule text.
+  - **Phase 1–2 tests:** two Phase 1 assertions are scoped to Phase 1 tables (FK catalog, table list), and the 4E test uses `createRuntimeTools()` instead of a constant.
+- **Open flags:**
+  - **Classifier ambiguity:** "rights" + "track" is ambiguous between GOVERNANCE and RECORDS (F3). This is reported as "clarify", not guessed. The keyword lists are brittle for unusual wording, so any request they miss is simply unroutable.
+  - **No domain entrypoints yet:** routed requests are held with "built in Phase 6A/7/14/15".
+  - **Steps run sequentially:** parallel branches aren't implemented.
+  - **Summarizer splits on abbreviations:** it splits after "e.g.", so one bullet starts mid-phrase.
+  - **Routing isn't logged:** decisions aren't persisted yet. Phase 15 audit may want them.
+- **Next phase needs (6A):**
+  - The 11 `research_*` tables (stub list in `supabase/migrations/20260924080100_research_extension_stub.sql`).
+  - `ALTER agent_runs` to add a nullable `research_run_id`.
+  - A new `xyp_research` role, INSERT-only on evidence and findings, tested first.
+  - The Research Orchestrator agent, which picks specialists and runs them through `runWorkflow()`.
+  - Register the `RESEARCH_INTELLIGENCE` entrypoint in `core/orchestrator/orchestrate.ts`.
+  - **Confirm the 20-specialist roster (F13) before 6B.**

@@ -63,13 +63,14 @@ describe('foreign keys (catalog)', () => {
     ['quality_reports', 'source_id', 'sources', 'r'],
   ];
 
-  it('declares exactly the expected FK set with the expected on-delete action', async () => {
+  it('declares exactly the expected FK set on the Phase 1 tables, with the expected on-delete action', async () => {
     const rows = await db.sql<{ tbl: string; col: string; ref: string; del: string }[]>`
       select c.conrelid::regclass::text as tbl, a.attname as col,
              c.confrelid::regclass::text as ref, c.confdeltype as del
       from pg_constraint c
       join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any (c.conkey)
       where c.contype = 'f' and c.connamespace = 'public'::regnamespace
+        and c.conrelid::regclass::text = any(${[...TABLES]})
       order by 1, 2`;
     expect(rows.map((r) => [r.tbl, r.col, r.ref, r.del])).toEqual(EXPECTED);
   });

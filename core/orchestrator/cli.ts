@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { createAgentRegistry } from '../agent-registry/registry.ts';
 import { connect } from '../db/client.ts';
 import { HANDLERS } from '../runtime/handlers.ts';
-import { TOOLS } from '../runtime/tools.ts';
+import { createRuntimeTools } from '../runtime/tools.ts';
 import { dispatch } from './dispatch.ts';
 
 // Usage: node core/orchestrator/cli.ts <agent-name> '<json input>'
@@ -20,12 +20,13 @@ console.log('1. registry pickup');
 console.log(agent ? `   ${agent.path}\n   class=${agent.class} domain=${agent.domain} tools=[${agent.tools.join(', ')}] model=${agent.model}` : `   ${name}: not in registry`);
 const failures = registry.validateAll();
 console.log(`2. validateAll(agents/): ${failures.length} failure(s)`);
-console.log('3. authorization');
-for (const t of agent?.tools ?? []) console.log(`   ${t}: ${JSON.stringify(TOOLS.authorize(agent!.class, t))}`);
-
 const sql = connect(undefined, { max: 2 });
+const tools = createRuntimeTools({ sql });
+console.log('3. authorization');
+for (const t of agent?.tools ?? []) console.log(`   ${t}: ${JSON.stringify(tools.authorize(agent!.class, t))}`);
+
 try {
-  const result = await dispatch({ sql, registry, tools: TOOLS, handlers: HANDLERS }, name, JSON.parse(rawInput));
+  const result = await dispatch({ sql, registry, tools, handlers: HANDLERS }, name, JSON.parse(rawInput));
   console.log(`4. execution: ${result.status} in ${result.latencyMs}ms${result.error ? ` — ${result.error}` : ''}`);
   const [row] = await sql`
     select id, agent_name, class, domain, input, output, tokens_used, latency_ms, status, error_detail, created_at, completed_at

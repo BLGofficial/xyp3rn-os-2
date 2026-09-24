@@ -1,0 +1,18 @@
+name: retrieve-and-summarize
+description: >-
+  Answer "what do we already know about X?": retrieve ranked, traceable context from long-term
+  memory (Context Engine), then produce a cited extractive summary. Phase 5 proof workflow.
+input:
+  required: [query]
+output: { $from: steps.summarize.output }
+steps:
+  - id: retrieve
+    agent: context-retriever
+    input:
+      query: { $from: input.query }
+  - id: summarize
+    agent: extractive-summarizer
+    dependsOn: [retrieve]
+    input:
+      query: { $from: input.query }
+      items: { $from: steps.retrieve.output.items }
