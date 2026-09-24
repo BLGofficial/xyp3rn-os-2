@@ -2,9 +2,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createAgentRegistry } from '../../core/agent-registry/registry.ts';
 import { ENTRYPOINTS, planRequest } from '../../core/orchestrator/orchestrate.ts';
-import { HANDLERS } from '../../core/runtime/handlers.ts';
+import { BUILT_SUBDOMAINS, HANDLERS } from '../../core/runtime/handlers.ts';
 import { parseScope } from '../../research-intelligence/orchestrator/select.ts';
-import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { loadMusicSystem, MUSIC_SYSTEM_SERVICE, selectSubdomains } from '../../records/x3lius/music-system.ts';
 import { REPO_ROOT } from '../helpers/db.ts';
 
@@ -14,8 +13,10 @@ const registry = createAgentRegistry({ dir: join(REPO_ROOT, 'agents') });
 const system = loadMusicSystem();
 
 // Later phases replace stubs with real agents under the same names (Phase 8: Songwriting, Lyrics,
-// Composition; Phase 9: Suno, Genre/Style — tests/phase-08, tests/phase-09). The rest stay stubs.
-const BUILT: readonly string[] = CREATIVE_SUBDOMAINS;
+// Composition; Phase 9: Suno, Genre/Style; Phase 10: Vocal DNA — tests/phase-08..10). The rest stay stubs.
+const BUILT: readonly string[] = BUILT_SUBDOMAINS;
+// Agents that work inside a sub-domain without being one (Phase 10: the Vocal DNA's RVC consumer).
+const SUBDOMAIN_MEMBERS = ['x3lius-rvc-post'];
 
 describe('Agent Registry: one agent per sub-domain', () => {
   it.each(system.subdomains.filter((s) => !BUILT.includes(s.slug)).map((s) => [s.slug]))('%s: read-only Knowledge stub under RECORDS with a handler and a scope', (slug) => {
@@ -27,7 +28,7 @@ describe('Agent Registry: one agent per sub-domain', () => {
 
   it('has no x3lius-* agent outside the manifest, and the whole registry still validates', () => {
     const names = new Set(system.subdomains.map((s) => s.slug));
-    expect(registry.list().filter((a) => a.name.startsWith('x3lius-') && !names.has(a.name)).map((a) => a.name)).toEqual([]);
+    expect(registry.list().filter((a) => a.name.startsWith('x3lius-') && !names.has(a.name)).map((a) => a.name)).toEqual(SUBDOMAIN_MEMBERS);
     expect(registry.validateAll()).toEqual([]);
   });
 });

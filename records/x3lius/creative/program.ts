@@ -2,11 +2,12 @@ import type { ClaimBundle, ContextBundle } from '../../../core/context-engine/co
 import type { LlmProgram } from '../../../core/llm/runner.ts';
 import { loadMusicSystem } from '../music-system.ts';
 import { SUNO_FORMULA_SPEC } from '../suno/formula.ts';
+import { LYRICS_SPEC } from './lyrics.ts';
 import {
-  COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, GENRE_STYLE_SCHEMA, GENRE_STYLE_SCHEMA_ID, LYRICS_SCHEMA, LYRICS_SCHEMA_ID,
-  SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
+  COMPOSITION_SCHEMA, COMPOSITION_SCHEMA_ID, GENRE_STYLE_SCHEMA, GENRE_STYLE_SCHEMA_ID, SONG_STRUCTURE_SCHEMA, SONG_STRUCTURE_SCHEMA_ID,
 } from './schemas.ts';
-import { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE, type ContextEntry, type CreativeSpec, type Prepared } from './types.ts';
+import { mixedScriptWords, type MixedScriptWord } from './script-check.ts';
+import { CLAIM_NAMESPACE, isModelAgnostic, MIN_SCOPED_RULES, VOICE_MODULE, type ContextEntry, type CreativeSpec, type ModelCall, type Prepared } from './types.ts';
 
 export { CLAIM_NAMESPACE, MIN_SCOPED_RULES, VOICE_MODULE } from './types.ts';
 
@@ -38,18 +39,7 @@ const SPECS: Readonly<Record<string, CreativeSpec>> = {
       ];
     },
   },
-  'x3lius-lyrics': {
-    schemaId: LYRICS_SCHEMA_ID,
-    schema: LYRICS_SCHEMA,
-    task: 'Write the lyric section the brief asks for (one verse if it does not say), bar by bar: the words of each bar, its language and the rhyme tag it ends on, then the rhyme scheme and the devices used.',
-    check: (b) => {
-      const bars = b.bars as { n: number }[];
-      return [
-        ...(bars.length === 0 ? ['bars is empty'] : []),
-        ...(bars.every((x, i) => x.n === i + 1) ? [] : ['bars[].n must count 1, 2, 3… in order']),
-      ];
-    },
-  },
+  'x3lius-lyrics': LYRICS_SPEC,
   'x3lius-composition': {
     schemaId: COMPOSITION_SCHEMA_ID,
     schema: COMPOSITION_SCHEMA,
@@ -123,6 +113,8 @@ const systemPrompt = (title: string, slug: string, spec: CreativeSpec, entries: 
   '- Voice, style, tone and language choices must come from CANONICAL RULES. Do not add traits they do not state.',
   '- In rulesApplied, list every rule you applied, with its full ref copied exactly as shown inside the brackets (it starts with "canonical_prompts:"), and how it shaped the output.',
   '- In ungroundedChoices, list every creative decision no rule covers. When the rules are thin this list is long; that is expected, not a failure.',
+  // Text integrity, not style: seen live in 4 of 4 long outputs (F22).
+  '- Write every word in a single alphabet: never mix Latin and Cyrillic letters inside one word.',
   '- Reply with JSON only, matching the response schema.',
 ].join('\n');
 
@@ -142,7 +134,7 @@ const knowledgeReport = (slug: string, modules: readonly string[], perModule: Re
       voice.length > 0
         ? `voice: ${voice.length} claim(s) under ${CLAIM_NAMESPACE}* from outside the sub-domain scope (${topics.join(', ')})`
         : `voice: no canonical claim under ${CLAIM_NAMESPACE}*`,
-      ...(excluded > 0 ? [`excluded ${excluded} canonical ${excluded === 1 ? 'entry' : 'entries'} ${spec.exclusionReason ?? 'that do not apply to this run'}`] : []),
+      ...(excluded > 0 ? [`excluded ${excluded} canonical ${excluded === 1 ? 'entry' : 'entries'} ${spec.exclusionReason ?? (spec.admit ? 'that do not apply to this run' : 'scoped to a specific model or tool')}`] : []),
       ...(sparse
         ? [`fewer than ${MIN_SCOPED_RULES} scoped rules: expect output close to generic. Promote rules tagged ${modules.filter((m) => m !== slug).length > 0 ? `${slug} or ${modules.filter((m) => m !== slug).join(' / ')}` : slug} through the gate to change that.`]
         : []),
@@ -191,19 +183,24 @@ const creativeProgram = (slug: string): LlmProgram => {
       }
     }
 
-    const kept = pulled.filter((p) => spec.admit?.(p.entry, prepared) ?? true);
+    const kept = pulled.filter((p) => (spec.admit ? spec.admit(p.entry, prepared) : isModelAgnostic(p.entry)));
     const entries = kept.map((p) => p.entry);
     const perModule = Object.fromEntries(modules.map((m) => [m, kept.filter((p) => p.module === m).length]));
     const knowledge = knowledgeReport(slug, modules, perModule, entries, pulled.length - kept.length, spec);
     await ctx.useTool('log_message', { message: `${slug}: context pulled: ${entries.length > 0 ? entries.map((e) => e.ref).join(', ') : 'none'}` });
     if (knowledge.sparse) await ctx.useTool('log_message', { level: 'warn', message: `${slug}: SPARSE canonical knowledge — ${knowledge.reasons.join(' | ')}` });
 
-    const res = await llm.complete({
-      system: systemPrompt(sub.title, slug, spec, entries),
-      user: [`BRIEF\n${prepared.brief}`, ...prepared.userSections].join('\n\n'),
-      schema: { name: llmSchema.id, schema: llmSchema.schema },
+    const system = systemPrompt(sub.title, slug, spec, entries);
+    const call: ModelCall = (extra, schema = llmSchema) => llm.complete({
+      system,
+      user: [`BRIEF\n${prepared.brief}`, ...prepared.userSections, ...extra].join('\n\n'),
+      schema: { name: schema.id, schema: schema.schema },
       signal: ctx.signal,
     });
+    const log = async (message: string, level: 'info' | 'warn' = 'info') => {
+      await ctx.useTool('log_message', { level, message: `${slug}: ${message}` });
+    };
+    const res = spec.generate ? await spec.generate(call, prepared, log) : await call([]);
     // Models copy refs loosely (brackets, bare topics — seen live with Nemotron): resolve to a given
     // ref when that is unambiguous, then require an exact match.
     const raw = res.json as Record<string, unknown>;
@@ -213,12 +210,19 @@ const creativeProgram = (slug: string): LlmProgram => {
     const unknown = reply.rulesApplied.map((r) => r.ref).filter((r) => !given.has(r));
     if (unknown.length > 0) throw new Error(`${slug} reply cites refs it was not given: ${unknown.join(', ')}`);
     const { body, violations } = spec.finalize?.(reply, prepared, entries) ?? { body: reply, violations: [] };
-    const all = [...violations, ...(spec.check?.(body) ?? [])];
+    // Checked on the final body, so text code copies in from upstream (the Suno lyrics) is covered too.
+    const explain = (w: MixedScriptWord) => `mixed-script word "${w.word}" at ${w.path} (Latin and Cyrillic letters in one word)`;
+    const toSuno = (w: MixedScriptWord) => (spec.sunoTextPaths ?? []).some((p) => p.test(w.path));
+    const mixed = mixedScriptWords(body);
+    const soft = mixed.filter((w) => !toSuno(w));
+    const all = [...violations, ...(spec.check?.(body) ?? []), ...mixed.filter(toSuno).map(explain)];
     if (all.length > 0) throw new Error(`${slug} reply failed checks: ${all.join('; ')}`);
+    const warnings = soft.map((w) => ({ kind: 'mixed-script', word: w.word, path: w.path }));
+    if (soft.length > 0) await ctx.useTool('log_message', { level: 'warn', message: `${slug}: written with warnings — ${soft.map(explain).join('; ')}` });
 
     const context = entries.map(contextRef);
     const written = (await ctx.useTool('write_artifact', {
-      schemaId: spec.schemaId, brief: prepared.brief, body, contextRefs: context, knowledge, model: ctx.agent.model,
+      schemaId: spec.schemaId, brief: prepared.brief, body, contextRefs: context, knowledge, model: ctx.agent.model, warnings,
     })) as { artifact_id: string; lineage_id: string; version: number };
 
     return {
@@ -228,6 +232,7 @@ const creativeProgram = (slug: string): LlmProgram => {
         artifact: { id: written.artifact_id, lineageId: written.lineage_id, version: written.version, schemaId: spec.schemaId },
         body,
         knowledge,
+        warnings,
         context,
         model: { ref: ctx.agent.model, served: res.model },
         usage: res.usage,

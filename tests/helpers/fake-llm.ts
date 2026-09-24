@@ -17,17 +17,27 @@ const REF = /\[(canonical_prompts:[0-9a-f-]{36}(?:#[a-z0-9.-]+)?)\]/g;
  * A schema-valid [FAKE] body for whichever creative schema a request carries.
  * @param schema - the JSON schema the request asked for
  * @param cited - refs to put in rulesApplied
+ * @param user - the request's user message (a per-section lyrics call names its section there)
  * @returns the reply object
  */
-export const fakeBody = (schema: Json, cited: readonly string[]): Json => {
+export const fakeBody = (schema: Json, cited: readonly string[], user = ''): Json => {
   const props = (schema.properties ?? {}) as Json;
   const common = { rulesApplied: cited.map((ref) => ({ ref, how: '[FAKE] cited to exercise traceability' })), ungroundedChoices: ['[FAKE] everything not covered by a cited rule'] };
-  if ('bars' in props) {
+  if ('instrumental' in props && 'bars' in props) {
+    // One section of lyrics written against a structure (x3lius.lyrics-section-llm/v2): the section named under WRITE NOW.
+    const [, id = 's', kind = 'verse'] = /WRITE NOW: section (\S+) \(([a-z-]+)/.exec(user) ?? [];
     return {
-      section: { kind: 'verse', label: 'Verse 1' },
-      bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] bar ${n}`, language: 'en', rhymeTag: n % 2 ? 'A' : 'B' })),
-      rhymeScheme: 'ABAB', devices: [], ...common,
+      instrumental: false, rhymeScheme: 'AABB', devices: [], directions: [],
+      bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] ${id} bar ${n}`, language: 'en', rhymeTag: n <= 2 ? 'A' : 'B' })), ...common,
     };
+  }
+  if ('instrumental' in props) {
+    // Whole-song lyrics (x3lius.lyrics/v2): covers the fake structure below (v1 verse, c1 chorus) in order.
+    const section = (sectionId: string, kind: string) => ({
+      sectionId, kind, rhymeScheme: 'AABB', devices: [], directions: [],
+      bars: [1, 2, 3, 4].map((n) => ({ n, text: `[FAKE] ${sectionId} bar ${n}`, language: 'en', rhymeTag: n <= 2 ? 'A' : 'B' })),
+    });
+    return { sections: [section('v1', 'verse'), section('c1', 'chorus')], instrumental: [], ...common };
   }
   if ('sections' in props) {
     return {
@@ -62,7 +72,7 @@ export const fakeBody = (schema: Json, cited: readonly string[]): Json => {
  * @param opts - `cite` picks refs from the prompt; `override` replaces the reply for a schema
  * @returns `fn` to pass as the runner's fetch, and the recorded `calls`
  */
-export const fakeModel = (opts: { readonly cite?: (refs: string[]) => string[]; readonly override?: (schema: Json, refs: string[]) => unknown } = {}) => {
+export const fakeModel = (opts: { readonly cite?: (refs: string[]) => string[]; readonly override?: (schema: Json, refs: string[], user: string) => unknown } = {}) => {
   const calls: FakeCall[] = [];
   const fn = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = input instanceof Request ? input.url : String(input);
@@ -74,7 +84,7 @@ export const fakeModel = (opts: { readonly cite?: (refs: string[]) => string[]; 
       : { url, system: messages[0]!.content, user: messages[1]!.content, schema: ((body.response_format as Json).json_schema as Json).schema as Json };
     calls.push(call);
     const refs = [...call.system.matchAll(REF)].map((m) => m[1]!);
-    const reply = opts.override?.(call.schema, refs) ?? fakeBody(call.schema, (opts.cite ?? ((r) => r.slice(0, 1)))(refs));
+    const reply = opts.override?.(call.schema, refs, call.user) ?? fakeBody(call.schema, (opts.cite ?? ((r) => r.slice(0, 1)))(refs), call.user);
     const text = JSON.stringify(reply);
     const payload = anthropic
       ? { id: 'msg_fake', type: 'message', role: 'assistant', model: 'fake', content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null, stop_details: null, usage: { input_tokens: FAKE_USAGE.input, output_tokens: FAKE_USAGE.output } }

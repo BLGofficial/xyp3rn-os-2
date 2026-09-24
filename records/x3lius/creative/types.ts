@@ -18,6 +18,15 @@ export type ContextEntry =
   | { readonly kind: 'rule'; readonly ref: string; readonly module: string; readonly slug: string | null; readonly title: string; readonly text: string; readonly modelTag: string | null; readonly score: number; readonly why: string; readonly source: Source }
   | { readonly kind: 'claim'; readonly ref: string; readonly module: string; readonly slug: string; readonly title: string; readonly topic: string; readonly value: unknown; readonly modelScope: string; readonly source: Source };
 
+/** The model/tool an entry is scoped to: a rule's model tag or a claim's model scope (null = unscoped). */
+export const scopeOf = (e: ContextEntry): string | null => (e.kind === 'rule' ? e.modelTag : e.modelScope);
+
+/** An entry that applies whatever model or tool the output is for. */
+export const isModelAgnostic = (e: ContextEntry): boolean => {
+  const s = scopeOf(e);
+  return s === null || s === 'model-agnostic';
+};
+
 /** What a spec's `prepare` derives from the run input before any context is pulled. */
 export type Prepared = {
   /** The brief: the retrieval query and the artifact's `brief`. */
@@ -27,6 +36,15 @@ export type Prepared = {
   /** Spec-private state carried to `admit` and `finalize`. */
   readonly state: unknown;
 };
+
+/** What one model call returns to a spec: the schema-valid reply, its usage, the model that served it. */
+export type Completion = { readonly json: unknown; readonly usage: { readonly inputTokens: number; readonly outputTokens: number }; readonly model: string };
+
+/**
+ * One model call with the run's system prompt: the user message is the brief and the prepared
+ * sections, then `extra`; `schema` defaults to the spec's model schema.
+ */
+export type ModelCall = (extra: readonly string[], schema?: { readonly id: string; readonly schema: JsonSchema }) => Promise<Completion>;
 
 export type CreativeSpec = {
   /** Artifact schema id and schema: what write_artifact stores. */
@@ -42,12 +60,27 @@ export type CreativeSpec = {
   readonly claimNamespaces?: readonly string[];
   /** Input → brief and extra sections (default: `{ request }` only). Throws on bad input. */
   readonly prepare?: (ctx: AgentContext, input: Record<string, unknown>) => Promise<Prepared>;
-  /** Keeps an entry out of the prompt when it doesn't apply to this run (e.g. another model version). */
+  /**
+   * Keeps an entry out of the prompt when it doesn't apply to this run (e.g. another model
+   * version). Default: model-agnostic entries only, so knowledge scoped to one tool (Suno
+   * versions, the RVC settings of the Vocal DNA) reaches only the agents that target it.
+   */
   readonly admit?: (entry: ContextEntry, prepared: Prepared) => boolean;
   /** How excluded entries are described in the knowledge report, e.g. "scoped to another Suno version". */
   readonly exclusionReason?: string;
+  /**
+   * Drives the model calls itself and returns the combined reply (default: one call). The reply's
+   * rulesApplied still goes through the program's ref check. `log` writes a run-log line.
+   */
+  readonly generate?: (call: ModelCall, prepared: Prepared, log: (message: string, level?: 'info' | 'warn') => Promise<void>) => Promise<Completion>;
   /** Model reply → artifact body, plus violations (default: the reply as-is). */
   readonly finalize?: (reply: Record<string, unknown>, prepared: Prepared, entries: readonly ContextEntry[]) => { readonly body: Record<string, unknown>; readonly violations: readonly string[] };
   /** Checks the schema subset can't express; returns violations. */
   readonly check?: (body: Record<string, unknown>) => string[];
+  /**
+   * JSON paths (of the final body) holding text Suno receives verbatim. A mixed-script word there
+   * refuses the run; anywhere else it is written as a warning on the artifact (F22, user decision).
+   * Default: none, for bodies Suno never sees directly.
+   */
+  readonly sunoTextPaths?: readonly RegExp[];
 };

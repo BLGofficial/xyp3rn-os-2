@@ -296,6 +296,13 @@ Migration `20260924190000_suno_generation.sql`.
 - **`xyp_execution`:** a new role. It may INSERT/SELECT the three tables and SELECT `creative_artifacts` (to read the artifact it submits). It cannot write artifacts or canonical knowledge (42501).
 - **`artifact.read`:** a new capability for Creative, Critic, Revision, Execution and Governance. `xyp_runtime` gains SELECT on `creative_artifacts` for the `read_artifact` tool.
 
+## After Phase 9: `creative_artifacts.warnings`
+
+Migration `20260924200000_artifact_warnings.sql`.
+
+- **`warnings`** (`jsonb`, not null, default `[]`, must be an array): defects the writing agent found in its own output that did not block the write. Each is one object, e.g. `{"kind":"mixed-script","word":"Лieux","path":"$.sections[0].devices[0].note"}` (ARCHITECTURE F22).
+- Set once at insert through `write_artifact`, like every other column (the immutable trigger covers it). Existing rows read `[]`. The table-level grants cover the new column.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

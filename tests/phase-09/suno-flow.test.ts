@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAgentRegistry } from '../../core/agent-registry/registry.ts';
 import { createLlmRunner } from '../../core/llm/runner.ts';
 import { dispatch, type DispatchDeps } from '../../core/orchestrator/dispatch.ts';
-import { HANDLERS } from '../../core/runtime/handlers.ts';
+import { BUILT_SUBDOMAINS, HANDLERS } from '../../core/runtime/handlers.ts';
 import { LLM_PROGRAMS } from '../../core/runtime/programs.ts';
 import { createRuntimeTools } from '../../core/runtime/tools.ts';
 import { loadWorkflow, runWorkflow } from '../../core/workflow-engine/engine.ts';
@@ -19,10 +19,12 @@ import { registerResearchSource } from '../../research-intelligence/sources/veri
 import { proposeCandidate, recordFinding } from '../../research-intelligence/synthesis/findings.ts';
 import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { loadMusicSystem, MUSIC_SYSTEM_MANIFEST } from '../../records/x3lius/music-system.ts';
+import { sectionLabels } from '../../records/x3lius/creative/lyrics.ts';
 import { renderLyrics, SONG_TO_SUNO_WORKFLOW } from '../../records/x3lius/suno/formula.ts';
+import { subdomainStub } from '../../records/x3lius/subdomain-stub.ts';
 import { STUB_SCORER } from '../../records/x3lius/suno/score-hook.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
-import { FAKE_KEYS, fakeModel } from '../helpers/fake-llm.ts';
+import { FAKE_KEYS, FAKE_USAGE, fakeBody, fakeModel } from '../helpers/fake-llm.ts';
 
 // Phase 9 proof: song → Suno prompt → submission → takes → scoring hook, against a throwaway DB
 // holding the real ingested guide + X3LIUS manifest.
@@ -51,6 +53,21 @@ const run = (deps: DispatchDeps, agent: string, input: unknown) => dispatch(deps
 
 type Out = { artifact: { id: string; schemaId: string }; body: Record<string, unknown>; knowledge: { perModule: Record<string, number>; sparse: boolean }; context: { kind: string; slug: string | null }[] };
 const out = (r: { output?: unknown }) => r.output as Out;
+type LyricsV2 = { sections: { sectionId: string; kind: string; label: string; bars: { text: string }[]; directions: string[] }[]; instrumental: string[]; sources: unknown[] };
+const artifactsOf = (runId: string) => db.sql<{ id: string }[]>`select id from creative_artifacts where agent_run_id = ${runId}`;
+
+/** Writes a pre-v2 lyrics artifact (x3lius.lyrics/v1, one section) the way Phase 8 did, so the formula's legacy path is tested. */
+const insertLegacyLyrics = async (bars: readonly string[]) => {
+  const [src] = await db.sql<{ agent_run_id: string }[]>`select agent_run_id from creative_artifacts where id = ${ids.structure}`;
+  const body = { section: { kind: 'verse', label: 'Verse 1' }, bars: bars.map((text, i) => ({ n: i + 1, text, language: 'en', rhymeTag: 'A' })), rhymeScheme: 'AA', devices: [], rulesApplied: [], ungroundedChoices: [] };
+  return asRole(db.sql, 'xyp_creative', async (tx) => {
+    const [a] = await tx<{ id: string }[]>`
+      insert into creative_artifacts (schema_id, agent_name, agent_run_id, brief, body, context_refs, knowledge, model)
+      values ('x3lius.lyrics/v1', 'x3lius-lyrics', ${src!.agent_run_id}, '[FIXTURE] legacy v1 lyrics', ${tx.json(body)}, '[]', '{}', 'fixture')
+      returning id`;
+    return a!.id;
+  });
+};
 
 /** Promotes one [FIXTURE] rule into x3lius-suno through the real gate, then embeds it. */
 const promoteSunoFixture = async (slug: string, note: string, claim: { topic: string; value: unknown; modelTag: string }) => {
@@ -133,9 +150,9 @@ describe('registry: Phase 9 agents', () => {
   });
 
   it('every sub-domain not built yet is still a read-only stub; the registry validates', () => {
-    const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !CREATIVE_SUBDOMAINS.includes(s));
-    expect(stubs.sort()).toEqual(['x3lius-arrangement', 'x3lius-evaluation', 'x3lius-mix-master', 'x3lius-production', 'x3lius-vocal-dna']);
-    for (const s of stubs) expect(registry.get(s)).toMatchObject({ class: 'Knowledge', model: 'none' });
+    const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !BUILT_SUBDOMAINS.includes(s));
+    expect(stubs.sort()).toEqual(['x3lius-arrangement', 'x3lius-evaluation', 'x3lius-mix-master', 'x3lius-production']);
+    for (const s of stubs) expect(HANDLERS[s]).toBe(subdomainStub);
     expect(registry.validateAll()).toEqual([]);
   });
 });
@@ -158,7 +175,7 @@ describe('the Suno Prompt-Formula agent (x3lius-suno)', () => {
   it('builds its inputs: structure, lyrics and genre/style artifacts (FAKE model)', async () => {
     const deps = depsWith(fakeModel());
     for (const [key, agent] of [['structure', 'x3lius-songwriting'], ['lyrics', 'x3lius-lyrics'], ['genre', 'x3lius-genre-style']] as const) {
-      const r = await run(deps, agent, { request: REQUEST });
+      const r = await run(deps, agent, { request: REQUEST, ...(key === 'lyrics' ? { structureArtifactId: ids.structure } : {}) });
       expect(r.status, r.error).toBe('success');
       ids[key] = out(r).artifact.id;
     }
@@ -176,20 +193,22 @@ describe('the Suno Prompt-Formula agent (x3lius-suno)', () => {
     ids.formula = o.artifact.id;
     expect(o.artifact.schemaId).toBe('x3lius.suno-prompt/v1');
 
-    const [lyricsRow] = await db.sql<{ body: { section: { kind: string; label: string }; bars: { text: string }[] } }[]>`select body from creative_artifacts where id = ${ids.lyrics}`;
-    expect(o.body.lyrics).toBe(renderLyrics([lyricsRow!.body]));
-    expect(o.body.lyrics).toBe(`[Verse 1]\n${lyricsRow!.body.bars.map((b) => b.text).join('\n')}`);
+    const [lyricsRow] = await db.sql<{ schema_id: string; body: LyricsV2 }[]>`select schema_id, body from creative_artifacts where id = ${ids.lyrics}`;
+    expect(o.body.lyrics).toBe(renderLyrics([{ schemaId: lyricsRow!.schema_id, body: lyricsRow!.body }]));
+    // Every section, in song order: a [label] meta-tag, one line per bar, a blank line between sections.
+    const [v1, c1] = lyricsRow!.body.sections;
+    expect(o.body.lyrics).toBe(`[Verse 1]\n${v1!.bars.map((b) => b.text).join('\n')}\n\n[Chorus]\n${c1!.bars.map((b) => b.text).join('\n')}`);
     expect(Object.keys((model.calls[0]!.schema.properties as object))).not.toContain('lyrics');
 
     const prompt = model.calls[0]!.system;
     expect(prompt).toContain(SUNO_RULE);
     const [claim] = await db.sql<{ value: string[] }[]>`select value from canonical_claims where topic = 'x3lius.voice-reference'`;
     for (const d of claim!.value) expect(prompt).toContain(d);
-    expect(model.calls[0]!.user).toContain(lyricsRow!.body.bars[0]!.text);
+    expect(model.calls[0]!.user).toContain(c1!.bars[3]!.text);
 
     expect(o.body).toMatchObject({ sunoModel: 'v5', title: '[FAKE] Suno Title', style: '[FAKE] style prompt', excludeStyles: ['[FAKE] excluded'], limits: [] });
     expect(o.body.sources).toEqual([
-      expect.objectContaining({ role: 'lyrics', artifactId: ids.lyrics, schemaId: 'x3lius.lyrics/v1' }),
+      expect.objectContaining({ role: 'lyrics', artifactId: ids.lyrics, schemaId: 'x3lius.lyrics/v2' }),
       expect.objectContaining({ role: 'structure', artifactId: ids.structure, schemaId: 'x3lius.song-structure/v1' }),
       expect.objectContaining({ role: 'genre-style', artifactId: ids.genre, schemaId: 'x3lius.genre-style/v1' }),
     ]);
@@ -224,7 +243,251 @@ describe('the Suno Prompt-Formula agent (x3lius-suno)', () => {
     // Rules and claims tagged for another Suno version never reach a v4.5 prompt.
     expect(model45.calls[0]!.system).not.toContain(SUNO_RULE);
     expect(model45.calls[0]!.system).not.toContain('suno.limit.style-chars');
-    expect((out(v45) as unknown as { knowledge: { reasons: string[] } }).knowledge.reasons.join('\n')).toMatch(/excluded 3 canonical entries scoped to another Suno version/);
+    expect((out(v45) as unknown as { knowledge: { reasons: string[] } }).knowledge.reasons.join('\n')).toMatch(/excluded 3 canonical entries scoped to another model or tool/);
+  });
+});
+
+describe('whole-song lyrics (x3lius.lyrics/v2): one model call per structure section, one artifact', () => {
+  type SectionReply = { instrumental: boolean; bars: { n: number; text: string }[]; devices: { bar: number; device: string; note: string }[]; directions: string[] };
+  /** A FAKE model whose per-section reply for section `id` gets `edit` applied. */
+  const sectionReply = (id: string, edit: (b: SectionReply) => void) => fakeModel({
+    override: (schema, refs, user) => {
+      if (!('bars' in (schema.properties as object)) || !user.includes(`WRITE NOW: section ${id} (`)) return undefined;
+      const b = fakeBody(schema, refs.slice(0, 1), user) as unknown as SectionReply;
+      edit(b);
+      return b;
+    },
+  });
+  const withStructure = { request: REQUEST, structureArtifactId: '' };
+  beforeAll(() => {
+    withStructure.structureArtifactId = ids.structure;
+  });
+
+  it('writes each structure section in its own call, in order, each seeing what was written before it', async () => {
+    const model = fakeModel();
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status, r.error).toBe('success');
+    const o = out(r);
+    expect(o.artifact.schemaId).toBe('x3lius.lyrics/v2');
+
+    // The fake structure has two sections (v1 verse, c1 chorus): two calls, each on the per-section schema.
+    expect(model.calls).toHaveLength(2);
+    // No label: code derives it from the structure, so a section id can never reach Suno as a tag.
+    for (const c of model.calls) expect(Object.keys(c.schema.properties as object).sort()).toEqual(['bars', 'devices', 'directions', 'instrumental', 'rhymeScheme', 'rulesApplied', 'ungroundedChoices']);
+    expect(model.calls[0]!.user).toContain('WRITE NOW: section v1 (verse, 16 bars)');
+    expect(model.calls[1]!.user).toContain('WRITE NOW: section c1 (chorus, 8 bars)');
+    // Every call carries the structure (with its selected hook); the second also carries the first section's words.
+    for (const c of model.calls) {
+      expect(c.user).toContain(`SONG STRUCTURE (artifact ${ids.structure} v1)`);
+      expect(c.user).toContain('[FAKE] hook a');
+    }
+    expect(model.calls[0]!.user).toContain('LYRICS WRITTEN SO FAR\n(none yet: this is the first section)');
+    expect(model.calls[1]!.user).toContain('[FAKE] v1 bar 4');
+
+    // Ids and kinds come from the structure, not the model; one trace entry per call, prefixed with its section.
+    const body = o.body as unknown as LyricsV2 & { rulesApplied: { ref: string; how: string }[]; ungroundedChoices: string[] };
+    expect(body.sections.map((x) => [x.sectionId, x.kind, x.label])).toEqual([['v1', 'verse', 'Verse 1'], ['c1', 'chorus', 'Chorus']]);
+    expect(body.instrumental).toEqual([]);
+    expect(body.sources).toEqual([{ role: 'structure', artifactId: ids.structure, schemaId: 'x3lius.song-structure/v1', version: 1 }]);
+    expect(body.rulesApplied.map((x) => x.how.slice(0, 5))).toEqual(['[v1] ', '[c1] ']);
+    expect(body.ungroundedChoices.every((u) => /^\[(v1|c1)\] /.test(u))).toBe(true);
+
+    // Usage adds up across calls; the run log shows each section as it lands.
+    const [row] = await db.sql<{ tokens_used: number; output: { logs: { message: string }[] } }[]>`select tokens_used, output from agent_runs where id = ${r.runId}`;
+    expect(row!.tokens_used).toBe(2 * (FAKE_USAGE.input + FAKE_USAGE.output));
+    const logs = row!.output.logs.map((l) => l.message);
+    expect(logs).toContainEqual(expect.stringMatching(/^x3lius-lyrics: section v1 \(verse\) 1\/2: 4 bars in \d+ms$/));
+    expect(logs).toContainEqual(expect.stringMatching(/^x3lius-lyrics: section c1 \(chorus\) 2\/2: 4 bars in \d+ms$/));
+  });
+
+  it('a section the model marks instrumental is listed as such, and later calls are told so', async () => {
+    const model = sectionReply('v1', (b) => {
+      b.instrumental = true;
+      b.bars = [];
+    });
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status, r.error).toBe('success');
+    const body = out(r).body as unknown as LyricsV2;
+    expect(body.sections.map((x) => x.sectionId)).toEqual(['c1']);
+    expect(body.instrumental).toEqual(['v1']);
+    expect(model.calls[1]!.user).toContain('(v1, verse: instrumental)');
+  });
+
+  it.each([
+    ['a section marked instrumental that still has bars', (b: SectionReply) => { b.instrumental = true; }, /section c1: marked instrumental but has 4 bars/],
+    ['a sung section with no bars', (b: SectionReply) => { b.bars = []; }, /section c1 has no bars/],
+    ['bars numbered out of order', (b: SectionReply) => { b.bars[0]!.n = 9; }, /section c1: bars\[\]\.n must count 1, 2, 3/],
+    ['a reply off the per-section schema', (b: SectionReply) => { (b as unknown as Record<string, unknown>).sections = []; }, /section c1: .*violates schema x3lius\.lyrics-section-llm\/v2: \$\.sections is not allowed/],
+  ])('refuses %s, naming the section; nothing is written', async (_, edit, error) => {
+    const r = await run(depsWith(sectionReply('c1', edit)), 'x3lius-lyrics', withStructure);
+    expect(r.status).toBe('error');
+    expect(r.error).toMatch(error);
+    expect(await artifactsOf(r.runId)).toHaveLength(0);
+  });
+
+  /** A FAKE model whose first `times` replies for section `id` get `edit`; later replies are clean. */
+  const firstReplies = (id: string, times: number, edit: (b: SectionReply) => void) => {
+    let n = 0;
+    return fakeModel({
+      override: (schema, refs, user) => {
+        if (!('bars' in (schema.properties as object)) || !user.includes(`WRITE NOW: section ${id} (`)) return undefined;
+        const b = fakeBody(schema, refs.slice(0, 1), user) as unknown as SectionReply;
+        if (n++ < times) edit(b);
+        return b;
+      },
+    });
+  };
+
+  it.each([
+    ['a lyric line (seen live: "горниotope")', (b: SectionReply) => { b.bars[2]!.text = 'горниotope над града'; }, '"горниotope" (bar 3)'],
+  ])('a mixed-script word in %s gets that section re-asked once with the words named; the fixed reply is kept', async (_, edit, named) => {
+    const model = firstReplies('c1', 1, edit);
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status, r.error).toBe('success');
+    // v1, c1, then c1 again with a CORRECTION naming the word and showing the previous lines.
+    expect(model.calls).toHaveLength(3);
+    const retry = model.calls[2]!.user;
+    expect(retry).toContain('WRITE NOW: section c1 (chorus, 8 bars)');
+    expect(retry).toContain(`CORRECTION\nYour previous reply for section c1 mixed Latin and Cyrillic letters inside a word: ${named}.`);
+    expect(retry).toContain('[FAKE] c1 bar 1');
+    const body = out(r).body as unknown as LyricsV2;
+    expect(body.sections[1]!.bars.map((b) => b.text)).toEqual([1, 2, 3, 4].map((n) => `[FAKE] c1 bar ${n}`));
+    expect(body.sections[1]!.label).toBe('Chorus');
+    const [row] = await db.sql<{ tokens_used: number; output: { logs: { level: string; message: string }[] } }[]>`select tokens_used, output from agent_runs where id = ${r.runId}`;
+    expect(row!.tokens_used).toBe(3 * (FAKE_USAGE.input + FAKE_USAGE.output));
+    expect(row!.output.logs).toContainEqual(expect.objectContaining({ level: 'warn', message: `x3lius-lyrics: section c1: mixed-script word ${named}; asking once for a corrected section` }));
+  });
+
+  it('still mixed after the one correction: the run fails naming the section and the word; nothing is written', async () => {
+    const model = firstReplies('c1', 2, (b) => { b.bars[0]!.text = 'Пeak слънцето'; });
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status).toBe('error');
+    expect(r.error).toMatch(/section c1: mixed-script word "Пeak" \(bar 1\) is still there after one correction/);
+    expect(model.calls).toHaveLength(3);
+    expect(await artifactsOf(r.runId)).toHaveLength(0);
+  });
+
+  it('a mixed-script word outside Suno text (a device note) is no reason to re-ask: one call per section, written with a warning', async () => {
+    const model = firstReplies('v1', 1, (b) => { b.devices = [{ bar: 1, device: 'loanword', note: 'French loan Лieux' }]; });
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status, r.error).toBe('success');
+    expect(model.calls).toHaveLength(2);
+    expect((r.output as { warnings: unknown[] }).warnings).toEqual([{ kind: 'mixed-script', word: 'Лieux', path: '$.sections[0].devices[0].note' }]);
+  });
+
+  it('every creative prompt asks for one alphabet per word', async () => {
+    for (const agent of ['x3lius-songwriting', 'x3lius-lyrics', 'x3lius-genre-style']) {
+      const model = fakeModel();
+      await run(depsWith(model), agent, { request: REQUEST });
+      expect(model.calls[0]!.system).toContain('Write every word in a single alphabet: never mix Latin and Cyrillic letters inside one word.');
+    }
+  });
+
+  it('refuses a structureArtifactId that is not a song-structure artifact, or not a string', async () => {
+    const deps = depsWith(fakeModel());
+    expect((await run(deps, 'x3lius-lyrics', { request: REQUEST, structureArtifactId: ids.genre })).error).toMatch(/is x3lius\.genre-style\/v1, expected x3lius\.song-structure\/v1/);
+    expect((await run(deps, 'x3lius-lyrics', { request: REQUEST, structureArtifactId: 7 })).error).toMatch(/structureArtifactId must be an artifact id/);
+  });
+
+  it('a bare brief (no structure) is still one call writing the sections it asks for; labels still come from code', async () => {
+    const model = fakeModel();
+    const r = await run(depsWith(model), 'x3lius-lyrics', { request: REQUEST });
+    expect(r.status, r.error).toBe('success');
+    expect(model.calls).toHaveLength(1);
+    expect(Object.keys(model.calls[0]!.schema.properties as object)).toContain('sections');
+    const body = out(r).body as unknown as LyricsV2;
+    expect(body.sources).toEqual([]);
+    expect(body.sections.map((x) => x.label)).toEqual(['Verse 1', 'Chorus']);
+  });
+
+  it('section labels (the Suno [tags]) come from the section kinds: verses numbered in order, every other kind by name', () => {
+    // The live structure from proof §7 (whose labels reached Suno as [v1], [pre1], [outro] when the model wrote them).
+    expect(sectionLabels(['intro', 'verse', 'pre-chorus', 'chorus', 'verse', 'pre-chorus', 'chorus', 'bridge', 'chorus', 'outro'])).toEqual(
+      ['Intro', 'Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Pre-Chorus', 'Chorus', 'Bridge', 'Chorus', 'Outro'],
+    );
+    expect(sectionLabels(['hook', 'post-chorus', 'breakdown', 'verse'])).toEqual(['Hook', 'Post-Chorus', 'Breakdown', 'Verse 1']);
+  });
+
+  it('stage directions go in directions: kept on the artifact, never in the lyrics Suno sings', async () => {
+    // Seen live (proof §7): the outro's "Synth decays... concrete breath fades" was written as a sung line.
+    const model = firstReplies('c1', 1, (b) => { b.directions = ['[FAKE] synth decays, city ambience swallows the mix']; });
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status, r.error).toBe('success');
+    expect(model.calls[0]!.system).toContain('bars hold only the words that are sung or spoken');
+    const body = out(r).body as unknown as LyricsV2;
+    expect(body.sections.map((x) => x.directions)).toEqual([[], ['[FAKE] synth decays, city ambience swallows the mix']]);
+    // v4.5: an earlier test promotes a [FIXTURE] 12-char style limit for v5.
+    const suno = await run(depsWith(fakeModel()), 'x3lius-suno', { request: REQUEST, sunoModel: 'v4.5', lyricsArtifactIds: [out(r).artifact.id] });
+    expect(suno.status, suno.error).toBe('success');
+    expect(out(suno).body.lyrics).not.toContain('synth decays');
+    expect(out(suno).body.lyrics).toBe(`[Verse 1]\n${body.sections[0]!.bars.map((b) => b.text).join('\n')}\n\n[Chorus]\n${body.sections[1]!.bars.map((b) => b.text).join('\n')}`);
+  });
+
+  it('the formula still renders a pre-v2 (x3lius.lyrics/v1) artifact', async () => {
+    const legacy = await insertLegacyLyrics(['[FIXTURE] legacy bar one', '[FIXTURE] legacy bar two']);
+    const r = await run(depsWith(fakeModel()), 'x3lius-suno', { request: REQUEST, sunoModel: 'v4.5', lyricsArtifactIds: [legacy] });
+    expect(r.status, r.error).toBe('success');
+    expect(out(r).body.lyrics).toBe('[Verse 1]\n[FIXTURE] legacy bar one\n[FIXTURE] legacy bar two');
+  });
+});
+
+describe('mixed-script words: refused in text Suno receives, a warning on the artifact anywhere else', () => {
+  /** A FAKE model whose reply for the schema carrying `marker` gets `edit` applied. */
+  const editing = (marker: string, edit: (b: Record<string, unknown>) => void) => fakeModel({
+    override: (schema, refs) => {
+      if (!(marker in (schema.properties as object))) return undefined;
+      const b = fakeBody(schema, refs.slice(0, 1));
+      edit(b);
+      return b;
+    },
+  });
+  type Section = { bars: { text: string }[]; devices: { bar: number; device: string; note: string }[] };
+
+  it.each([
+    ['a lyric bar (seen live: "Пeak")', (b: Record<string, unknown>) => { (b.sections as Section[])[0]!.bars[0]!.text = 'Пeak слънцето никога не се връща'; }, 'Пeak', '$.sections[0].bars[0].text'],
+  ])('lyrics: refused in %s; nothing is written', async (_, edit, word, path) => {
+    const r = await run(depsWith(editing('instrumental', edit)), 'x3lius-lyrics', { request: REQUEST });
+    expect(r.error).toContain(`mixed-script word "${word}" at ${path}`);
+    expect(await artifactsOf(r.runId)).toHaveLength(0);
+  });
+
+  it('lyrics: in a device note (seen live: "Лieux") it is written, with the word recorded as a warning', async () => {
+    const r = await run(depsWith(editing('instrumental', (b) => {
+      (b.sections as Section[])[0]!.devices = [{ bar: 1, device: 'loanword', note: 'French loan Лieux opens the verse' }];
+    })), 'x3lius-lyrics', { request: REQUEST });
+    expect(r.status, r.error).toBe('success');
+    const warning = { kind: 'mixed-script', word: 'Лieux', path: '$.sections[0].devices[0].note' };
+    expect((r.output as { warnings: unknown[] }).warnings).toEqual([warning]);
+    const [a] = await db.sql<{ warnings: unknown[] }[]>`select warnings from creative_artifacts where agent_run_id = ${r.runId}`;
+    expect(a!.warnings).toEqual([warning]);
+    const [row] = await db.sql<{ output: { logs: { level: string; message: string }[] } }[]>`select output from agent_runs where id = ${r.runId}`;
+    expect(row!.output.logs).toContainEqual(expect.objectContaining({ level: 'warn', message: expect.stringContaining('mixed-script word "Лieux" at $.sections[0].devices[0].note') }));
+  });
+
+  it('genre/style: nothing in it reaches Suno verbatim (seen live: "phonк"), so it is a warning', async () => {
+    const r = await run(depsWith(editing('primaryGenre', (b) => { b.subgenres = ['industrial trap', 'phonк']; })), 'x3lius-genre-style', { request: REQUEST });
+    expect(r.status, r.error).toBe('success');
+    expect((r.output as { warnings: unknown[] }).warnings).toEqual([{ kind: 'mixed-script', word: 'phonк', path: '$.subgenres[1]' }]);
+  });
+
+  it('a clean artifact carries no warnings', async () => {
+    const r = await run(depsWith(fakeModel()), 'x3lius-genre-style', { request: REQUEST });
+    expect((r.output as { warnings: unknown[] }).warnings).toEqual([]);
+    const [a] = await db.sql<{ warnings: unknown[] }[]>`select warnings from creative_artifacts where agent_run_id = ${r.runId}`;
+    expect(a!.warnings).toEqual([]);
+  });
+
+  it('formula: refused in the style it writes; nothing is written', async () => {
+    const r = await run(depsWith(editing('excludeStyles', (b) => { b.style = 'dark phonк trap'; })), 'x3lius-suno', { request: REQUEST, sunoModel: 'v5', lyricsArtifactIds: [ids.lyrics] });
+    expect(r.error).toContain('mixed-script word "phonк" at $.style');
+    expect(await artifactsOf(r.runId)).toHaveLength(0);
+  });
+
+  it('formula: an older lyrics artifact carrying one cannot reach a Suno prompt (the rendered lyrics are checked)', async () => {
+    const legacy = await insertLegacyLyrics(['Пeak слънцето никога не се връща']);
+    const r = await run(depsWith(fakeModel()), 'x3lius-suno', { request: REQUEST, sunoModel: 'v5', lyricsArtifactIds: [legacy] });
+    expect(r.error).toMatch(/mixed-script word "Пeak" at \$\.lyrics/);
+    expect(await artifactsOf(r.runId)).toHaveLength(0);
   });
 });
 
@@ -251,7 +514,7 @@ describe('the Suno Execution agent (suno-submitter)', () => {
   it('the operation must be fully specified: no adapter, a wrong artifact, or both modes at once are refused', async () => {
     const deps = depsWith(fakeModel());
     expect((await run(deps, 'suno-submitter', { submit: { formulaArtifactId: ids.formula } })).error).toMatch(/adapter must be one of manual, sunoapi/);
-    expect((await run(deps, 'suno-submitter', { submit: { formulaArtifactId: ids.lyrics, adapter: 'manual' } })).error).toMatch(/expects a x3lius\.suno-prompt\/v1 artifact, got x3lius\.lyrics\/v1/);
+    expect((await run(deps, 'suno-submitter', { submit: { formulaArtifactId: ids.lyrics, adapter: 'manual' } })).error).toMatch(/expects a x3lius\.suno-prompt\/v1 artifact, got x3lius\.lyrics\/v2/);
     expect((await run(deps, 'suno-submitter', { submit: { formulaArtifactId: ids.formula, adapter: 'manual' }, capture: { submissionId: 'x' } })).error).toMatch(/exactly one of submit, capture/);
   });
 
@@ -321,6 +584,9 @@ describe('end to end: one workflow from a brief to a Suno-ready prompt (FAKE mod
       select step_id, agent_name, output from agent_runs where workflow_run_id = ${r.workflowRunId} order by created_at`;
     expect(steps.map((s) => s.agent_name)).toEqual(['x3lius-songwriting', 'x3lius-lyrics', 'x3lius-genre-style', 'x3lius-suno']);
     const byStep = Object.fromEntries(steps.map((s) => [s.step_id, s.output.result.artifact.id]));
+    // Lyrics are written against the structure the songwriting step produced.
+    const [lyricsStep] = await db.sql<{ input: { structureArtifactId: string } }[]>`select input from agent_runs where workflow_run_id = ${r.workflowRunId} and step_id = 'lyrics'`;
+    expect(lyricsStep!.input.structureArtifactId).toBe(byStep.structure);
     expect((o.body.sources as { role: string; artifactId: string }[]).map((s) => [s.role, s.artifactId])).toEqual([
       ['lyrics', byStep.lyrics], ['structure', byStep.structure], ['genre-style', byStep.genre],
     ]);

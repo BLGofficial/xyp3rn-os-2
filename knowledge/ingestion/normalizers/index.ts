@@ -2,6 +2,7 @@ import type { NormalizedDocument } from '../types.ts';
 import { detectBuildSequence, parseBuildSequence } from './build-sequence.ts';
 import { NORMALIZER_ID, normalizeBuildSequence } from './build-sequence-normalize.ts';
 import { detectModuleManifest, MODULE_MANIFEST_NORMALIZER_ID, normalizeModuleManifest } from './module-manifest.ts';
+import { detectVocalDna, normalizeVocalDna, VOCAL_DNA_NORMALIZER_ID } from './vocal-dna.ts';
 
 export type Normalizer = {
   readonly id: string;
@@ -20,6 +21,7 @@ export const NORMALIZERS: readonly Normalizer[] = [
     normalize: (pages) => normalizeBuildSequence(parseBuildSequence(pages)),
   },
   { id: MODULE_MANIFEST_NORMALIZER_ID, detect: detectModuleManifest, normalize: normalizeModuleManifest },
+  { id: VOCAL_DNA_NORMALIZER_ID, detect: detectVocalDna, normalize: normalizeVocalDna },
 ];
 
 /**

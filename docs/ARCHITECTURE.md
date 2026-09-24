@@ -189,7 +189,8 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - The Anthropic base URL is pinned, not read from `ANTHROPIC_BASE_URL` (hosted dev containers set that variable for their own tooling).
 - Live-verified on OpenRouter with `nvidia/nemotron-3-ultra-550b-a55b:free` (Phase 8 addendum), which is now the creative agents' model (user decision). Anthropic and Groq are still verified against fakes only.
 - The schema is stated in the prompt as well as in `response_format`, because some routes drop the latter.
-- Model calls retry transient provider errors (408/429/5xx) twice with backoff. A completion changes no external state; Execution agents stay retry-free (Phase 4D).
+- Model calls retry transient provider errors twice with backoff: 408/429/5xx, and a 200 whose `finish_reason` is `error` (the upstream abandoned the generation; seen live). A completion changes no external state; Execution agents stay retry-free (Phase 4D).
+- The LLM step timeout is 30 min (user decision): whole-song lyrics make about ten calls of 30–110s each. OpenRouter's upstream idle timeout (120s) still ends a stalled call.
 
 **F18. Canonical knowledge is too sparse for a distinct X3LIUS voice.** OPEN (flagged by Phase 8, as the guide requires).
 - The creative sub-domains and Vocal DNA hold 0 rules. The model's whole voice context is the guide's one claim, `x3lius.voice-reference` (4 descriptors).
@@ -208,3 +209,47 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 **F20. Suno rules are version-scoped.** DECIDED (Phase 9, recorded here because it constrains Phases 10–12).
 - A canonical rule or claim tagged `suno-<version>` applies only to prompts for that version; anything else applies to all.
 - Platform limits (`suno.limit.<field>-chars`) are canonical claims, never constants in code.
+
+**F21. Lyrics follow the song structure: the whole song, one model call per section.** DECIDED (user, after the Phase 9 live runs).
+- Lyrics written from the brief alone gave Suno one verse and no hook.
+- `x3lius-lyrics` now reads the song-structure artifact and writes one `x3lius.lyrics/v2` artifact covering every section: each written or listed as instrumental.
+- It makes one model call per structure section, in order (`x3lius.lyrics-section-llm/v2`). Each call sees the structure (with its selected hook) and the lyrics written so far.
+- Code sets each section's id and kind from the structure, so coverage and order hold by construction. It records the structure version followed, and tags each call's trace with its section.
+- One whole-song reply was tried first and dropped. On the free Nemotron route only 1 of 5 attempts returned a complete reply:
+  - the provider abandoned one at 137s;
+  - one hit the 16k output cap at 357s;
+  - with reasoning off, 3 tries all hit the 120s upstream idle timeout.
+- Short replies are what that route handles reliably. A failed section call stops the run, and nothing is written.
+- A bare brief with no structure is still one call.
+- `x3lius.lyrics/v1` artifacts stay readable (the formula renders both) and revisable.
+- Whether the hook actually appears in the chorus is not code-checked (fuzzy); it is the Phase 12 Critic's.
+- Section tags are code's (user decision, after the model wrote ids as tags live: `[v1]`, `[pre1]`). Verses are numbered in song order and every other kind gets its name (`sectionLabels`). This is a rendering convention in code until a canonical Suno rule says otherwise.
+- The sung bars hold words only. Production and performance notes go in each section's `directions`, stored on the artifact and never sent to Suno. The model wrote an outro's stage directions as sung lines live. This is asked for in the prompt, not code-checked.
+
+**F22. Mixed-script words: refused in text Suno receives, a warning elsewhere.** DECIDED (user, after the Phase 9 live runs).
+- A word mixing Latin and Cyrillic letters (seen live: "Пeak", "phonк", "Лieux") is a homoglyph corruption. Every creative artifact body is checked before it is written.
+- A hit in text Suno receives verbatim refuses the run, and nothing is written. That text is:
+  - lyric bars and section labels;
+  - the formula's title, style, excluded styles and lyrics. The rendered lyrics are checked too, so an older artifact can't pass a hit on.
+- A hit anywhere else (device notes, genre/style fields, songwriting text) is written as a warning in `creative_artifacts.warnings` and logged. That way a typo in metadata doesn't cost a 4-minute run.
+- Per-section repair (user decision, after "горниotope"-style hits in 4 of 4 long live outputs):
+  - Whole-song lyrics check each section's lines as soon as its call returns (labels are code's).
+  - On a hit, that one section is asked for once more, with the words named. Still mixed means the run fails, naming the section.
+  - Every creative prompt also asks for one alphabet per word.
+- Switching script between words is untouched: which languages a line uses is canonical knowledge.
+
+**F23. Vocal DNA is one canonical row with many readers.** DECIDED (user, Phase 10).
+- The X3LIUS vocal signature is operator-authored first-party data in `records/x3lius/vocal-dna.yaml` (`xyp-vocal-dna/v1`).
+  - It holds tone, register, delivery and ad-libs as lists of descriptors, plus the RVC/Applio model and the settings actually used.
+  - It is admitted through the gate's first-party path into the manifest's `x3lius-vocal-dna` module, never redeclared. A change is a re-ingest and becomes a new version in `knowledge_versions`.
+- Its claims are the interface. `x3lius.vocal.{tone,register,delivery,adlibs}` are model-agnostic; `x3lius.vocal.rvc` is scoped `rvc`.
+- Readers:
+  - Every creative agent gets the attributes (the Suno formula included), through the claims and the row's module.
+  - The RVC step (`x3lius-rvc-post`) and the Vocal DNA agent read through one reader (`records/x3lius/vocal-dna/read.ts`). It requires exactly one row with all five claims.
+  - Nobody keeps a copy, so a new version reaches every reader at once.
+- Tool scoping, which extends F20:
+  - A creative agent admits only model-agnostic knowledge by default.
+  - The Suno formula admits model-agnostic knowledge plus its own `suno-<v>`.
+  - So knowledge scoped to one tool (Suno versions, the RVC settings) reaches only the agents that target it.
+- The ingestion writer lets a document place its prompts in a module another document owns, using that module's current version.
+- No value is defaulted: an RVC setting the file doesn't state is listed as `unset`, and the local tool's defaults apply.

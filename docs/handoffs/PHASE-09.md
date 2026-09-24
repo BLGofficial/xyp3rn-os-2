@@ -69,3 +69,27 @@ HANDOFF — Phase 9 complete (live prompt assembly produced; see the addendum at
   - Some Bulgarian is invalid ("тън", "Градът дъха") and needs a native check.
   - The declared rhyme scheme doesn't hold.
   - The model's `ungroundedChoices` contradict its own style text on BPM.
+
+**Addendum 2 (2026-09-24, later): whole-song lyrics, mixed-script guard, provider robustness (user decisions).**
+- **Live proof, current:** `docs/proofs/PHASE-09-suno.txt` §7.
+  - Brief → structure → lyrics for all 10 structure sections (9 sung, 84 bars) → genre/style → Suno prompt artifact `113e4bd3-…`. About 8.5 minutes end to end.
+  - The structure's selected hook is every line of all three choruses.
+  - No mixed-script word in any Suno field.
+- **Lyrics v2** (`x3lius.lyrics/v2`, ARCHITECTURE F21):
+  - The workflow passes the structure to lyrics, which makes one model call per structure section, each seeing the lyrics written so far.
+  - Code sets ids and kinds from the structure and records it in `sources`.
+  - One reply for the whole song was tried first and dropped: 1 complete reply in 5 attempts on the free route.
+  - v1 artifacts stay readable.
+- **Mixed-script guard** (F22; seen live in 4 of 4 long outputs):
+  - Refused in text Suno receives verbatim. Before that, a lyrics section with a hit is asked for once more, with the words named.
+  - Elsewhere it becomes a warning in the new `creative_artifacts.warnings` column (migration `20260924200000`).
+  - Every creative prompt asks for one alphabet per word.
+- **Provider robustness** (F17):
+  - A `finish_reason: "error"` reply is retried like a 5xx.
+  - `LLM_TIMEOUT_MS` is now 30 min.
+- **Open, for Phase 12 / canonical Suno rules:**
+  - Section labels reach Suno as ids (`[v1]`, `[pre1]`).
+  - The outro has stage directions as sung lines.
+  - Choruses are the hook repeated 8 times.
+  - The Bulgarian needs a native check.
+  - The whole context is still one canonical claim (F18).

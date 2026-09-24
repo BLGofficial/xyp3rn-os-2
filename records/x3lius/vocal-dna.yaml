@@ -1,0 +1,38 @@
+# X3LIUS Vocal DNA: operator-authored first-party data (Phase 10, ARCHITECTURE F23). One canonical row;
+# the Suno formula, the creative agents and x3lius-rvc-post all read it, never a copy. Admit (then embed):
+#   pnpm ingest --file records/x3lius/vocal-dna.yaml --origin first_party
+# A change here + re-admission = a new version in knowledge_versions.
+vocal_dna: xyp-vocal-dna/v1
+artist: X3LIUS
+date: 2026-09-24
+module: x3lius-vocal-dna
+tone:
+  - dark, cold, slightly gritty baritone
+  - low-mid weight, dense body
+  - restrained top end, dulled brightness
+  - light rasp on stressed syllables
+register:
+  - low-to-mid chest voice, speaking-range rap
+  - stays in chest; no head voice on verses
+  - hooks lift only slightly, melodic-trap half-sung
+  - 'typical pitch area: baritone, roughly A2-E4'
+delivery:
+  - controlled, deliberate flow, behind-the-beat in verses
+  - hard consonant attack, clipped line endings
+  - triplet and double-time switches on drill sections
+  - Bulgarian/English code-switching on bar boundaries, not mid-phrase
+  - 'dynamics: near-monotone menace in verses, raised intensity on hooks'
+adlibs:
+  - low, short, doubled ad-libs placed at line ends
+  - whispered/breathy echo of the last word
+  - sparse; confrontational shouts only on drops
+  - 'typical: "yeah", "grr", clipped one-word echoes'
+rvc:
+  engine: applio
+  model: REQUIRED          # not in loaded context; give the .pth name
+  index: REQUIRED          # matching .index file, if you have one
+  pitch: 0
+  index_rate: 0.75
+  protect: 0.33
+  f0_method: rmvpe
+  rms_mix_rate: 0.25

@@ -150,9 +150,10 @@ describe('OpenAI-compatible transport (Groq, OpenRouter; FAKE fetch)', () => {
     expect(system).toMatch(/single JSON object/);
   });
 
-  it('a reply cut off by the token limit is an error, not partial JSON', async () => {
+  it('a reply cut off by the token limit is an error, not partial JSON, and is not retried', async () => {
     const f = fakeFetch([{ body: chatReply('{"line":', 'length') }]);
-    await expect(createLlmClient({ model: 'groq:m', agentName: 'a', env: ENV, fetch: f.fn }).complete(REQ)).rejects.toThrow(/groq reply incomplete \(length\)/);
+    await expect(createLlmClient({ model: 'groq:m', agentName: 'a', env: ENV, fetch: f.fn, retryDelaysMs: [0, 0] }).complete(REQ)).rejects.toThrow(/groq reply incomplete \(length\)/);
+    expect(f.calls).toHaveLength(1);
   });
 
   it('a non-2xx reply surfaces status and provider message', async () => {
@@ -169,6 +170,18 @@ describe('transient provider errors: bounded retries (a model call changes no ex
     const r = await createLlmClient({ model: 'openrouter:x/y', agentName: 'a', env: ENV, fetch: f.fn, retryDelaysMs: [0, 0, 0] }).complete(REQ);
     expect(r.json).toEqual(GOOD);
     expect(f.calls).toHaveLength(4);
+  });
+
+  it('retries a reply the upstream provider abandoned mid-generation (finish_reason "error" inside a 200)', async () => {
+    // Seen live (Nemotron via OpenRouter, 2026-09-24): a whole-song lyrics call ended after 137s with
+    // finish_reason "error"; the same request then completed.
+    const f = fakeFetch([{ body: chatReply('{"line":"half', 'error') }, { body: chatReply(JSON.stringify(GOOD)) }]);
+    const r = await createLlmClient({ model: 'openrouter:x/y', agentName: 'a', env: ENV, fetch: f.fn, retryDelaysMs: [0, 0] }).complete(REQ);
+    expect(r.json).toEqual(GOOD);
+    expect(f.calls).toHaveLength(2);
+    const always = fakeFetch([{ body: chatReply('', 'error') }]);
+    await expect(createLlmClient({ model: 'openrouter:x/y', agentName: 'a', env: ENV, fetch: always.fn, retryDelaysMs: [0] }).complete(REQ))
+      .rejects.toThrow('openrouter reply incomplete (error) (after 2 attempts)');
   });
 
   it('gives up after the last delay, surfacing the final error', async () => {

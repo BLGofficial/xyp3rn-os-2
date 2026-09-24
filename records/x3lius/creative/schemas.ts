@@ -26,7 +26,7 @@ const TRACEABILITY = {
 };
 
 export const SONG_STRUCTURE_SCHEMA_ID = 'x3lius.song-structure/v1';
-export const LYRICS_SCHEMA_ID = 'x3lius.lyrics/v1';
+export const LYRICS_V1_SCHEMA_ID = 'x3lius.lyrics/v1';
 export const COMPOSITION_SCHEMA_ID = 'x3lius.composition/v1';
 
 export const SONG_STRUCTURE_SCHEMA = obj({
@@ -41,11 +41,54 @@ export const SONG_STRUCTURE_SCHEMA = obj({
   ...TRACEABILITY,
 });
 
-export const LYRICS_SCHEMA = obj({
+const BAR = obj({ n: int('1-based bar number'), text: str('The words of this bar'), language: LANGUAGE, rhymeTag: str('Rhyme-scheme letter this bar ends on, e.g. A') });
+
+/** Phase 8's one-section lyrics. No agent writes it any more; kept so existing artifacts stay readable and revisable. */
+export const LYRICS_V1_SCHEMA = obj({
   section: obj({ kind: SECTION_KIND, label: str('e.g. "Verse 1"') }),
-  bars: arr(obj({ n: int('1-based bar number'), text: str('The words of this bar'), language: LANGUAGE, rhymeTag: str('Rhyme-scheme letter this bar ends on, e.g. A') })),
+  bars: arr(BAR),
   rhymeScheme: str('The pattern across the bars, e.g. AABB'),
   devices: arr(obj({ bar: int('Bar number'), device: str('Named technique, e.g. internal rhyme'), note: str('Where and how it is used') })),
+  ...TRACEABILITY,
+});
+
+// Whole-song lyrics (after the Phase 9 live run showed one verse reaching Suno with no chorus): every
+// section of the song structure, written one section per model call (LYRICS_SECTION_LLM; a whole
+// song in one reply proved unreliable on the free route) and assembled by code, which sets each
+// section's id and kind from the structure and records the structure followed (sources). A bare
+// brief with no structure is one call on LYRICS_LLM.
+export const LYRICS_SCHEMA_ID = 'x3lius.lyrics/v2';
+export const LYRICS_LLM_SCHEMA_ID = 'x3lius.lyrics-llm/v2';
+export const LYRICS_SECTION_LLM_SCHEMA_ID = 'x3lius.lyrics-section-llm/v2';
+// No label here: code derives each section's Suno tag from its kind (the model wrote section ids
+// as tags live). Directions give production notes a place outside the sung bars (seen live too).
+const SECTION_WRITTEN = {
+  bars: arr(BAR, 'Only the words that are sung or spoken'),
+  rhymeScheme: str('The pattern across this section’s bars, e.g. AABB'),
+  devices: arr(obj({ bar: int('Bar number within this section'), device: str('Named technique, e.g. internal rhyme'), note: str('Where and how it is used') })),
+  directions: arr(str('A production or performance note for this section (instruments, effects, a fade): never sung, so never a bar')),
+};
+const SECTION_ID = str('The id of the SONG STRUCTURE section this covers (e.g. v1); a short id of your own when no structure is given');
+const INSTRUMENTAL = arr(str('Id of a SONG STRUCTURE section that has no vocals'));
+const LYRICS_WRITTEN = {
+  sections: arr(obj({ sectionId: SECTION_ID, kind: SECTION_KIND, ...SECTION_WRITTEN }), 'In song order'),
+  instrumental: INSTRUMENTAL,
+};
+export const LYRICS_LLM_SCHEMA = obj({ ...LYRICS_WRITTEN, ...TRACEABILITY });
+export const LYRICS_SECTION_LLM_SCHEMA = obj({
+  instrumental: { type: 'boolean', description: 'true when this section has no vocals; bars is then empty' },
+  ...SECTION_WRITTEN,
+  ...TRACEABILITY,
+});
+export const LYRICS_SCHEMA = obj({
+  sections: arr(obj({
+    sectionId: SECTION_ID,
+    kind: SECTION_KIND,
+    label: str('The section tag Suno sees, derived by code from the kind, e.g. "Verse 1", "Chorus"'),
+    ...SECTION_WRITTEN,
+  }), 'In song order'),
+  instrumental: INSTRUMENTAL,
+  sources: arr(obj({ role: { type: 'string', enum: ['structure'] }, artifactId: str(), schemaId: str(), version: int('Artifact version') }), 'The song structure followed; empty when none was given'),
   ...TRACEABILITY,
 });
 
@@ -93,6 +136,7 @@ export const SUNO_PROMPT_SCHEMA = obj({
 /** schema id → schema: what write_artifact accepts. */
 export const ARTIFACT_SCHEMAS: Readonly<Record<string, JsonSchema>> = {
   [SONG_STRUCTURE_SCHEMA_ID]: SONG_STRUCTURE_SCHEMA,
+  [LYRICS_V1_SCHEMA_ID]: LYRICS_V1_SCHEMA,
   [LYRICS_SCHEMA_ID]: LYRICS_SCHEMA,
   [COMPOSITION_SCHEMA_ID]: COMPOSITION_SCHEMA,
   [GENRE_STYLE_SCHEMA_ID]: GENRE_STYLE_SCHEMA,
