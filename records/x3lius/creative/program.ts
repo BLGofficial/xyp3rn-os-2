@@ -113,6 +113,8 @@ const systemPrompt = (title: string, slug: string, spec: CreativeSpec, entries: 
   '- Voice, style, tone and language choices must come from CANONICAL RULES. Do not add traits they do not state.',
   '- In rulesApplied, list every rule you applied, with its full ref copied exactly as shown inside the brackets (it starts with "canonical_prompts:"), and how it shaped the output.',
   '- In ungroundedChoices, list every creative decision no rule covers. When the rules are thin this list is long; that is expected, not a failure.',
+  // Text integrity, not style: seen live in 4 of 4 long outputs (F22).
+  '- Write every word in a single alphabet: never mix Latin and Cyrillic letters inside one word.',
   '- Reply with JSON only, matching the response schema.',
 ].join('\n');
 
@@ -195,8 +197,8 @@ const creativeProgram = (slug: string): LlmProgram => {
       schema: { name: schema.id, schema: schema.schema },
       signal: ctx.signal,
     });
-    const log = async (message: string) => {
-      await ctx.useTool('log_message', { message: `${slug}: ${message}` });
+    const log = async (message: string, level: 'info' | 'warn' = 'info') => {
+      await ctx.useTool('log_message', { level, message: `${slug}: ${message}` });
     };
     const res = spec.generate ? await spec.generate(call, prepared, log) : await call([]);
     // Models copy refs loosely (brackets, bare topics — seen live with Nemotron): resolve to a given

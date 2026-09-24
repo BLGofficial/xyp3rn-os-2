@@ -246,7 +246,7 @@ describe('the Suno Prompt-Formula agent (x3lius-suno)', () => {
 });
 
 describe('whole-song lyrics (x3lius.lyrics/v2): one model call per structure section, one artifact', () => {
-  type SectionReply = { instrumental: boolean; label: string; bars: { n: number; text: string }[] };
+  type SectionReply = { instrumental: boolean; label: string; bars: { n: number; text: string }[]; devices: { bar: number; device: string; note: string }[] };
   /** A FAKE model whose per-section reply for section `id` gets `edit` applied. */
   const sectionReply = (id: string, edit: (b: SectionReply) => void) => fakeModel({
     override: (schema, refs, user) => {
@@ -320,6 +320,65 @@ describe('whole-song lyrics (x3lius.lyrics/v2): one model call per structure sec
     expect(r.status).toBe('error');
     expect(r.error).toMatch(error);
     expect(await artifactsOf(r.runId)).toHaveLength(0);
+  });
+
+  /** A FAKE model whose first `times` replies for section `id` get `edit`; later replies are clean. */
+  const firstReplies = (id: string, times: number, edit: (b: SectionReply) => void) => {
+    let n = 0;
+    return fakeModel({
+      override: (schema, refs, user) => {
+        if (!('bars' in (schema.properties as object)) || !user.includes(`WRITE NOW: section ${id} (`)) return undefined;
+        const b = fakeBody(schema, refs.slice(0, 1), user) as unknown as SectionReply;
+        if (n++ < times) edit(b);
+        return b;
+      },
+    });
+  };
+
+  it.each([
+    ['a lyric line (seen live: "горниotope")', (b: SectionReply) => { b.bars[2]!.text = 'горниotope над града'; }, '"горниotope" (bar 3)'],
+    ['the section label', (b: SectionReply) => { b.label = 'Chorуs'; }, '"Chorуs" (label)'],
+  ])('a mixed-script word in %s gets that section re-asked once with the words named; the fixed reply is kept', async (_, edit, named) => {
+    const model = firstReplies('c1', 1, edit);
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status, r.error).toBe('success');
+    // v1, c1, then c1 again with a CORRECTION naming the word and showing the previous lines.
+    expect(model.calls).toHaveLength(3);
+    const retry = model.calls[2]!.user;
+    expect(retry).toContain('WRITE NOW: section c1 (chorus, 8 bars)');
+    expect(retry).toContain(`CORRECTION\nYour previous reply for section c1 mixed Latin and Cyrillic letters inside a word: ${named}.`);
+    expect(retry).toContain('[FAKE] c1 bar 1');
+    const body = out(r).body as unknown as LyricsV2;
+    expect(body.sections[1]!.bars.map((b) => b.text)).toEqual([1, 2, 3, 4].map((n) => `[FAKE] c1 bar ${n}`));
+    expect(body.sections[1]!.label).toBe('Chorus');
+    const [row] = await db.sql<{ tokens_used: number; output: { logs: { level: string; message: string }[] } }[]>`select tokens_used, output from agent_runs where id = ${r.runId}`;
+    expect(row!.tokens_used).toBe(3 * (FAKE_USAGE.input + FAKE_USAGE.output));
+    expect(row!.output.logs).toContainEqual(expect.objectContaining({ level: 'warn', message: `x3lius-lyrics: section c1: mixed-script word ${named}; asking once for a corrected section` }));
+  });
+
+  it('still mixed after the one correction: the run fails naming the section and the word; nothing is written', async () => {
+    const model = firstReplies('c1', 2, (b) => { b.bars[0]!.text = 'Пeak слънцето'; });
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status).toBe('error');
+    expect(r.error).toMatch(/section c1: mixed-script word "Пeak" \(bar 1\) is still there after one correction/);
+    expect(model.calls).toHaveLength(3);
+    expect(await artifactsOf(r.runId)).toHaveLength(0);
+  });
+
+  it('a mixed-script word outside Suno text (a device note) is no reason to re-ask: one call per section, written with a warning', async () => {
+    const model = firstReplies('v1', 1, (b) => { b.devices = [{ bar: 1, device: 'loanword', note: 'French loan Лieux' }]; });
+    const r = await run(depsWith(model), 'x3lius-lyrics', withStructure);
+    expect(r.status, r.error).toBe('success');
+    expect(model.calls).toHaveLength(2);
+    expect((r.output as { warnings: unknown[] }).warnings).toEqual([{ kind: 'mixed-script', word: 'Лieux', path: '$.sections[0].devices[0].note' }]);
+  });
+
+  it('every creative prompt asks for one alphabet per word', async () => {
+    for (const agent of ['x3lius-songwriting', 'x3lius-lyrics', 'x3lius-genre-style']) {
+      const model = fakeModel();
+      await run(depsWith(model), agent, { request: REQUEST });
+      expect(model.calls[0]!.system).toContain('Write every word in a single alphabet: never mix Latin and Cyrillic letters inside one word.');
+    }
   });
 
   it('refuses a structureArtifactId that is not a song-structure artifact, or not a string', async () => {

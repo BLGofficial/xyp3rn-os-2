@@ -30,6 +30,7 @@ Keywords: lyric (3), rhyme (3), wordplay (3), bar (2), punchline (2), flow (1)
     - Each call sees the structure and the lyrics written so far, under `WRITE NOW: section <id> (<kind>, <bars> bars): <purpose>`.
     - Code sets `sectionId` and `kind` from the structure and records it in `sources`. So every structure section appears once, in order, written or in `instrumental`.
     - Each call's trace is kept, prefixed `[<sectionId>]`. A section marked instrumental may not have bars.
+    - A section whose lines or label have a mixed-script word is asked for once more, with a `CORRECTION` naming each word and its bar. Still mixed means the run fails.
   - Without a structure: one call replies against `x3lius.lyrics-llm/v2`.
   - In both cases every section's bars are numbered 1..n in order, and no section id repeats.
   - Mixed-script words (Latin and Cyrillic letters in one word, a homoglyph corruption; ARCHITECTURE F22):

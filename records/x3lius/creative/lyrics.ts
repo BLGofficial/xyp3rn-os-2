@@ -2,6 +2,7 @@ import { readArtifact, sourceOf, withoutTrace, type ArtifactSource } from './art
 import {
   LYRICS_LLM_SCHEMA, LYRICS_LLM_SCHEMA_ID, LYRICS_SCHEMA, LYRICS_SCHEMA_ID, LYRICS_SECTION_LLM_SCHEMA, LYRICS_SECTION_LLM_SCHEMA_ID, SONG_STRUCTURE_SCHEMA_ID,
 } from './schemas.ts';
+import { mixedScriptWords } from './script-check.ts';
 import type { Completion, CreativeSpec } from './types.ts';
 
 /**
@@ -11,6 +12,8 @@ import type { Completion, CreativeSpec } from './types.ts';
  *   free route). Each call sees the structure and the lyrics written so far; code sets each
  *   section's id and kind from the structure, so coverage and order hold by construction, and
  *   records the structure version followed. A failed call stops the run: nothing is written.
+ * - A section whose lines or label mix Latin and Cyrillic letters inside a word (text Suno sings or
+ *   shows; F22) is asked for once more, with the words named. Still mixed: the run fails.
  * - Without one (a bare brief from `pnpm ask`): one call writing the sections the brief asks for.
  */
 
@@ -43,6 +46,20 @@ const writtenSoFar = (done: readonly (Section | StructureSection)[]): string =>
     ? '(none yet: this is the first section)'
     : done.map((s) => ('sectionId' in s ? `[${s.label}] (${s.sectionId})\n${s.bars.map((b) => b.text).join('\n')}` : `(${s.id}, ${s.kind}: instrumental)`)).join('\n\n')}`;
 
+/** Mixed-script words in the text of one section that reaches Suno: its lines and its label. */
+const sunoTextFaults = (r: SectionReply): string[] => [
+  ...mixedScriptWords(r.label).map((w) => `"${w.word}" (label)`),
+  ...r.bars.flatMap((b) => mixedScriptWords(b.text).map((w) => `"${w.word}" (bar ${b.n})`)),
+];
+
+const correction = (id: string, faults: readonly string[], r: SectionReply): string => [
+  'CORRECTION',
+  `Your previous reply for section ${id} mixed Latin and Cyrillic letters inside a word: ${faults.join(', ')}.`,
+  'Write this section again with every word in a single alphabet, changing only what that needs. Your previous label and lines:',
+  `[${r.label}]`,
+  ...r.bars.map((b) => b.text),
+].join('\n');
+
 /**
  * One call per structure section; the replies are combined into one v2 reply. Each call's trace is
  * kept, prefixed with its section, so the Critic can see which rule shaped which section.
@@ -56,22 +73,34 @@ const generate: CreativeSpec['generate'] = async (call, p, log) => {
   let model = '';
   for (const [i, s] of structure.sections.entries()) {
     const started = Date.now();
-    let res: Completion;
-    try {
-      res = await call([writtenSoFar(done), `WRITE NOW: section ${s.id} (${s.kind}, ${s.bars} bars): ${s.purpose}`], SECTION_SCHEMA);
-    } catch (e) {
-      throw new Error(`section ${s.id}: ${e instanceof Error ? e.message : String(e)}`);
+    const writeNow = `WRITE NOW: section ${s.id} (${s.kind}, ${s.bars} bars): ${s.purpose}`;
+    const ask = async (extra: readonly string[]): Promise<SectionReply> => {
+      let res: Completion;
+      try {
+        res = await call([writtenSoFar(done), writeNow, ...extra], SECTION_SCHEMA);
+      } catch (e) {
+        throw new Error(`section ${s.id}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      usage.inputTokens += res.usage.inputTokens;
+      usage.outputTokens += res.usage.outputTokens;
+      model = res.model;
+      return res.json as SectionReply;
+    };
+    let r = await ask([]);
+    const faults = sunoTextFaults(r);
+    if (faults.length > 0) {
+      // One short re-ask instead of losing the song at the final check (user decision, F22).
+      await log(`section ${s.id}: mixed-script word ${faults.join(', ')}; asking once for a corrected section`, 'warn');
+      r = await ask([correction(s.id, faults, r)]);
+      const still = sunoTextFaults(r);
+      if (still.length > 0) throw new Error(`section ${s.id}: mixed-script word ${still.join(', ')} is still there after one correction`);
     }
-    const r = res.json as SectionReply;
     if (r.instrumental && r.bars.length > 0) throw new Error(`section ${s.id}: marked instrumental but has ${r.bars.length} bars`);
     done.push(r.instrumental ? s : { sectionId: s.id, kind: s.kind, label: r.label, bars: r.bars, rhymeScheme: r.rhymeScheme, devices: r.devices });
     traces.push({
       rulesApplied: r.rulesApplied.map((x) => ({ ref: x.ref, how: `[${s.id}] ${x.how}` })),
       ungroundedChoices: r.ungroundedChoices.map((u) => `[${s.id}] ${u}`),
     });
-    usage.inputTokens += res.usage.inputTokens;
-    usage.outputTokens += res.usage.outputTokens;
-    model = res.model;
     await log(`section ${s.id} (${s.kind}) ${i + 1}/${structure.sections.length}: ${r.instrumental ? 'instrumental' : `${r.bars.length} bars`} in ${Date.now() - started}ms`);
   }
   return {

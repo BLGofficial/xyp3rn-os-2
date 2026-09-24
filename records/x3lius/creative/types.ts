@@ -59,7 +59,7 @@ export type CreativeSpec = {
    * Drives the model calls itself and returns the combined reply (default: one call). The reply's
    * rulesApplied still goes through the program's ref check. `log` writes a run-log line.
    */
-  readonly generate?: (call: ModelCall, prepared: Prepared, log: (message: string) => Promise<void>) => Promise<Completion>;
+  readonly generate?: (call: ModelCall, prepared: Prepared, log: (message: string, level?: 'info' | 'warn') => Promise<void>) => Promise<Completion>;
   /** Model reply → artifact body, plus violations (default: the reply as-is). */
   readonly finalize?: (reply: Record<string, unknown>, prepared: Prepared, entries: readonly ContextEntry[]) => { readonly body: Record<string, unknown>; readonly violations: readonly string[] };
   /** Checks the schema subset can't express; returns violations. */

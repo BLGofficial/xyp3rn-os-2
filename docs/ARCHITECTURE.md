@@ -230,4 +230,8 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
   - lyric bars and section labels;
   - the formula's title, style, excluded styles and lyrics. The rendered lyrics are checked too, so an older artifact can't pass a hit on.
 - A hit anywhere else (device notes, genre/style fields, songwriting text) is written as a warning in `creative_artifacts.warnings` and logged. That way a typo in metadata doesn't cost a 4-minute run.
+- Per-section repair (user decision, after "горниotope"-style hits in 4 of 4 long live outputs):
+  - Whole-song lyrics check each section's lines and label as soon as its call returns.
+  - On a hit, that one section is asked for once more, with the words named. Still mixed means the run fails, naming the section.
+  - Every creative prompt also asks for one alphabet per word.
 - Switching script between words is untouched: which languages a line uses is canonical knowledge.
