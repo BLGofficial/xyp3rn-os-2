@@ -1,0 +1,55 @@
+HANDOFF — Phase 11 built and proven on fixtures; the real rubric values are outstanding
+
+- **Built:**
+  - **`trace.analysis/v1`**, the TRACE boundary contract (`tech/trace/analysis.ts`, TECH-owned, ARCHITECTURE F24):
+    - one render at the `mix` or `master` stage;
+    - loudness (integrated, short-term max, momentary max, range, true peak), tonal balance over seven fixed bands, stereo correlation and width (full band and per band), crest factor;
+    - a strict validator (shape, then ranges) and 29 metric ids (`loudness.integrated-lufs`, `stereo.sub.width-pct`, …).
+    - Never edited in place: Phase 14 implements it, and a change is `trace.analysis/v2`.
+  - **Mix/master rubric as canonical claims:**
+    - `records/x3lius/mix-rubric.yaml` (`xyp-mix-rubric/v1`, normalizer `knowledge/ingestion/normalizers/mix-rubric.ts`) goes in through the gate's first-party path as one versioned row in `x3lius-mix-master`.
+    - Each bound is a claim `x3lius.<stage>.<metric>` = `{ min?, max? }`, scoped `trace`, so it never reaches a creative prompt.
+    - Admission is strict: an unknown metric, a placeholder, a non-number or min > max fails the run.
+  - **`x3lius-mix-master`** (Creative, deterministic, replaces its stub):
+    - It checks an analysis against the current claims for its stage and writes an `x3lius.mix-report/v1` artifact.
+    - Each check says keep, raise or lower, by how much, with its claim ref and version. A metric no claim bounds is `unset`.
+    - It refuses a metric bounded by two rows, a malformed bound, and a missing or invalid analysis.
+  - **`x3lius-arrangement`** and **`x3lius-production`** (Creative, LLM, shared program, replacing their stubs):
+    - Arrangement (`x3lius.arrangement/v1`) optionally follows a song structure: its ids, in order, with kind and bars copied from it.
+    - Production (`x3lius.production/v1`) covers drums, sound design and the FL Studio layout (channels → mixer tracks, with effect chains). It reads Production + Arrangement + Vocal DNA and optionally an arrangement. Both record their upstream in `sources`.
+  - **Proof** (`docs/proofs/PHASE-11-production-mix.txt`):
+    - 54 new tests; full suite 797/798. The one failure is the Phase 3 ranking check, which also failed on `main` before this phase. PR #7 fixes it.
+    - 8/8 mutations caught.
+    - A sample report is included.
+- **Key decisions (user):**
+  - **F10 resolved:** three single-class agents and no hybrid. Mix/Master is deterministic and needs no key; TRACE intake (the Execution half) is Phase 14's.
+  - **Rubric source:** an operator file with the values from the operator, like Vocal DNA. Research candidates can add bounds.
+  - **TRACE shape:** defined from the guide's list, since no TRACE export exists yet.
+- **Deviations from spec:**
+  - **Three agents, not two:** Arrangement has its own agent, since the manifest assigns it to Phase 11 and every sub-domain has one agent by name.
+  - **No real rubric row yet:** the guide's "wire the rubric" delivers the wiring, and the values wait on the operator. Until then every metric reports `unset`.
+  - **Earlier-phase edits:**
+    - The JSON-schema builders moved to `core/llm/json-schema.ts`, so the TECH contract doesn't import from Records.
+    - The Phase 7 stub-path proof now runs on Evaluation.
+    - The Phase 9 stub list is now `['x3lius-evaluation']`.
+    - Vocal DNA's `PLACEHOLDER` is exported for reuse.
+- **Open flags:**
+  - **To finish Phase 11:**
+    1. Fill in every `REQUIRED` in `records/x3lius/mix-rubric.yaml` (or delete the line).
+    2. Run `pnpm ingest --file records/x3lius/mix-rubric.yaml --origin first_party`, then embed.
+    3. Run `pnpm dispatch x3lius-mix-master '{"analysis": …}'` on a real render.
+  - **Not live-run:** Arrangement and Production have not been run against a live model (no `OPENROUTER_API_KEY`; the free quota ran out on 2026-09-24). Their wiring is proven on the FAKE model.
+  - **Dev DB not set up:** on this Windows checkout every migration is still pending.
+  - **Production vs arrangement coverage:** a production made for an arrangement that uses elements is refused if it has no drum or sound-design element, or no channel. Which production element covers which arrangement element is not code-checked, because names vary and a lead vocal isn't made in drums or sound design.
+  - **A research bound on a metric the file already states** leaves two current rows, and the report is refused until the operator drops the metric from the file (a re-ingest).
+  - **The Phase 3 ranking assertion** (`adds 1-hop graph neighbours…`) fails on this machine's embeddings. It is unrelated to Phase 11. It is investigated and fixed in PR #7, which changes only the test.
+    - The ranking works as designed. The `phase-4-agent-runtime-registry` module is found, but the limit of 4 graph-only items cuts it.
+    - Here, direct hits #7 and #8 are off-topic, and their `precedes` neighbours (0.8486 × 0.7) outscore the module (0.9188 × 0.6).
+    - The fixed test checks one-hop reachability with that limit raised.
+- **Next phase needs (12):**
+  - **Critic inputs are ready:**
+    - every creative artifact carries `rulesApplied` refs;
+    - every mix check carries `ref` + `version`, so a critique can tie each violation to a rubric claim id (AGENT_CLASSES Critic).
+  - **Revision:** a mix report's raise/lower checks are the natural first target. A revision is a new artifact version (the parent/lineage triggers), never an edit.
+  - **Evaluation** is the last Phase 7 stub (`x3lius-evaluation`). Replace it under the same name so routing and scope carry over.
+  - **Wire the Phase 9 stub score hook** (`records/x3lius/suno/score-hook.ts`) to the real Critic.

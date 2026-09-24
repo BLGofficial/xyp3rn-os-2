@@ -151,7 +151,8 @@ describe('registry: Phase 9 agents', () => {
 
   it('every sub-domain not built yet is still a read-only stub; the registry validates', () => {
     const stubs = loadMusicSystem().subdomains.map((s) => s.slug).filter((s) => !BUILT_SUBDOMAINS.includes(s));
-    expect(stubs.sort()).toEqual(['x3lius-arrangement', 'x3lius-evaluation', 'x3lius-mix-master', 'x3lius-production']);
+    // Phase 11 built Arrangement, Production and Mix/Master (tests/phase-11); Evaluation is Phase 12's.
+    expect(stubs.sort()).toEqual(['x3lius-evaluation']);
     for (const s of stubs) expect(HANDLERS[s]).toBe(subdomainStub);
     expect(registry.validateAll()).toEqual([]);
   });

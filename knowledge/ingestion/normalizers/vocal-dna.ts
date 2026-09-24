@@ -56,7 +56,7 @@ const fail = (message: string): never => {
 };
 
 // A template's fill-in marker, not a value (the operator's first file carried model: REQUIRED).
-const PLACEHOLDER = /^(required|todo|tbd|fixme|changeme|<[^>]*>)$/i;
+export const PLACEHOLDER = /^(required|todo|tbd|fixme|changeme|<[^>]*>)$/i;
 
 const text = (v: unknown, what: string): string => {
   if (typeof v !== 'string' || v.trim() === '') return fail(`${what} must be a non-empty string`);

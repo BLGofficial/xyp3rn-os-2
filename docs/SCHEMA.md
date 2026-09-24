@@ -303,6 +303,12 @@ Migration `20260924200000_artifact_warnings.sql`.
 - **`warnings`** (`jsonb`, not null, default `[]`, must be an array): defects the writing agent found in its own output that did not block the write. Each is one object, e.g. `{"kind":"mixed-script","word":"Лieux","path":"$.sections[0].devices[0].note"}` (ARCHITECTURE F22).
 - Set once at insert through `write_artifact`, like every other column (the immutable trigger covers it). Existing rows read `[]`. The table-level grants cover the new column.
 
+## Phase 11 additions (no migration)
+
+- **New `creative_artifacts.schema_id` values:** `x3lius.arrangement/v1`, `x3lius.production/v1` and `x3lius.mix-report/v1`.
+  - A mix report's `model` is `none`, since Mix/Master is deterministic, and its `body.analysis` is the `trace.analysis/v1` it checked.
+- **New canonical claims:** `x3lius.<stage>.<metric>` = `{ min?, max? }` (`model_scope` `trace`), read through `canonical_claims` like every claim (ARCHITECTURE F24).
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

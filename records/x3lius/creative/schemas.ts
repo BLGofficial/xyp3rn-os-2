@@ -1,4 +1,5 @@
-import type { JsonSchema } from '../../../core/llm/json-schema.ts';
+import { arr, int, num, obj, str, type JsonSchema } from '../../../core/llm/json-schema.ts';
+import { TRACE_ANALYSIS_SCHEMA } from '../../../tech/trace/analysis.ts';
 
 /**
  * Output contracts of the Phase 8 Creative agents. Structured on purpose: the Phase 12 Critic
@@ -9,13 +10,6 @@ import type { JsonSchema } from '../../../core/llm/json-schema.ts';
  * Nothing here describes an artist's voice: languages are free ISO codes, not a fixed list, and
  * every stylistic choice is left to the canonical rules the agent is given at run time.
  */
-
-const str = (description?: string): JsonSchema => (description ? { type: 'string', description } : { type: 'string' });
-const int = (description: string): JsonSchema => ({ type: 'integer', description });
-const arr = (items: JsonSchema, description?: string): JsonSchema => (description ? { type: 'array', items, description } : { type: 'array', items });
-const obj = (properties: Record<string, JsonSchema>, description?: string): JsonSchema => ({
-  type: 'object', properties, required: Object.keys(properties), additionalProperties: false, ...(description ? { description } : {}),
-});
 
 const SECTION_KIND: JsonSchema = { type: 'string', enum: ['intro', 'verse', 'pre-chorus', 'chorus', 'post-chorus', 'hook', 'bridge', 'breakdown', 'outro'] };
 const LANGUAGE = str('Language of this text: an ISO 639-1 code, or "mixed" when it switches within the line');
@@ -133,6 +127,58 @@ export const SUNO_PROMPT_SCHEMA = obj({
   ...TRACEABILITY,
 });
 
+// Phase 11: arrangement and production (LLM, code adds `sources`), and the Mix/Master report
+// (deterministic: a TRACE analysis checked against the canonical rubric claims).
+const upstream = (role: string, description: string) =>
+  arr(obj({ role: { type: 'string', enum: [role] }, artifactId: str(), schemaId: str(), version: int('Artifact version') }), description);
+
+export const ARRANGEMENT_SCHEMA_ID = 'x3lius.arrangement/v1';
+export const ARRANGEMENT_LLM_SCHEMA_ID = 'x3lius.arrangement-llm/v1';
+const ARRANGEMENT_WRITTEN = {
+  sections: arr(obj({
+    sectionId: SECTION_ID,
+    kind: SECTION_KIND,
+    bars: int('Length in bars'),
+    energy: int('Relative intensity, from 1 (sparsest) to 10 (fullest)'),
+    elements: arr(obj({ element: str('An instrument or sound, e.g. 808, hi-hats, pad, lead vocal'), role: str('What it plays or does in this section') })),
+    transitionIn: str('How the song moves into this section (e.g. riser, drop-out, fill); "none" for the first'),
+  }), 'In song order'),
+};
+export const ARRANGEMENT_LLM_SCHEMA = obj({ ...ARRANGEMENT_WRITTEN, ...TRACEABILITY });
+export const ARRANGEMENT_SCHEMA = obj({ ...ARRANGEMENT_WRITTEN, sources: upstream('structure', 'The song structure followed; empty when none was given'), ...TRACEABILITY });
+
+export const PRODUCTION_SCHEMA_ID = 'x3lius.production/v1';
+export const PRODUCTION_LLM_SCHEMA_ID = 'x3lius.production-llm/v1';
+const PRODUCTION_WRITTEN = {
+  tempoBpm: num('Beats per minute'),
+  drums: arr(obj({ element: str('e.g. kick, 808, snare, hi-hat, percussion'), sound: str('How it should sound and how it is made'), pattern: str('Rhythm and programming notes') })),
+  soundDesign: arr(obj({ element: str('A non-drum sound, e.g. bass, lead, pad'), source: str('The synth, sample or recording it comes from'), processing: arr(str('One processing step, in chain order')) })),
+  flStudio: obj({
+    channels: arr(obj({ name: str('Channel Rack name'), generator: str('Plugin or sampler that makes the sound'), mixerTrack: int('Mixer track it is routed to: one of mixerTracks') })),
+    mixerTracks: arr(obj({ track: int('Mixer track number'), name: str('Mixer track name'), effects: arr(str('Effect plugin, in slot order')) })),
+  }, 'The FL Studio project layout'),
+};
+export const PRODUCTION_LLM_SCHEMA = obj({ ...PRODUCTION_WRITTEN, ...TRACEABILITY });
+export const PRODUCTION_SCHEMA = obj({ ...PRODUCTION_WRITTEN, sources: upstream('arrangement', 'The arrangement produced; empty when none was given'), ...TRACEABILITY });
+
+export const MIX_REPORT_SCHEMA_ID = 'x3lius.mix-report/v1';
+const RUBRIC_BOUND: JsonSchema = { type: 'object', properties: { min: num('Lowest value in range'), max: num('Highest value in range') }, required: [], additionalProperties: false };
+export const MIX_REPORT_SCHEMA = obj({
+  stage: { type: 'string', enum: ['mix', 'master'] },
+  analysis: TRACE_ANALYSIS_SCHEMA,
+  checks: arr(obj({
+    metric: str('trace.analysis/v1 metric id'),
+    unit: str(),
+    measured: num('The analysis value'),
+    rubric: RUBRIC_BOUND,
+    action: { type: 'string', enum: ['keep', 'raise', 'lower'] },
+    by: num('How far to move it to reach the nearest bound, in unit (0 when kept)'),
+    ref: str('The rubric claim: canonical_prompts:<id>#<topic>'),
+    version: int('Version of that canonical row'),
+  }), 'One per metric the rubric bounds, in contract order'),
+  unset: arr(str('A metric no rubric claim bounds: reported, never defaulted')),
+});
+
 /** schema id → schema: what write_artifact accepts. */
 export const ARTIFACT_SCHEMAS: Readonly<Record<string, JsonSchema>> = {
   [SONG_STRUCTURE_SCHEMA_ID]: SONG_STRUCTURE_SCHEMA,
@@ -141,4 +187,7 @@ export const ARTIFACT_SCHEMAS: Readonly<Record<string, JsonSchema>> = {
   [COMPOSITION_SCHEMA_ID]: COMPOSITION_SCHEMA,
   [GENRE_STYLE_SCHEMA_ID]: GENRE_STYLE_SCHEMA,
   [SUNO_PROMPT_SCHEMA_ID]: SUNO_PROMPT_SCHEMA,
+  [ARRANGEMENT_SCHEMA_ID]: ARRANGEMENT_SCHEMA,
+  [PRODUCTION_SCHEMA_ID]: PRODUCTION_SCHEMA,
+  [MIX_REPORT_SCHEMA_ID]: MIX_REPORT_SCHEMA,
 };

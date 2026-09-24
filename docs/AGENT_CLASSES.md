@@ -59,7 +59,7 @@ Records ops capabilities (catalog, rights splits) are deliberately undefined unt
 ## Creative
 
 - **Question**: What should the song, lyrics or style be?
-- **Allowed inputs**: A brief; canonical style, voice and rubric rules pulled through the Context Engine; prior artifact versions.
+- **Allowed inputs**: A brief; canonical style, voice and rubric rules pulled through the Context Engine; prior artifact versions; a structured measurement of a render (a `trace.analysis/v1`, Phase 11).
 - **Allowed outputs**: A new version of a structured creative artifact (JSON objects, not prose blobs, so the Critic can diff them against a rubric).
 - **Forbidden to mutate**: Canonical knowledge, including the rules it consumes; research tables; critiques; previously written artifact versions. It may not hardcode a voice or style rule.
 

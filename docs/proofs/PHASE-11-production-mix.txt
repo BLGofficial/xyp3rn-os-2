@@ -1,0 +1,165 @@
+Phase 11 — Production / Mix / Master: proof (2026-09-24)
+Produced with the repo's own commands against the local Postgres; every DB test runs in its own throwaway database.
+================================================================================
+
+## 0. Status of the guide's deliverables
+# - Two agents: x3lius-production (Creative, LLM) and x3lius-mix-master (Creative, deterministic). Arrangement is
+#   its own Creative agent (x3lius-arrangement), as the manifest's built_in '11' asks (user decision, ARCHITECTURE F10:
+#   three single-class agents, no hybrid).
+# - TRACE-shaped input contract: trace.analysis/v1 in tech/trace/analysis.ts (ARCHITECTURE F24), strict validator,
+#   29 metric ids. TRACE itself is not reachable: the contract is defined and the integration is Phase 14's.
+# - Rubric in canonical_prompts: bounds are canonical claims x3lius.<stage>.<metric> scoped `trace`, admitted through
+#   the gate (records/x3lius/mix-rubric.yaml, first-party; or research candidates). No threshold in code.
+# - The real rubric VALUES are the operator's (user decision). The draft file holds REQUIRED placeholders, which
+#   admission refuses (section 3).
+# - 5-bullet handoff for Phase 12: docs/handoffs/PHASE-11.md.
+
+## 1. Tests (tests/phase-11; [FIXTURE] analysis, rubric and Production rule in throwaway DBs; FAKE model for LLM calls)
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > accepts a complete analysis and flattens it into every contract metric, in order
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses another contract id
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses an unknown stage
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses a missing band
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses an extra field
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses a string for a number
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses a correlation above 1
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses a band width above 100 %
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses a band louder than the full band
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses a negative loudness range
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses a zero sample rate
+✓ tests/phase-11/mix-master.test.ts > trace.analysis/v1: the one TRACE contract > refuses an empty label
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > is selected for a rubric file and only for one
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > yields one prompt in the manifest’s Mix/Master module with one claim per bound
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > refuses a placeholder bound, loudly (never half-normalized)
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > refuses a metric outside the contract, loudly (never half-normalized)
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > refuses min above max, loudly (never half-normalized)
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > refuses a bound with no side, loudly (never half-normalized)
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > refuses an unknown bound field, loudly (never half-normalized)
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > refuses a non-number bound, loudly (never half-normalized)
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > refuses an unknown top-level field, loudly (never half-normalized)
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > refuses no stage at all, loudly (never half-normalized)
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > refuses an empty stage, loudly (never half-normalized)
+✓ tests/phase-11/mix-master.test.ts > mix rubric normalizer (xyp-mix-rubric/v1): bounds as claims scoped trace, one row > the operator draft names only contract metrics (its values are the operator’s to give)
+✓ tests/phase-11/mix-master.test.ts > checkMetric: nearest bound, signed by action > -12.3 against {"min":-10,"max":-8} → raise 2.3
+✓ tests/phase-11/mix-master.test.ts > checkMetric: nearest bound, signed by action > -7.2 against {"min":-10,"max":-8} → lower 0.8
+✓ tests/phase-11/mix-master.test.ts > checkMetric: nearest bound, signed by action > -9 against {"min":-10,"max":-8} → keep 0
+✓ tests/phase-11/mix-master.test.ts > checkMetric: nearest bound, signed by action > -8 against {"min":-10,"max":-8} → keep 0
+✓ tests/phase-11/mix-master.test.ts > checkMetric: nearest bound, signed by action > -20 against {"max":-8} → keep 0
+✓ tests/phase-11/mix-master.test.ts > checkMetric: nearest bound, signed by action > -20 against {"min":-10} → raise 10
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master reads the rubric strictly > refuses a metric bounded by two canonical rows, before writing anything
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master reads the rubric strictly > refuses a malformed bound in a canonical claim
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master reads the rubric strictly > leaves out claims not scoped trace and reports claims naming no contract metric
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master against the canonical rubric > refuses a bare request: it needs a trace.analysis/v1 and names the contract
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master against the canonical rubric > refuses an invalid analysis with every violation named, and writes nothing
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master against the canonical rubric > with no rubric admitted, every metric is unset: no threshold comes from code
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master against the canonical rubric > only first-party origin admits a rubric file; third-party material goes through Research Intelligence
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master against the canonical rubric > admission writes one versioned row in the manifest’s Mix/Master module, its claims scoped trace
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master against the canonical rubric > checks a master analysis: keep, raise or lower by how much, each citing its claim and version (no LLM)
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master against the canonical rubric > a mix analysis is checked against the mix bounds only
+✓ tests/phase-11/production.test.ts > x3lius-arrangement > from a bare brief: an x3lius.arrangement/v1 artifact from its own module + Vocal DNA, no sources
+✓ tests/phase-11/production.test.ts > x3lius-arrangement > against a song structure: its sections in its order, kind and bars copied from it, the version recorded
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master against the canonical rubric > the rubric never reaches a creative prompt: it is scoped to the TRACE check
+✓ tests/phase-11/mix-master.test.ts > x3lius-mix-master against the canonical rubric > a rubric change is a new version, and the next report cites it
+✓ tests/phase-11/mix-master.test.ts > registry: Phase 11 Mix/Master > x3lius-mix-master is a deterministic Creative agent that reads claims and writes its report
+✓ tests/phase-11/production.test.ts > x3lius-arrangement > refuses sections out of the structure’s order, and writes nothing
+✓ tests/phase-11/production.test.ts > x3lius-arrangement > refuses an upstream artifact of another kind
+✓ tests/phase-11/production.test.ts > x3lius-arrangement > refuses an energy outside 1–10
+✓ tests/phase-11/production.test.ts > x3lius-production > reads Production, Arrangement and Vocal DNA; a promoted Production rule reaches the prompt and the artifact
+✓ tests/phase-11/production.test.ts > x3lius-production > refuses a channel routed to a mixer track it does not list, and writes nothing
+✓ tests/phase-11/production.test.ts > x3lius-production > refuses repeated mixer track numbers
+✓ tests/phase-11/production.test.ts > registry: Phase 11 Creative agents replace their stubs under the same names > x3lius-arrangement: Creative, RECORDS, LLM-backed, context + artifact tools, routable by its Scope
+✓ tests/phase-11/production.test.ts > registry: Phase 11 Creative agents replace their stubs under the same names > x3lius-production: Creative, RECORDS, LLM-backed, context + artifact tools, routable by its Scope
+✓ tests/phase-11/production.test.ts > registry: Phase 11 Creative agents replace their stubs under the same names > Phase 11 built exactly Arrangement, Production and Mix/Master; only Evaluation (Phase 12) is still a stub
+# Full suite: 797/798 (50 files); pnpm typecheck clean; pnpm agents:validate 0 failures.
+# The one failure is from before Phase 11 and outside its scope: tests/phase-03/context-engine.test.ts "adds 1-hop graph
+# neighbours…" expects slug phase-4-agent-runtime-registry among the top results. On this Windows checkout, real-data
+# embedding ranking leaves it out. It failed identically on main before any Phase 11 change.
+# Earlier-phase tests updated:
+#   - Phase 7's stub-path proof moves from Mix/Master (now built) to Evaluation, the last stub (Phase 12).
+#   - Phase 9's stub list is now ['x3lius-evaluation'].
+
+## 2. Mutations (each applied, run against tests/phase-11, reverted) — 8/8 caught
+# M1 Mix/Master admits claims not scoped trace                      → 1 failed
+# M2 checkMetric raises when above min (wrong comparison)           → 7 failed
+# M3 Mix/Master accepts a metric bounded by two rows                → 1 failed
+# M4 rubric claims scoped model-agnostic (would reach creative)     → 6 failed
+# M5 TRACE validator lets a band exceed the full band               → 1 failed
+# M6 arrangement accepts sections out of the structure's order      → 1 failed
+# M7 production accepts a channel routed to an unlisted track       → 1 failed
+# M8 arrangement keeps the model's kind instead of the structure's  → 1 failed
+
+## 3. The operator draft: records/x3lius/mix-rubric.yaml (xyp-mix-rubric/v1) is refused until filled
+# draft: mix rubric: mix.loudness.true-peak-dbtp.max is a placeholder ("REQUIRED"): give the real value
+# To finish: replace every REQUIRED with a value (or delete the line), then
+#   pnpm ingest --file records/x3lius/mix-rubric.yaml --origin first_party   (then embed, as for any source)
+
+## 4. A report: the [FIXTURE] rubric of tests/phase-11 applied to the [FIXTURE] master analysis
+#    (x3lius-mix-master handler, claims as the normalizer writes them; row id elided). Run log, then the body:
+x3lius-mix-master: master "[FIXTURE] night drive, master bounce 3": 4 checked, 3 to move (raise loudness.integrated-lufs by 2.3 LUFS; lower loudness.true-peak-dbtp by 0.8 dBTP; lower stereo.sub.width-pct by 2 %), 25 unset
+{
+  "stage": "master",
+  "checks": [
+    {
+      "metric": "loudness.integrated-lufs",
+      "unit": "LUFS",
+      "measured": -12.3,
+      "rubric": {
+        "min": -10,
+        "max": -8
+      },
+      "action": "raise",
+      "by": 2.3,
+      "ref": "canonical_prompts:<row-id>#x3lius.master.loudness.integrated-lufs",
+      "version": 1
+    },
+    {
+      "metric": "loudness.range-lu",
+      "unit": "LU",
+      "measured": 5.2,
+      "rubric": {
+        "min": 4
+      },
+      "action": "keep",
+      "by": 0,
+      "ref": "canonical_prompts:<row-id>#x3lius.master.loudness.range-lu",
+      "version": 1
+    },
+    {
+      "metric": "loudness.true-peak-dbtp",
+      "unit": "dBTP",
+      "measured": -0.2,
+      "rubric": {
+        "max": -1
+      },
+      "action": "lower",
+      "by": 0.8,
+      "ref": "canonical_prompts:<row-id>#x3lius.master.loudness.true-peak-dbtp",
+      "version": 1
+    },
+    {
+      "metric": "stereo.sub.width-pct",
+      "unit": "%",
+      "measured": 7,
+      "rubric": {
+        "max": 5
+      },
+      "action": "lower",
+      "by": 2,
+      "ref": "canonical_prompts:<row-id>#x3lius.master.stereo.sub.width-pct",
+      "version": 1
+    }
+  ],
+  "unset": "25 metrics",
+  "knowledge": {
+    "rubricClaims": 4,
+    "unset": 25,
+    "reasons": [
+      "master: 4 rubric claim(s) under x3lius.master.* scoped trace"
+    ]
+  }
+}
+
+## 5. Not run live
+# - The Production and Arrangement agents were not run against a live model: no OPENROUTER_API_KEY in this session,
+#   and the free quota ran out on 2026-09-24 (Phase 10 handoff). Their wiring is proven with the FAKE model (section 1).
+# - The dev DB on this machine has no migrations applied (pnpm db:status: all pending), so there is no dev-DB run.
+#   Mix/Master needs no key: once the rubric is admitted, `pnpm dispatch x3lius-mix-master '{"analysis": …}'` is the live check.
