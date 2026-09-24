@@ -1,4 +1,4 @@
-HANDOFF — Phase 9 built; live prompt-assembly proof pending a provider key
+HANDOFF — Phase 9 complete (live prompt assembly produced; see the addendum at the end)
 
 - **Built:**
   - **Suno Prompt-Formula agent** `x3lius-suno` (Creative, replaces its stub). It is hybrid (user decision):
@@ -31,14 +31,14 @@ HANDOFF — Phase 9 built; live prompt-assembly proof pending a provider key
   - New insert-only tables for the trail.
   - Tests were written first.
 - **Deviations from spec:**
-  - **No live prompt assembly:** the formula and its inputs need the LLM key.
+  - **No live prompt assembly** at build time: the formula and its inputs needed the LLM key. It was produced later the same day (addendum).
   - **"Two agent files" became three**, plus the Genre/Style agent (F15).
   - **Earlier-phase edits:**
     - Phase 7's stub-agent propagation proof now runs on `x3lius-mix-master` (Suno isn't a stub any more), with its own FIXTURE rule.
     - Phase 7 and 8 registry tests count the stubs that remain instead of a fixed number.
     - The Phase 8 program was generalized (per-spec modules, claim namespaces, a separate model schema, prepare/admit/finalize). Phase 8 behaviour is unchanged and its tests pass untouched in substance.
 - **Open flags:**
-  - **The live assembly and the first real take are outstanding.** They need a provider key (and Suno access for a take): add the key in a new session, then follow §5 of the proof.
+  - **The first real take is outstanding.** It needs Suno access (manual in the Suno UI, or `SUNO_API_KEY` for `sunoapi`); follow §5 of the proof with the live formula artifact `cb1c7803-21e1-4419-a0e1-8eb056aa4a85`.
   - **`sunoapi` is unverified:**
     - Field names follow the vendor docs, which disagree on casing; capture accepts both `audio_url` and `audioUrl`.
     - `callBackUrl` is required by the vendor: set `SUNO_CALLBACK_URL` (the adapter polls regardless).
@@ -52,3 +52,20 @@ HANDOFF — Phase 9 built; live prompt-assembly proof pending a provider key
   - **The RVC post-processing consumer** should read the same row through `retrieve_claims`/`retrieve_context`, never a copy. Phase 10's proof is both consumers returning the same `canonical_prompts.id` and version. Mind `modelTag`: give it `model-agnostic` (or a tag both readers accept), or the formula's Suno-version filter will drop it.
   - **The Phase 6D pending claim** ("RVC/Applio voice model already exists for X3LIUS") lived on an earlier, ephemeral dev DB and went to `records-validated-rules`. Re-propose it tagged `x3lius-vocal-dna` if Phase 10 builds on it.
   - **Keys:** the Phase 8 verse, the Phase 9 assembly and Phase 10's proof of both consumers can all run in one keyed session. The RVC consumer can be deterministic (no key) if it only reads the row.
+
+**Addendum (2026-09-24, later): live prompt assembly with Nemotron via OpenRouter.**
+- **Produced** (`docs/proofs/PHASE-09-suno.txt` §6): `pnpm workflow records/x3lius/song-to-suno.workflow.yaml` ran all four steps live (structure → lyrics → genre/style → formula, 4m39s). The result is `x3lius.suno-prompt/v1` artifact `cb1c7803-21e1-4419-a0e1-8eb056aa4a85`:
+  - title "NOCTURNE БЕТОН", a 492-char style, 8 excluded styles;
+  - lyrics rendered verbatim from the lyrics artifact;
+  - `sources` naming the three upstream artifact versions;
+  - `limits: []`, because no `suno.limit.*` claim exists.
+- **The context was one canonical line** (the guide's voice claim) at every step, so every artifact is `sparse: true` (F18).
+- **The first attempt was refused, with nothing written,** on a bare-topic ref. That is fixed by ref alias resolution (tested).
+- **Design gap, for a decision before Phase 10 builds on it:**
+  - The workflow's lyrics step receives only the brief, not the structure artifact. It writes one 8-bar verse unrelated to the 10-section structure, so the selected hook never reaches the Suno lyrics field.
+  - As assembled, a Suno prompt holds one verse and no chorus.
+- **Quality, for the Phase 12 Critic:**
+  - A mixed-script word ("Пeak": Cyrillic П + Latin "eak") passed into the Suno lyrics verbatim.
+  - Some Bulgarian is invalid ("тън", "Градът дъха") and needs a native check.
+  - The declared rhyme scheme doesn't hold.
+  - The model's `ungroundedChoices` contradict its own style text on BPM.

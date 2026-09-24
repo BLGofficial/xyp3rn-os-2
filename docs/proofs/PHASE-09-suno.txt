@@ -3,10 +3,10 @@ Produced with the repo's own commands against the local Supabase-emulating Postg
 ================================================================================
 
 ## 0. Status of the guide's "one real end-to-end prompt assembly (formula agent output shown)"
-# NOT PRODUCED IN THIS SESSION. The formula agent and its inputs (Phase 8 artifacts) are LLM
-# agents, and no provider key exists in this container (same blocker as Phase 8's verse). Section 3
-# shows the live dev-DB run up to that point; section 4 shows the SHAPE of the output from a FAKE
-# model on a throwaway DB — every text field "[FAKE]", takes "[FIXTURE]". It is not a Suno prompt.
+# PRODUCED later the same day: see section 6 (brief → structure, lyrics, genre/style → Suno prompt
+# artifact cb1c7803-…, model nvidia/nemotron-3-ultra-550b-a55b:free via OpenRouter). Sections 3–4 are the
+# earlier no-key run and the FAKE-model shape ("[FAKE]"/"[FIXTURE]"), kept as the record of the contract.
+# No take yet: nothing was submitted to Suno (section 5 has the commands).
 # Suno access: no official public API exists (partner-only exploration since 2026-07); adapters are
 # manual (works now) and the sunoapi.org reseller (unverified until SUNO_API_KEY exists).
 
@@ -189,3 +189,316 @@ take_scores: [{"scorer":"stub:phase-12-critic","is_stub":true,"score":null,"deta
 #    … generate in the Suno UI with the logged prompt, then:
 #    pnpm dispatch suno-submitter '{"capture":{"submissionId":"<id>","takes":[{"audioUrl":"https://…"}]}}'
 # For sunoapi instead: SUNO_API_KEY + SUNO_CALLBACK_URL, adapter "sunoapi", capture without takes (polls once).
+
+## 6. LIVE (2026-09-24, later): the real end-to-end prompt assembly
+# OPENROUTER_API_KEY=… pnpm workflow records/x3lius/song-to-suno.workflow.yaml \
+#   '{"request":"An X3LIUS track about the city at night","sunoModel":"v5"}'
+# Model openrouter:nvidia/nemotron-3-ultra-550b-a55b:free for all four steps (key supplied for the session, never committed).
+# Steps: structure 99.7s → lyrics 60.7s → genre 61.8s → formula 57.2s; workflow 4m39s; tokens 2778 + 2332 + 2013 + 2961.
+# The first live attempt was refused at songwriting, as designed, with nothing written:
+#   "x3lius-songwriting reply cites refs it was not given: x3lius.voice-reference"
+# (a bare claim topic; fixed by the ref alias resolution in a368a96: a topic/slug maps only when exactly
+# one given entry carries it). This rerun is the first run through all four steps.
+# Context every step got: exactly one canonical line, the guide's claim x3lius.voice-reference; every
+# module on the scoped path holds 0 rules, so each artifact is sparse: true (F18). limits: [] because no
+# canonical suno.limit.* claim exists — the 492-char style is NOT checked against any Suno v5 limit.
+#
+# Reviewer notes (for Phase 10/12, not fixed here):
+#  - DESIGN GAP: the workflow's lyrics step gets only the brief, not the structure artifact. So the lyrics
+#    are one 8-bar "Verse 1" written independently of the structure (10 sections, v1 = 16 bars), and the
+#    selected hook ("Градът спи, аз не спя / City sleeps, I don't sleep") appears nowhere in the Suno lyrics
+#    field. As assembled, the prompt carries a single verse and no chorus.
+#  - MIXED-SCRIPT WORD passed through verbatim: lyrics bar 8 "Пeak" = Cyrillic П + Latin "eak" (homoglyph
+#    corruption); the genre artifact's "phonк" (Latin + Cyrillic к) was normalised to "phonk" by the formula model.
+#  - Bulgarian needs a native check: "тън" (bar 6) is not a word; "Градът дъха" (bar 2) uses the noun
+#    "дъх", not the verb "диша". English bar 5 "bass crush" lacks agreement.
+#  - Declared rhyme scheme AABBCCDD does not hold across the BG/EN pairs (same as the Phase 8 verse).
+#  - The model's self-report is inconsistent: ungroundedChoices says the BPM range went in "without a numeric
+#    tag", but the style text ends in "128-142 BPM". The style also carries non-audio descriptors
+#    ("modern brutalism, aggressive confrontational, bilingual Bulgarian English").
+
+Upstream artifacts (summarised; SELECT body FROM creative_artifacts WHERE id IN (…)):
+{
+    "genre": {
+        "id": "900cdf21-3c09-4227-b6e3-545807dff128",
+        "mood": [
+            "nocturnal",
+            "aggressive",
+            "confrontational",
+            "gritty",
+            "atmospheric",
+            "menacing",
+            "cold"
+        ],
+        "tempoBpm": {
+            "max": 142,
+            "min": 128
+        },
+        "subgenres": [
+            "industrial trap",
+            "phonк",
+            "brutalist trap",
+            "nocturnal trap"
+        ],
+        "primaryGenre": "dark melodic trap",
+        "ungroundedChoices": 9
+    },
+    "lyrics": {
+        "id": "9016eeab-f3fe-468b-9949-694c5ff94877",
+        "bars": 8,
+        "section": {
+            "kind": "verse",
+            "label": "Verse 1"
+        },
+        "rhymeScheme": "AABBCCDD",
+        "ungroundedChoices": 6
+    },
+    "structure": {
+        "id": "4b8c530c-0749-43d8-a619-38b2eabce5d6",
+        "theme": "The city at night belongs to those who refuse to sleep — a brutalist anthem for the predators prowling concrete veins while the world dreams.",
+        "title": "NOCTURNE БЕТОН",
+        "sections": [
+            "intro:intro:4",
+            "v1:verse:16",
+            "pre1:pre-chorus:8",
+            "c1:chorus:16",
+            "v2:verse:16",
+            "pre2:pre-chorus:8",
+            "c2:chorus:16",
+            "brk:breakdown:8",
+            "c3:chorus:16",
+            "outro:outro:8"
+        ],
+        "selectedHook": "Градът спи, аз не спя / City sleeps, I don't sleep",
+        "ungroundedChoices": 8
+    }
+}
+
+Workflow output (verbatim):
+spec: x3lius-song-to-suno (records/x3lius/song-to-suno.workflow.yaml, sha256 d922a3027468…) steps: structure=x3lius-songwriting → lyrics=x3lius-lyrics → genre=x3lius-genre-style → formula=x3lius-suno
+status: success
+output:
+{
+  "subdomain": "x3lius-suno",
+  "status": "generated",
+  "artifact": {
+    "id": "cb1c7803-21e1-4419-a0e1-8eb056aa4a85",
+    "lineageId": "cb1c7803-21e1-4419-a0e1-8eb056aa4a85",
+    "version": 1,
+    "schemaId": "x3lius.suno-prompt/v1"
+  },
+  "body": {
+    "sunoModel": "v5",
+    "title": "NOCTURNE БЕТОН",
+    "style": "dark melodic trap, industrial trap, phonk, brutalist trap, nocturnal trap, modern brutalism, aggressive confrontational, bilingual Bulgarian English, heavy 808 kicks long decay, metallic snare snap, triplet hi-hats aggressive velocity, sub-heavy distorting 808 basslines portamento, detuned saw waves cold digital pads slow attack minor-key harsh FM tones, saturated pitch-down vocal chain raw doubling minimal reverb, city ambience sirens rain subway rumble sidechained bitcrush, 128-142 BPM",
+    "excludeStyles": [
+      "bright major-key melodies",
+      "clean polished production",
+      "pop song structures",
+      "warm analog saturation",
+      "relaxed chill vibes",
+      "acoustic instrumentation",
+      "reverb-heavy dreamy textures",
+      "commercial trap clichés"
+    ],
+    "lyrics": "[Verse 1]\nMidnight concrete veins pulse cold\nГрадът дъха смрад на бензин и мраз\nNeon scars bleed through the fog\nСкрийте се, тъпи сенки в бяг\nSirens scream, bass crush the bone\nНяма спасение, само бетон и тън\nX3LIUS rise, the night is ours\nПeak слънцето никога не се връща",
+    "sources": [
+      {
+        "role": "lyrics",
+        "artifactId": "9016eeab-f3fe-468b-9949-694c5ff94877",
+        "schemaId": "x3lius.lyrics/v1",
+        "version": 1
+      },
+      {
+        "role": "structure",
+        "artifactId": "4b8c530c-0749-43d8-a619-38b2eabce5d6",
+        "schemaId": "x3lius.song-structure/v1",
+        "version": 1
+      },
+      {
+        "role": "genre-style",
+        "artifactId": "900cdf21-3c09-4227-b6e3-545807dff128",
+        "schemaId": "x3lius.genre-style/v1",
+        "version": 1
+      }
+    ],
+    "limits": [],
+    "rulesApplied": [
+      {
+        "ref": "canonical_prompts:ab30dc65-8670-4f5f-a4ce-a723242db6e7#x3lius.voice-reference",
+        "how": "Enforced the four pillars of the x3lius voice: modern brutalism aesthetic (concrete/neon imagery, harsh textures), aggressive/confrontational tone (predator stance, no compromise), bilingual Bulgarian/English delivery (code-switching mid-bar, grammatical contrasts), and dark melodic trap genre (minor-key FM leads, distorting 808s, triplet grids). Every style descriptor and exclusion traces back to these pillars."
+      }
+    ],
+    "ungroundedChoices": [
+      "Selected 'NOCTURNE БЕТОН' as title from the song-structure artifact rather than inventing a new one",
+      "Compressed the full sound-palette description into a single Suno-style comma-separated string, prioritizing the most sonically distinctive elements (808 decay, metallic snare, FM synths, vocal saturation, city ambience bitcrush)",
+      "Mapped the 128-142 BPM range into the style text without a numeric tag, relying on Suno's genre tempo priors",
+      "Translated the 'avoid' list directly into excludeStyles, keeping each item atomic for negative prompting",
+      "Chose not to embed structural tags (intro/verse/chorus) in the style field, trusting Suno v5 to follow the lyric structure markers"
+    ]
+  },
+  "knowledge": {
+    "sparse": true,
+    "threshold": 3,
+    "scopedRules": 0,
+    "perModule": {
+      "x3lius-suno": 0,
+      "x3lius-genre-style": 0,
+      "x3lius-vocal-dna": 0
+    },
+    "voiceClaims": 1,
+    "reasons": [
+      "x3lius-suno: 0 rules on the scoped context path",
+      "x3lius-genre-style: 0 rules on the scoped context path",
+      "x3lius-vocal-dna: 0 rules on the scoped context path",
+      "voice: 1 claim(s) under x3lius.* from outside the sub-domain scope (x3lius.voice-reference)",
+      "fewer than 3 scoped rules: expect output close to generic. Promote rules tagged x3lius-suno or x3lius-genre-style / x3lius-vocal-dna through the gate to change that."
+    ]
+  },
+  "context": [
+    {
+      "kind": "claim",
+      "ref": "canonical_prompts:ab30dc65-8670-4f5f-a4ce-a723242db6e7#x3lius.voice-reference",
+      "module": "phase-8-songwriting-lyrics-agents",
+      "slug": "phase-8-meta-prompt",
+      "topic": "x3lius.voice-reference",
+      "value": [
+        "modern brutalism",
+        "aggressive/confrontational",
+        "bilingual Bulgarian/English",
+        "dark melodic trap"
+      ],
+      "modelScope": "model-agnostic",
+      "source": {
+        "id": "8fcdd89c-ae86-4798-a187-30454619939f",
+        "uri": "XYP3RN_Agentic_OS_Build_Sequence.pdf"
+      }
+    }
+  ],
+  "model": {
+    "ref": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+    "served": "nvidia/nemotron-3-ultra-550b-a55b:free"
+  },
+  "usage": {
+    "inputTokens": 2050,
+    "outputTokens": 911
+  }
+}
+workflow_runs row:
+{
+  "id": "5aaf09e0-6525-4aa6-98c3-8d3d0ec0a762",
+  "workflow_name": "x3lius-song-to-suno",
+  "status": "success",
+  "failed_step": null,
+  "skipped_steps": [],
+  "created_at": "2026-09-24T14:51:53.464Z",
+  "completed_at": "2026-09-24T14:56:32.927Z"
+}
+agent_runs rows (one per step):
+[
+  {
+    "id": "b75d01ff-33ec-4bdd-8144-eecc6c171235",
+    "step_id": "structure",
+    "agent_name": "x3lius-songwriting",
+    "class": "Creative",
+    "status": "success",
+    "latency_ms": 99679,
+    "tokens_used": 2778,
+    "logs": [
+      {
+        "at": "2026-09-24T14:51:53.752Z",
+        "level": "info",
+        "message": "x3lius-songwriting: context pulled: canonical_prompts:ab30dc65-8670-4f5f-a4ce-a723242db6e7#x3lius.voice-reference"
+      },
+      {
+        "at": "2026-09-24T14:51:53.752Z",
+        "level": "warn",
+        "message": "x3lius-songwriting: SPARSE canonical knowledge — x3lius-songwriting: 0 rules on the scoped context path | x3lius-vocal-dna: 0 rules on the scoped context path | voice: 1 claim(s) under x3lius.* from outside the sub-domain scope (x3lius.voice-reference) | fewer than 3 scoped rules: expect output close to generic. Promote rules tagged x3lius-songwriting or x3lius-vocal-dna through the gate to change that."
+      },
+      {
+        "at": "2026-09-24T14:53:33.147Z",
+        "level": "info",
+        "message": "write_artifact → x3lius.song-structure/v1 4b8c530c-0749-43d8-a619-38b2eabce5d6 v1"
+      }
+    ]
+  },
+  {
+    "id": "72d156cd-2d37-4251-a361-298cb7d0acd8",
+    "step_id": "lyrics",
+    "agent_name": "x3lius-lyrics",
+    "class": "Creative",
+    "status": "success",
+    "latency_ms": 60733,
+    "tokens_used": 2332,
+    "logs": [
+      {
+        "at": "2026-09-24T14:53:33.192Z",
+        "level": "info",
+        "message": "x3lius-lyrics: context pulled: canonical_prompts:ab30dc65-8670-4f5f-a4ce-a723242db6e7#x3lius.voice-reference"
+      },
+      {
+        "at": "2026-09-24T14:53:33.192Z",
+        "level": "warn",
+        "message": "x3lius-lyrics: SPARSE canonical knowledge — x3lius-lyrics: 0 rules on the scoped context path | x3lius-vocal-dna: 0 rules on the scoped context path | voice: 1 claim(s) under x3lius.* from outside the sub-domain scope (x3lius.voice-reference) | fewer than 3 scoped rules: expect output close to generic. Promote rules tagged x3lius-lyrics or x3lius-vocal-dna through the gate to change that."
+      },
+      {
+        "at": "2026-09-24T14:54:33.885Z",
+        "level": "info",
+        "message": "write_artifact → x3lius.lyrics/v1 9016eeab-f3fe-468b-9949-694c5ff94877 v1"
+      }
+    ]
+  },
+  {
+    "id": "3a8f8c56-d934-4dd2-acb3-1199d1cd6df0",
+    "step_id": "genre",
+    "agent_name": "x3lius-genre-style",
+    "class": "Creative",
+    "status": "success",
+    "latency_ms": 61762,
+    "tokens_used": 2013,
+    "logs": [
+      {
+        "at": "2026-09-24T14:54:33.911Z",
+        "level": "info",
+        "message": "x3lius-genre-style: context pulled: canonical_prompts:ab30dc65-8670-4f5f-a4ce-a723242db6e7#x3lius.voice-reference"
+      },
+      {
+        "at": "2026-09-24T14:54:33.911Z",
+        "level": "warn",
+        "message": "x3lius-genre-style: SPARSE canonical knowledge — x3lius-genre-style: 0 rules on the scoped context path | x3lius-vocal-dna: 0 rules on the scoped context path | voice: 1 claim(s) under x3lius.* from outside the sub-domain scope (x3lius.voice-reference) | fewer than 3 scoped rules: expect output close to generic. Promote rules tagged x3lius-genre-style or x3lius-vocal-dna through the gate to change that."
+      },
+      {
+        "at": "2026-09-24T14:55:35.650Z",
+        "level": "info",
+        "message": "write_artifact → x3lius.genre-style/v1 900cdf21-3c09-4227-b6e3-545807dff128 v1"
+      }
+    ]
+  },
+  {
+    "id": "7f954fb9-824e-4471-97b9-35b76350bd8d",
+    "step_id": "formula",
+    "agent_name": "x3lius-suno",
+    "class": "Creative",
+    "status": "success",
+    "latency_ms": 57249,
+    "tokens_used": 2961,
+    "logs": [
+      {
+        "at": "2026-09-24T14:55:35.688Z",
+        "level": "info",
+        "message": "x3lius-suno: context pulled: canonical_prompts:ab30dc65-8670-4f5f-a4ce-a723242db6e7#x3lius.voice-reference"
+      },
+      {
+        "at": "2026-09-24T14:55:35.688Z",
+        "level": "warn",
+        "message": "x3lius-suno: SPARSE canonical knowledge — x3lius-suno: 0 rules on the scoped context path | x3lius-genre-style: 0 rules on the scoped context path | x3lius-vocal-dna: 0 rules on the scoped context path | voice: 1 claim(s) under x3lius.* from outside the sub-domain scope (x3lius.voice-reference) | fewer than 3 scoped rules: expect output close to generic. Promote rules tagged x3lius-suno or x3lius-genre-style / x3lius-vocal-dna through the gate to change that."
+      },
+      {
+        "at": "2026-09-24T14:56:32.902Z",
+        "level": "info",
+        "message": "write_artifact → x3lius.suno-prompt/v1 cb1c7803-21e1-4419-a0e1-8eb056aa4a85 v1"
+      }
+    ]
+  }
+]
+exit 0
