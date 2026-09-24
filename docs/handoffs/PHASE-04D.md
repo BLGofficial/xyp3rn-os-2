@@ -1,0 +1,24 @@
+HANDOFF — Phase 4D complete
+
+- **Built:**
+  - `core/orchestrator/dispatch.ts`, `dispatch(deps, agentName, input, {timeoutMs})`. It resolves the agent through the 4B registry, authorizes every tool the frontmatter declares through 4C before anything runs, executes, captures output, tool logs, tokens and latency, and writes exactly one 4A `agent_runs` row (pending → success or error).
+  - Handlers reach tools only through `ctx.useTool`, which re-checks both "declared in frontmatter" and authorization on every call.
+  - 11 tests, the unauthorized-tool case first:
+    - the run is logged as error with the exact denial reason, and the handler is never called;
+    - using an undeclared tool at runtime is stopped;
+    - unknown agent, invalid file, missing handler, missing LLM runner and a throwing handler each produce an error row with a specific reason;
+    - timeout;
+    - the happy path;
+    - no `pending` row is ever left behind.
+- **Key decisions:**
+  - **Execution binding (user):** `model: none` agents run a function from a checked-in handler table keyed by agent name. Any other model goes to a shared LLM runner. That runner fails loudly (`ANTHROPIC_API_KEY is not set`) until the key exists.
+  - **Timeout:** 30s by default, overridable per dispatch. When it fires, the row becomes `error` with `timeout after <n>ms`, the handler's `AbortSignal` is aborted with the same reason, and a late result is ignored. The 4A seal trigger also blocks any late write at the DB level.
+  - **Failures:** registry and authorization failures are logged as error runs, never thrown. The only throw is when the run row itself can't be inserted.
+- **Deviations from spec:** a dispatch for an unknown agent still writes a row, with `class`/`domain` null, so every dispatch is logged.
+- **Open flags:**
+  - **Retries: none, and flagged as a scope decision.** Side-effecting Execution agents need idempotency keys before retries are safe.
+  - **The LLM runner is not implemented:** building it without a key would ship unverified code. It comes when `ANTHROPIC_API_KEY` is present.
+  - **An aborted handler may keep running:** it's the handler's job to honour `signal`, since JavaScript can't kill it.
+- **Next phase needs:**
+  - 4E adds `agents/health-check.agent.md` (Execution, CORE, tools `[log_message]`, model `none`) and its handler in the checked-in handler table.
+  - The full path runs registry → authorize → execute → `agent_runs`, and the row is read back with SQL.
