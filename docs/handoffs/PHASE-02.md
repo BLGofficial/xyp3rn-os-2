@@ -1,0 +1,32 @@
+HANDOFF — Phase 2 complete
+
+- **Built:**
+  - Source Registry (`knowledge/source-registry/acquire.ts`): file, url or manual input, SHA-256 content address, with `origin` required on every source.
+  - PDF text extraction with unpdf.
+  - A rule-based parser for the build-sequence document (`knowledge/ingestion/normalizers/build-sequence*.ts`), picked through a registry of normalizers that rejects any source no normalizer recognizes.
+  - An atomic register → normalize → score pipeline (`knowledge/ingestion/ingest.ts`) running as the new `xyp_ingest_bootstrap` role (migration `20260924090000_ingest_bootstrap_role.sql`).
+  - The quality rubric (`knowledge/quality/rubric.ts`, `quality-v1`) and a CLI (`pnpm ingest --file|--url|--manual … --origin …`).
+  - **Real run:** the build-guide PDF produced 19 modules (6 CORE, 3 KNOWLEDGE, 1 RESEARCH_INTELLIGENCE, 7 RECORDS, 1 TECH, 1 GOVERNANCE), 31 canonical prompts, 8 content tags, 68 relations (50 derived_from, 12 precedes, 6 depends_on) and 32 quality reports. The source scored 0.9874 overall: completeness 1 (21/21 TOC entries), reliability 1 (first-party file), freshness 0.937 (23 days old). Re-ingesting gave `noop`.
+- **Key decisions:**
+  - The user chose the rule-based parser (same bytes always give the same entries) and weights of 0.5 completeness, 0.3 reliability, 0.2 freshness.
+  - Reliability comes from an explicit table covering all 6 kind × origin pairs. An unknown document date earns 0 freshness.
+  - The TOC decides what counts as a heading.
+  - When a changed source re-ingests, identical content is reused and changed content is appended as version+1, never overwritten.
+  - **Race (flagged, then fixed):** the unique checksum plus `ON CONFLICT DO NOTHING` inside one transaction, plus a global `pg_advisory_xact_lock` that also closes the `(slug, version)` race between different bytes. Proof: a naive check-then-insert, reinstated temporarily, produced `['error','success']`; the real code gives `['noop','success']`, and the test asserts the two runs genuinely overlapped.
+- **Deviations from spec:**
+  - "Staleness" is implemented as its inverse, freshness = 1 − age/365, so higher is always better.
+  - A no-op re-ingest leaves the knowledge tables byte-identical (row fingerprints) but still logs a `noop` ingestion run.
+  - Registering and normalizing are one atomic step: a source that no normalizer recognizes is not registered at all, and the run records an error. This avoids a registered-but-never-normalized source that re-ingest would then skip forever.
+  - Two Phase 1 tests were tightened for per-role policies: no policy may ever reach anon, authenticated or public, and the migration snapshot now covers policies.
+- **Open flags:**
+  - Module completeness isn't scored: phases 6–12 lack Goal or Depends-on lines, but `quality_reports` can only target a source or a prompt. Fixing it would need an `ALTER` adding `module_id`.
+  - A process killed mid-run leaves a `running` row, because there is no reaper.
+  - Dehyphenation assumes a hyphen after a lowercase letter at a line end is a syllable break; this holds for the 3 occurrences in this document.
+  - `SET ROLE` on hosted Supabase (where `postgres` is not a superuser) is unverified.
+  - The dev DB is ephemeral, so each session must re-run `pnpm db:setup && pnpm db:up && pnpm ingest --file XYP3RN_Agentic_OS_Build_Sequence.pdf --origin first_party`.
+- **Next phase needs:**
+  - Populated `canonical_prompts` (31, with `body` and `structured`) and `sources` (1) as the embedding targets.
+  - `relations` edges (`derived_from`, `depends_on`, `precedes`) for 1-hop expansion.
+  - `modules.domain` for domain-scoped retrieval.
+  - Tags such as `test-first` and `grant-enforcement` for filters.
+  - Phase 3 must choose and state its embedding model; no API key is configured in this environment.

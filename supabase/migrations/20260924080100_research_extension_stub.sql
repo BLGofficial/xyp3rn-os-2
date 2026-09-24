@@ -1,0 +1,18 @@
+-- Phase 1 — research_* extension stub. VISIBILITY ONLY: nothing below executes.
+-- Phase 6A replaces this with the real migration. Listed here so Phase 1-5 schema work
+-- can see what is coming and avoid name collisions.
+--
+-- research_projects      -- a research effort (e.g. "dark baritone vocal control in Suno")
+-- research_questions     -- questions under a project; input to the Research Orchestrator
+-- research_runs          -- one orchestrated pass; agent_runs.research_run_id -> research_runs (6A ALTER)
+-- research_findings      -- synthesized claims; INSERT-only for research roles (grant-enforced)
+-- research_evidence      -- per-claim evidence with model/version tag + confidence; INSERT-only
+-- research_sources       -- cited origins of evidence; nullable FK -> sources.id when already ingested (F9)
+-- experiments            -- controlled A/B definitions for a candidate rule
+-- experiment_runs        -- individual trials + scores (scoring source: Phase 12 Critic)
+-- contradictions         -- finding vs candidate/canonical conflicts; block promotion until resolved
+-- knowledge_candidates   -- proposed rules; research may INSERT status=proposed only
+-- knowledge_versions     -- append-only canonical history; written only by the Promotion Gate (F2)
+--
+-- FK chain (6A): sources -> research_evidence -> research_findings -> knowledge_candidates
+--                -> [gate validation] -> canonical_prompts/modules (+ knowledge_versions) -> relations

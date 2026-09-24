@@ -1,0 +1,31 @@
+HANDOFF — Phase 1 complete
+
+- **Built:** migration `supabase/migrations/20260924080000_canonical_base.sql` and its rollback. It creates 9 tables: `sources`, `ingestion_runs`, `modules`, `canonical_prompts`, `prompt_variants`, `tags`, `prompt_tags`, `relations`, `quality_reports`. It also creates 5 enums (`xyp_domain`, `source_kind`, `ingestion_run_status`, `canonical_provenance`, `relation_entity_type`), updated_at triggers, a trigger that checks `relations` endpoints, and the `relations_dangling` view. Also built:
+  - the `research_*` visibility stub (comments only);
+  - the local runner (`core/db/*`, `pnpm db:up|down|status`);
+  - local PG16 + pgvector with Supabase-emulated roles (`pnpm db:setup`);
+  - `docs/SCHEMA.md` (mermaid ERD, rendered and checked);
+  - the rolled-back FK-proof seed (`pnpm db:seed:proof`);
+  - 24 DB tests (72 total, all green).
+- **Key decisions:** the user chose three things: vitest + postgres.js as the DB test harness; a seed that runs inside BEGIN…ROLLBACK, so Phase 2's first ingestion of the PDF is real; and `relations` integrity through an insert-time trigger plus an orphan view. Design decisions:
+  - Every FK is `ON DELETE RESTRICT`, except that `prompt_tags` cascades.
+  - `sources.checksum_sha256` is UNIQUE, which is the DB-level race fix for Phase 2.
+  - Canonical rows are unique on `(slug, version)`, not slug alone, so 6D can append versions.
+  - Bootstrap rows must carry `source_id`.
+  - `anon`/`authenticated` are revoked on everything; without that revoke a read as `anon` silently returns zero rows, as a mutation test showed.
+- **Deviations from spec:**
+  - `relations.subject_id`/`object_id` are `text`, not uuid, so file-backed agents fit.
+  - `relations` has no `updated_at`, and neither do `prompt_tags` and `quality_reports`, which are insert/delete-only.
+  - `canonical_prompts` has no `domain` column; it inherits the domain from its module.
+  - F7 is resolved without `xyp_owner`: the migration role owns the tables.
+  - The up/down tests run in throwaway local databases (CREATE DATABASE), which is local-only.
+- **Open flags:**
+  - Multi-tenant RLS is not added. It would be needed if the Phase 16 UI reads from the browser with the anon key (recommended: server-side reads through `xyp_readonly`), or if a payee portal is ever built on `rights_splits`.
+  - `sources` has no `embedding` column yet (Phase 3).
+  - Earlier flags still open: F10 (hybrid-class agents), F13 (specialist roster).
+- **Next phase needs:**
+  - Create role `xyp_ingest_bootstrap` in Phase 2 with INSERT on `sources`, `ingestion_runs`, `modules`, `canonical_prompts`, `tags`, `prompt_tags`, `quality_reports` and `relations`, UPDATE on `ingestion_runs`, and EXECUTE on `xyp_relation_endpoint_exists`.
+  - Ingest `XYP3RN_Agentic_OS_Build_Sequence.pdf` (sha256 `10f0c63694ba…`) via `insert … on conflict (checksum_sha256) do nothing`.
+  - Write `promoted_via = 'bootstrap'` on every canonical write.
+  - Store the quality rubric in `quality_reports.criteria` (name, weight, score, inputs).
+  - Test helpers are in `tests/helpers/db.ts` (`createTestDb`, `withRollback`, `asRole`, `expectPgError`).
