@@ -1,0 +1,1 @@
+-- Rollback for the research_* visibility stub: it creates nothing, so there is nothing to drop.

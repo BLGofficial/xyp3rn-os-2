@@ -34,13 +34,13 @@ Example: `agent_runs.research_run_id → research_runs.id`
 
 ### Enums
 
-The type is named `<table_singular>_<column>`, and values are lower_snake.
-Example: `agent_run_status` with values `pending`, `success`, `error`
+The type is named `<table_singular>_<column>`, and values are lower_snake. An enum shared by several tables is named for its concept instead. Domain ids keep their `UPPER_SNAKE` form so they match the taxonomy exactly.
+Example: `agent_run_status` with values `pending`, `success`, `error`; shared: `canonical_provenance` (used by `modules` and `canonical_prompts`), `xyp_domain`
 
 ### Indexes and constraints
 
-Indexes are `<table>_<col>[_<col>]_idx`. Unique constraints are `<table>_<cols>_key` and checks are `<table>_<rule>_check`, matching Postgres defaults where they exist.
-Example: `relations_subject_type_subject_id_idx`
+Indexes are `<table>_<col>[_<col>]_idx`. Unique constraints are `<table>_<cols>_key` and checks are `<table>_<rule>_check`, matching Postgres defaults where they exist. When the column list would exceed Postgres's 63-character identifier limit, use a short descriptive word instead.
+Example: `relations_subject_type_subject_id_idx`; over-long unique: `relations_edge_key`
 
 ### Triggers and SQL functions
 

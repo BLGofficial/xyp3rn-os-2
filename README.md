@@ -14,11 +14,16 @@ Requires Node 22+ and pnpm.
 
 ```sh
 pnpm install
-pnpm test        # vitest: phase proofs + unit tests
+pnpm db:setup    # local Postgres 16 + pgvector + emulated Supabase roles (Debian/Ubuntu; idempotent)
+pnpm db:up       # apply migrations
+pnpm test        # vitest: phase proofs + unit tests (DB tests use throwaway databases)
 pnpm typecheck   # tsc --noEmit
 ```
+
+Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 
 ## Build status
 
 - [x] Phase 0: Foundation / Contracts
-- [ ] Phase 1: Supabase canonical data model
+- [x] Phase 1: Supabase canonical data model
+- [ ] Phase 2: Knowledge ingestion + normalization

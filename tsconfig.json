@@ -16,6 +16,7 @@
     "erasableSyntaxOnly": true
   },
   "include": [
+    "supabase",
     "core",
     "knowledge",
     "research-intelligence",
