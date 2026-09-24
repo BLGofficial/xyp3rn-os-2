@@ -208,3 +208,14 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 **F20. Suno rules are version-scoped.** DECIDED (Phase 9, recorded here because it constrains Phases 10–12).
 - A canonical rule or claim tagged `suno-<version>` applies only to prompts for that version; anything else applies to all.
 - Platform limits (`suno.limit.<field>-chars`) are canonical claims, never constants in code.
+
+**F21. Lyrics follow the song structure, whole song in one reply.** DECIDED (user, after the Phase 9 live run).
+- Lyrics written from the brief alone gave Suno one verse and no hook.
+- `x3lius-lyrics` now reads the song-structure artifact and writes `x3lius.lyrics/v2`: every section, each either written or listed as instrumental, in the structure's order and with its kinds (code-checked). Code records the structure version it followed.
+- Chosen over one step per section: one call keeps the song consistent across sections. The cost is one long reply on a free route; a failure loses the whole song.
+- `x3lius.lyrics/v1` artifacts stay readable (the formula renders both) and revisable.
+- Whether the hook actually appears in the chorus is not code-checked (fuzzy); it is the Phase 12 Critic's.
+
+**F22. Mixed-script words are refused.** DECIDED (user, after the Phase 9 live run).
+- A word mixing Latin and Cyrillic letters (seen live: "Пeak", "phonк") is a homoglyph corruption. Every creative artifact body is checked before it is written, the rendered Suno lyrics included; a hit refuses the run.
+- Switching script between words is untouched: which languages a line uses is canonical knowledge.
