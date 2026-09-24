@@ -13,6 +13,8 @@ A six-domain agent operating system: CORE, KNOWLEDGE, RESEARCH_INTELLIGENCE, REC
 Requires Node 22+ and pnpm.
 
 ```sh
+# Cloud sessions: scripts/session-start.sh (SessionStart hook in .claude/settings.json) runs the
+# setup below automatically — DB, migrations, guide + X3LIUS manifest ingest, embeddings.
 pnpm install
 pnpm db:setup    # local Postgres 16 + pgvector + emulated Supabase roles (Debian/Ubuntu; idempotent)
 pnpm db:up       # apply migrations

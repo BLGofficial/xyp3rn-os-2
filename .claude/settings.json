@@ -9,5 +9,19 @@
   },
   "enabledPlugins": {
     "chisle@chisle": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/session-start.sh",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
   }
 }
