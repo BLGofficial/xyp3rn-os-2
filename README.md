@@ -46,4 +46,15 @@ Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 - [x] Phase 3: Retrieval / context engine
 - [x] Phase 4: Agent runtime + registry (4A–4E)
 - [x] Phase 5: Workflow / orchestration engine
-- [ ] Phase 6: AI Music Research Intelligence (6A–6D)
+- [x] Phase 6: AI Music Research Intelligence (6A–6D; the 20 specialists still need an LLM program to run)
+- [x] Phase 7: X3LIUS Music Intelligence (module + ten sub-domains, scoped context path)
+- [x] Phase 8: Songwriting + Lyrics agents, plus Composition (F15). Built; the live-verse proof is pending a provider key ([handoff](docs/handoffs/PHASE-08.md))
+- [ ] Phase 9: Suno Generation System, plus Genre/Style (F15)
+- [ ] Phase 10: Vocal / Artist DNA
+- [ ] Phase 11: Production / Mix / Master
+- [ ] Phase 12: Critic + Revision System
+- [ ] Phase 13: XYP3RN Records
+- [ ] Phase 14: XYP3RN Tech
+- [ ] Phase 15: Legal / Governance
+- [ ] Phase 16: UI / Observability / Graph View / Command Center (16A–16D)
+- [ ] Phase 17: End-to-End Validation
