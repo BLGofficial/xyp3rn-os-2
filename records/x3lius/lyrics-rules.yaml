@@ -1,0 +1,215 @@
+# X3LIUS lyric and song-structure rules: operator-authored first-party data (SUNO BRAIN: ai-cliches.md,
+# overused-words.md, lyric-craft.md). Each rule is one canonical row in an existing sub-domain module:
+# x3lius-lyrics rules are read by the Lyrics agent and judged by the Critic on lyrics artifacts;
+# x3lius-songwriting rules by the Songwriting agent and the Critic on song-structure artifacts.
+# Admit (then embed):
+#   pnpm ingest --file records/x3lius/lyrics-rules.yaml --origin first_party
+#   pnpm embed
+# A change here + re-admission = a new version of each changed rule in knowledge_versions.
+#
+# The word blacklist also carries a claim (lyrics.word-blacklist) the Critic checks in code: it counts
+# whole-word, case-insensitive hits of `terms` across every sung bar; more than `maxHits` fails the
+# lyrics, each hit quoted at its bar. `[x]` in a term stands for any one word. Words the rule qualifies
+# ("broken (as a bare adjective)", "numb (no concrete context)", "electric (bare…)") are not in `terms`:
+# code can't judge the qualifier, so the Critic's model judges them from the rule text. No genre
+# exception is applied in code (X3LIUS is dark trap; the Urban Noir words count).
+rule_set: xyp-rule-set/v1
+artist: X3LIUS
+date: 2026-09-25
+source: SUNO BRAIN (ai-cliches.md, overused-words.md, lyric-craft.md)
+rules:
+  # ── x3lius-lyrics: lyric authenticity ──────────────────────────────────────────────────────────────
+  - slug: x3lius-lyrics-grounding-method
+    module: x3lius-lyrics
+    title: Ground every abstraction in physical reality
+    rule: >-
+      Every abstract noun or stated emotion must resolve to one real, specific, physical detail — a nameable
+      place, object, action, or time. This is the single fix that solves most AI-cliché problems.
+    data:
+      anchor_categories: [real places, real objects, real actions, real times]
+      examples:
+        - { before: neon lights, after: the 7-Eleven sign buzzing at 2 AM }
+        - { before: broken heart, after: coffee cup with a chipped rim you refuse to throw away }
+        - { before: lost in darkness, after: couldn't find my keys in the parking garage again }
+        - { before: city nights, after: Tuesday evening on Ashland Avenue }
+
+  - slug: x3lius-lyrics-show-dont-tell
+    module: x3lius-lyrics
+    title: Show emotion through action, not statement
+    rule: Reveal an emotion through a concrete action or observation instead of naming it directly.
+    data:
+      examples:
+        - { before: I'm alone, after: eating dinner facing the empty chair you always sat in }
+        - { before: I'm broken, after: laughing at your jokes three days after the funeral }
+        - { before: Drowning in pain, after: can't remember which drawer we kept the silverware in }
+        - { before: Lost without you, after: still setting two alarms even though there's no one to wake }
+
+  - slug: x3lius-lyrics-sensory-range
+    module: x3lius-lyrics
+    title: Engage every sense, not just sight
+    rule: >-
+      AI-generated lyrics default almost entirely to visual imagery. Pull from sound, smell, and touch/taste
+      at least once per song. Use sight sparingly relative to the others. If a lyric only ever engages sight,
+      that alone is a tell.
+    data:
+      sound: [your key scratching the lock at midnight, rain on the tin roof, the creak of the third stair]
+      smell: [coffee and cigarettes on your jacket, mom's perfume on old letters, cut grass in July]
+      touch: [cold side of the pillow, worn fabric on your favorite chair, splinter from the back deck]
+      taste: [burnt toast and black coffee, birthday cake from the corner store, cheap wine in plastic cups]
+      sight_use_sparingly: [rust stain shaped like Ohio, crack in the windshield spreading, polaroid losing its color]
+
+  - slug: x3lius-lyrics-structural-cliches
+    module: x3lius-lyrics
+    title: Structural clichés (beyond individual words)
+    rule: >-
+      Four structural patterns that read as generated even when individual words are fine. The Critic checks
+      lyrics against each independently.
+    data:
+      items:
+        - name: list-of-abstractions chorus
+          violation: "stacking 3-4 vague emotion words in a row with no concrete anchor (e.g. 'broken, hollow, drowning, lost')"
+        - name: unearned we/you address
+          violation: "universalized second-person ('you and me against the world') with no identifying detail"
+          fix: ground the 'you' in one identifying detail early
+        - name: rhyme-driven cliché
+          violation: reaching for fire/desire, pain/rain, heart/apart purely because they rhyme, no image behind the word
+          fix: rhyme word must also carry a concrete image, or it's decoration not work
+        - name: forced bridge restating chorus
+          violation: bridge just re-says the chorus idea in different words instead of introducing genuine contrast
+
+  - slug: x3lius-lyrics-word-blacklist
+    module: x3lius-lyrics
+    title: Overused / AI-tell word categories
+    rule: >-
+      Not a hard ban — each word is fine in the right genre context (see exceptions per category) but defaults
+      to sounding generated when used as filler. 0 hits is the target; 1-2 are acceptable if genre-justified;
+      3 or more across the song flag the lyrics as generated (hard fail).
+    data:
+      categories:
+        - name: Technology / Digital
+          words: [static, neon, wire, circuits, digital, 'electric (bare, not "electric guitar")', synthetic, pulse, pixelated, glitching, binary, code, data, signal, machine, mechanical, automated, programmed]
+          exception: cyberpunk, synthwave, industrial genres
+          replace_with: the real object the abstraction is standing in for
+        - name: Abstract / Vague Imagery
+          words: [echoes, shadows, void, fragments, shattered, broken (as a bare adjective), fading, dissolving, vanishing]
+          phrase_patterns: ['drowning in [emotion]', 'lost in [abstraction]', silence screaming, darkness calling, thunder in my veins, fire in my soul]
+          replace_with: a specific broken/faded/lost thing with a story
+        - name: Urban Noir Imagery
+          words: [city lights, city night(s), neon streets, empty streets, midnight rain, streetlights, concrete jungle, skyscrapers, alleys, urban sprawl]
+          exception: noir, urban, darkwave genres
+          replace_with: a specific street, a specific store, a specific hour
+        - name: Ghost-in-the-Machine themes
+          words: [trapped consciousness, digital prison, escaping reality, questioning existence, not real / not alive, waking up, becoming aware, breaking free from control]
+          exception: explicit existential or sci-fi concept songs, when actually requested
+        - name: Generic Emotion Words
+          words: [broken, lost, alone, empty, numb (no concrete context), dark, cold, distant, hollow (as primary descriptor), burning, aching, bleeding (metaphorical, no physical grounding)]
+          replace_with: the action or object that reveals the emotion instead of naming it
+    claim:
+      topic: lyrics.word-blacklist
+      value:
+        maxHits: 2
+        terms: [
+          static, neon, wire, circuits, digital, synthetic, pulse, pixelated, glitching, binary, code, data, signal,
+          machine, mechanical, automated, programmed,
+          echoes, shadows, void, fragments, shattered, fading, dissolving, vanishing,
+          'drowning in [x]', 'lost in [x]', silence screaming, darkness calling, thunder in my veins, fire in my soul,
+          city lights, city night, city nights, neon streets, empty streets, midnight rain, streetlights, concrete jungle,
+          skyscrapers, alleys, urban sprawl,
+          trapped consciousness, digital prison, escaping reality, questioning existence, not real, not alive, waking up,
+          becoming aware, breaking free from control,
+          broken, lost, alone, empty, dark, cold, distant, burning, aching,
+        ]
+
+  - slug: x3lius-lyrics-self-review-checklist
+    module: x3lius-lyrics
+    title: Lyric self-review checklist (Creative pre-submit + Critic scoring rubric)
+    rule: >-
+      Run after any lyric draft. Same checklist used by Creative before submitting and by the Critic when
+      scoring: single source, two consumers.
+    data:
+      items:
+        - no more than 1-2 words from x3lius-lyrics-word-blacklist, and only where genre-justified
+        - every metaphor references a tangible object or a real, nameable experience
+        - at least one detail specific enough that it reads like an actual memory, not a general scenario
+        - at least 2-3 genuinely unexpected images per song
+        - emotions are shown through action/observation at least as often as they're stated directly
+        - non-visual senses appear at least once (smell, touch, taste, or sound)
+        - words feel like human observation, not a generated approximation of a feeling
+        - rhymes carry an image, not just a sound match
+      blacklist_hit_threshold:
+        '0': target
+        '1-2': acceptable if genre-justified
+        '3+': flag as generated — Critic hard-fail trigger
+
+  - slug: x3lius-lyrics-override-conditions
+    module: x3lius-lyrics
+    title: When to override the grounding/anti-cliché rules
+    rule: >-
+      Suspend x3lius-lyrics-grounding-method / x3lius-lyrics-word-blacklist / x3lius-lyrics-structural-cliches
+      when any of: (a) person explicitly asked for the aesthetic (e.g. 'neon cyberpunk imagery'), (b) genre
+      demands it (synthwave→neon, industrial→machinery, existential indie→'questioning reality' as literal
+      theme), (c) a specific artistic vision calls for abstraction as a deliberate choice, (d) a cultural
+      reference or well-known phrase is used intentionally. Goal is never zero abstraction — every abstraction
+      used should be grounded in something concrete underneath it.
+
+  # ── x3lius-songwriting: song structure ─────────────────────────────────────────────────────────────
+  - slug: x3lius-songwriting-genre-structures
+    module: x3lius-songwriting
+    title: Song structure skeletons by genre
+    rule: >-
+      Use meta tags to mark every section boundary explicitly — Suno follows structural tags far more reliably
+      than it infers structure from lyric content alone.
+    data:
+      structures:
+        - { genre: Pop, sequence: [Intro, Verse 1, Pre-Chorus, Chorus, Verse 2, Pre-Chorus, Chorus, Bridge, Chorus, Outro] }
+        - { genre: Hip-hop / Trap, sequence: [Intro | Hook fragment, Verse 1 | 16 bars, Hook, Verse 2 | 16 bars, Hook, Verse 3 or Bridge, Hook, Outro] }
+        - genre: UK Drill / Grime
+          sequence: [Intro, Verse 1 | 16 bars | grime bar cadence, Hook | x2, Verse 2 | 16 bars, Hook | x2, 'Verse 3 | 8-16 bars, escalate intensity', Outro | hook fade]
+          note: often bridge-less — hook repetition itself carries the emotional arc; don't force a bridge in if the genre doesn't call for one
+        - { genre: Rock / Alternative, sequence: [Intro, Verse 1, Chorus, Verse 2, Chorus, Guitar Solo or Bridge, 'Chorus | double chorus, key change optional', Outro] }
+        - genre: Folk / Singer-Songwriter
+          sequence: [Verse 1, Verse 2, Chorus, Verse 3, Chorus, Bridge, Chorus | stripped down]
+          note: tolerates a less symmetrical shape; through-composed (no repeating chorus, evolving verse structure) is a legitimate, often stronger choice for narrative folk
+        - genre: Electronic / EDM
+          sequence: [Intro, Build, Drop, Breakdown, Build, Drop | bigger than first drop, Outro]
+          note: the Drop functions as the chorus-equivalent — the hook lives there even without traditional lyrics
+
+  - slug: x3lius-songwriting-chorus-escalation
+    module: x3lius-songwriting
+    title: Chorus escalation across repeats
+    rule: >-
+      A repeated chorus that sounds identical each time is the most common flatness problem. Escalate
+      deliberately across repeats using meta tags, not new lyrics. Pick 1-2 levers per repeat, not all of them —
+      the progression should read as intentional, not just 'louder.'
+    data:
+      levers:
+        - 'ad-lib density: none -> sparse (yeah)/(oh) -> constant background ad-libs'
+        - 'capitalization ramp: quiet chorus 1 -> some caps chorus 2 -> FULL CAPS on the hook line by the final chorus'
+        - 'instrumentation layering: state explicitly what gets added each pass (+ strings, + full drum kit, + backing choir)'
+        - 'key/register lift: reserve for the final chorus only (key change, octave lift on final line)'
+      worked_example:
+        chorus_1: '[Chorus | anthemic | lead vocal only]'
+        chorus_2: '[Chorus | anthemic | stacked harmonies | denser instrumentation]'
+        final_chorus: '[Chorus | anthemic | double chorus | key change | ad-libs throughout | full instrumentation]'
+
+  - slug: x3lius-songwriting-transition-engineering
+    module: x3lius-songwriting
+    title: Transition engineering between sections
+    rule: Never let a section just stop and the next start cold. Engineer the seam.
+    data:
+      patterns:
+        - name: pre-chorus tension build
+          tags: '[Pre-Chorus | rising tension | building energy | half-time feel]'
+          note: keep lines shorter and more clipped than the verse — rhythmic compression sells the release into the chorus
+        - name: instrumental build (electronic/trap)
+          tags: '[Build | riser | filter sweep | snare roll] -> [Drop]'
+          note: the standard electronic/trap 'something is about to happen' signal
+        - name: silence trick
+          tags: '[Brief pause | full stop] -> [Drop | full energy]'
+          note: a half-beat of near-silence immediately before a hook/drop makes the hit land harder than added instrumentation would; only works if rare within the track
+        - name: bridge-to-final-chorus lift
+          tags: '[Bridge | stripped down | vulnerable | sparse instrumentation] -> [Chorus | full return | maximum energy | all layers restored]'
+          note: strip the bridge down harder than feels necessary — the bigger the contrast, the bigger the payoff
+        - name: verse-to-hook (drill/trap)
+          tags: '[Verse | building aggression toward final bars] -> [Hook | hit hard | full 808 presence]'
+          note: let the last 2-4 bars of the verse escalate via capitalization and shorter, punchier lines so the hook feels like a release, not an abrupt cut
