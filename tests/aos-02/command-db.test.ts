@@ -291,6 +291,7 @@ describe('tasks: immutable, with a status history', () => {
     const t = await task();
     await expect(move(t, 'blocked')).rejects.toMatchObject(code('23514'));
     await expect(db.sql`update tasks set title = 'x' where id = ${t}`).rejects.toMatchObject(code('55000'));
+    await move(t, 'done');
     await expect(db.sql`delete from task_events where task_id = ${t}`).rejects.toMatchObject(code('55000'));
   });
 });
