@@ -1,6 +1,6 @@
 # Phase 14 — XYP3RN Tech: design
 
-Status: the four decisions below were made by the user in conversation (2026-09-25). Everything else is the default stated here.
+Status: the four decisions below were made by the user in conversation (2026-09-25). Everything else is the default stated here. Updated to match what was built (§13).
 Branch: `claude/build-audit-next-steps-ffve76`, on top of Phase 13 (PR #12, not yet merged). The session may push only to this branch, so PR #12 grows to cover Phases 13 and 14.
 
 ## 1. Intent
@@ -47,7 +47,7 @@ Defaults the user did not override: red tests first (D4 of Phase 13); frontier o
   - `tech/trace/schemas/trace.analysis.v1.schema.json` and `trace.report.v1.schema.json` are generated from the TS schemas by `pnpm trace:schemas`.
   - A test fails when a file differs from what generation would write, byte for byte.
   - The files state the shape. Ranges (correlation −1..1, band dB ≤ 0, …) are enforced by the service through `validateTraceAnalysis`, and each range is described in the field's description.
-  - The optional `min`/`max` of a rubric bound need optional keys. `obj()` gets an `optional` list for non-LLM schemas; the LLM schemas are unchanged.
+  - The optional `min`/`max` of a rubric bound use the subset's `required: []` directly, as Phase 11's rubric bound already did. `obj()` is unchanged.
 - **"Defined once" is tested:** no file outside `tech/trace/` may declare the `trace.analysis/v1` or `trace.report/v1` ids, or a check type of its own. A grep test covers `core/`, `records/`, `tech/` and `knowledge/`.
 
 ## 4. The TRACE service (`tech/trace/server.ts`, `pnpm trace:serve`)
@@ -210,3 +210,11 @@ Defaults the user did not override: red tests first (D4 of Phase 13); frontier o
 - **TRACE itself** (the VST3/AU plugin) lives in its own codebase. This phase builds its boundary.
 - **Acting on an approved backlog item.** "Shipped" is outside the OS until someone decides otherwise.
 - **The service is local-only.** Exposing it beyond localhost is a deployment decision.
+
+## 13. Deviations found while building
+
+- **No `obj()` change.** The subset's `required: []` already allowed optional keys. Phase 11's rubric bound used it, and it moved into `tech/trace/report.ts` unchanged.
+- **The artifact schema was a second copy of the check shape.** Besides Mix/Master's TS type, the mix report artifact schema in `records/x3lius/creative/schemas.ts` carried its own copy. Both now import `TRACE_CHECK_SCHEMA` / `TraceCheck`, and the grep test covers both forms.
+- **`write_rd_backlog` returns no approval ids.** `xyp_planner` has no grant on `approval_queue` by design, so the queue rows are read by the operator (`pnpm gate queue`), not by the planner.
+- **`trace-intake` takes `takeId` as a required-null key.** The workflow engine has no optional inputs, as in Phase 13.
+

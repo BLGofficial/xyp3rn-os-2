@@ -37,6 +37,10 @@ pnpm workflow core/workflows/retrieve-and-summarize.workflow.yaml '{"query":"...
 pnpm workflow records/workflows/register-track.workflow.yaml '{"takeId":"<uuid>","release":{"title":"...","artist":"X3LIUS","kind":"single"},"position":1,"title":null,"mixReportArtifactId":null}'   # Phase 13: catalog a Suno take
 pnpm dispatch records-catalog '{"splits":{"trackId":"<uuid>","splits":[{"payee":"X3LIUS","percentage":70},{"payee":null,"percentage":30}]}}'   # Phase 13: split set (null = unassigned); must sum to 100
 pnpm dispatch records-catalog '{"assign":{"trackId":"<uuid>","isrc":"QZAB12600001"}}'   # Phase 13: ISRC / UPC, once
+XYP_TRACE_TOKEN=<16+ chars> pnpm trace:serve   # Phase 14: TRACE service on 127.0.0.1:8787 — POST /v1/trace/analyses (trace.analysis/v1 → trace.report/v1)
+pnpm trace:schemas               # Phase 14: regenerate tech/trace/schemas/*.schema.json from the contract
+pnpm dispatch tech-r-and-d '{"request":"..."}'   # Phase 14: R&D backlog proposals from Frontier Scanner evidence, each queued for pnpm gate decide
+pnpm ingest --file tech/tech.manifest.yaml --origin first_party   # Phase 14: TECH components via the gate
 pnpm workflow records/workflows/schedule-release.workflow.yaml '{"releaseId":"<uuid>","releaseDate":"YYYY-MM-DD"}'   # Phase 13: Rights check, then schedule
 pnpm test        # vitest: phase proofs + unit tests (DB tests use throwaway databases)
 pnpm typecheck   # tsc --noEmit
@@ -63,7 +67,11 @@ Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
   - `releases`, `tracks` and `rights_splits`. Each split set sums to exactly 100 at commit for every role; an unassigned share is an explicit null-payee row, and it blocks scheduling (F31).
   - Catalog lookup (Knowledge) → catalog (Execution) (F10), Rights (Governance) and the release calendar (Execution).
   - Proven on a throwaway DB with the real CLIs ([handoff](docs/handoffs/PHASE-13.md)).
-- [ ] Phase 14: XYP3RN Tech
+- [x] Phase 14: XYP3RN Tech.
+  - The TRACE service (`trace.analysis/v1` in, `trace.report/v1` out, one definition of a check, JSON Schemas for the plugin).
+  - The TECH components via a gate-admitted manifest.
+  - The R&D backlog agent, whose verified proposals are each queued for a human.
+  - Proven with the live service on a throwaway DB. The R&D model call has not run live, for lack of a key ([handoff](docs/handoffs/PHASE-14.md)).
 - [ ] Phase 15: Legal / Governance
 - [ ] Phase 16: UI / Observability / Graph View / Command Center (16A–16D)
 - [ ] Phase 17: End-to-End Validation

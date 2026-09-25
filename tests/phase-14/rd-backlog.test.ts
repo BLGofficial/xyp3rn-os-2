@@ -54,7 +54,7 @@ const p = (title: string, evidenceIds: string[], component = 'audio-tools'): Pro
 
 type Out = {
   status: string; considered: number;
-  written: { id: string; title: string; approvalId: string }[];
+  written: { id: string; title: string }[];
   duplicates: string[];
   unverified: { title: string; reason: string }[];
 };
