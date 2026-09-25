@@ -11,7 +11,7 @@ import { CLASS_CAPABILITIES } from '../../core/tool-registry/capabilities.ts';
 import { decideArtifact } from '../../governance/approvals.ts';
 import { addToVault, mediaClassOf } from '../../knowledge/ingestion/vault.ts';
 import { createLocalVaultStore, type VaultStore } from '../../knowledge/source-registry/vault-store.ts';
-import { importLyricSheet } from '../../records/vault/import.ts';
+import { addAndImport, importLyricSheet } from '../../records/vault/import.ts';
 import { renderLyrics } from '../../records/x3lius/suno/formula.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 import { asCommitted, insertArtifact, insertRun } from '../helpers/records-fixture.ts';
@@ -173,11 +173,10 @@ describe('addToVault: bytes in the store, a sources row, the text, tags; one run
     const a = await addToVault(deps, { path: file('moodboard-1.txt', 'Chrome, rain, sodium lamps.\n'), tags: ['New Era', 'moodboard'] });
     const b = await addToVault(deps, { path: file('moodboard-2.txt', 'Night bus, empty platform.\n'), tags: ['moodboard', 'Нова ера'] });
     const tagsOf = (id: string) => db.sql<{ slug: string; label: string }[]>`
-      select t.slug, t.label from source_tags st join tags t on t.id = st.tag_id where st.source_id = ${id} order by t.label`;
+      select t.slug, t.label from source_tags st join tags t on t.id = st.tag_id where st.source_id = ${id} order by t.slug`;
     expect(await tagsOf(a.sourceId)).toEqual([{ slug: 'moodboard', label: 'moodboard' }, { slug: 'new-era', label: 'New Era' }]);
     const bt = await tagsOf(b.sourceId);
-    expect(bt[0]).toEqual({ slug: 'moodboard', label: 'moodboard' });
-    expect(bt[1]!.label).toBe('Нова ера');
+    expect(bt.map((t) => t.label)).toEqual(['moodboard', 'Нова ера']);
     expect(bt[1]!.slug).toMatch(/^t-[0-9a-f]{12}$/);
   });
 
@@ -206,9 +205,9 @@ describe('records-songs: a song identity, revisions, typed links', () => {
     const root = await insertArtifact(db.sql, 'x3lius.song-structure/v1', { fixture: true });
     const child = await childOf(root);
     const lineageLink = await songs({ link: { songId, artifactId: child, role: 'structure' } });
-    expect(lineageLink).toMatchObject({ kind: 'artifact', targetId: root });
+    expect(lineageLink).toMatchObject({ kind: 'artifact_lineage', targetId: root });
     expect(await songs({ unlink: { linkId: fileLink.linkId, reason: '[FIXTURE] wrong reference' } })).toEqual({ linkId: fileLink.linkId, retracted: true });
-    expect(await db.sql`select kind, role from current_song_links where song_id = ${songId}`).toEqual([{ kind: 'artifact', role: 'structure' }]);
+    expect(await db.sql`select kind, role from current_song_links where song_id = ${songId}`).toEqual([{ kind: 'artifact_lineage', role: 'structure' }]);
   });
 
   it('refuses: zero or two operations, two link targets, an unknown song, an unlink without a reason', async () => {
@@ -236,19 +235,19 @@ describe('lyric sheets → x3lius.lyrics/v2 lineages (owner-authored, draft unti
     const f = await addToVault(deps, { path: file('night-city-lyrics.txt', NIGHT_CITY), as: 'lyric_sheet', language: 'en', songId });
     expect(f).toMatchObject({ mediaClass: 'lyric_sheet', status: 'added' });
     const imported = await importLyricSheet(deps, { sourceId: f.sourceId, songId });
-    expect(imported).toMatchObject({ version: 1, instrumental: ['s1', 's6'], warnings: [] });
+    expect(imported).toMatchObject({ version: 1, instrumental: ['s1', 's5'], warnings: [] });
     const [a] = await db.sql<{ schema_id: string; agent_name: string; body: Record<string, unknown>; context_refs: unknown; knowledge: unknown; model: string; lineage_id: string }[]>`
       select schema_id, agent_name, body, context_refs, knowledge, model, lineage_id from creative_artifacts where id = ${imported.artifactId}`;
     expect(a).toMatchObject({ schema_id: 'x3lius.lyrics/v2', agent_name: 'x3lius-lyric-editor', model: 'none', knowledge: { authored: 'owner' } });
     expect(a!.context_refs).toEqual([{ kind: 'vault-file', sourceId: f.sourceId, sha256: f.sha256, title: 'night-city-lyrics.txt' }]);
-    expect(a!.body).toMatchObject({ sources: [], rulesApplied: [], ungroundedChoices: ['owner-authored'], instrumental: ['s1', 's6'] });
+    expect(a!.body).toMatchObject({ sources: [], rulesApplied: [], ungroundedChoices: ['owner-authored'], instrumental: ['s1', 's5'] });
     expect(renderLyrics([{ schemaId: a!.schema_id, body: a!.body }])).toBe(
       '[Verse 1]\nNight city lights\nNeon on the glass\n\n[Chorus]\nWe run tonight\nTill the morning comes\n\n[Verse 2]\nSecond verse, same street',
     );
     expect((await db.sql`select status from artifact_approvals where id = ${imported.artifactId}`)[0]).toEqual({ status: 'draft' });
     expect(await db.sql`select kind, role, target_id from current_song_links where song_id = ${songId} order by created_at`).toEqual([
       { kind: 'source', role: 'lyric-sheet', target_id: f.sourceId },
-      { kind: 'artifact', role: 'lyrics', target_id: a!.lineage_id },
+      { kind: 'artifact_lineage', role: 'lyrics', target_id: a!.lineage_id },
     ]);
     const runs = await db.sql`select agent_name, status::text from agent_runs where id = any(${[...f.runIds, ...imported.runIds]}::uuid[]) order by created_at`;
     expect(runs).toEqual([
@@ -266,6 +265,16 @@ describe('lyric sheets → x3lius.lyrics/v2 lineages (owner-authored, draft unti
     const w = await importLyricSheet(deps, { sourceId: g.sourceId });
     expect(w.warnings).toEqual(['s1 (Intro) has no sung lines, so it is instrumental; its directions "Guitar solo" stay only in the sheet']);
     expect((await db.sql`select body->'sections'->0->'bars'->0->>'language' as l from creative_artifacts where id = ${w.artifactId}`)[0]).toEqual({ l: 'und' });
+  });
+
+  it('addAndImport: a lyric sheet is imported once; adding the same sheet again finds the lineage instead of writing a second one', async () => {
+    const p = file('once.txt', '[Verse]\nonly once\n');
+    const first = await addAndImport(deps, { path: p, as: 'lyric_sheet', language: 'en' });
+    expect(first.lyrics).toMatchObject({ version: 1, alreadyImported: false });
+    const again = await addAndImport(deps, { path: p, as: 'lyric_sheet', language: 'en' });
+    expect(again.file.status).toBe('existing');
+    expect(again.lyrics).toEqual({ artifactId: first.lyrics!.artifactId, lineageId: first.lyrics!.lineageId, version: 1, alreadyImported: true });
+    expect(await addAndImport(deps, { path: file('plain-note.txt', 'not lyrics\n') })).toMatchObject({ lyrics: null });
   });
 
   it('the owner edits a version: a child version, still a draft; the approved pointer moves only on approval', async () => {

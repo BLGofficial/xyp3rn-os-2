@@ -200,6 +200,29 @@ end $$;
 
 create index if not exists sources_agent_run_id_idx on public.sources (agent_run_id);
 
+-- A Vault file never changes (a changed file is new bytes, a new row); only the knowledge index's
+-- embedding columns are still written to it. The one other update is a promotion: the checksum is
+-- unique, so bytes `pnpm ingest` already registered become a Vault file by setting the Vault
+-- columns on that row, once. The constraints above decide whether the promoted row is valid.
+create or replace function public.xyp_sources_vault_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_index constant text[] := array['embedding', 'embedding_model', 'embedding_input_sha256', 'embedding_truncated', 'embedded_at', 'updated_at'];
+begin
+  if old.storage is not null and (to_jsonb(new) - v_index) is distinct from (to_jsonb(old) - v_index) then
+    raise exception 'source % is a Vault file: it never changes (a changed file is a new file)', old.id
+      using errcode = 'object_not_in_prerequisite_state';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace trigger trg_sources_vault_guard before update on public.sources
+  for each row execute function public.xyp_sources_vault_guard();
+
 create table if not exists public.source_texts (
   source_id    uuid primary key references public.sources (id) on delete restrict,
   text         text not null,
@@ -382,6 +405,8 @@ grant select on table public.songs, public.song_revisions, public.song_links, pu
 grant select, insert on table public.songs, public.song_revisions, public.song_links, public.song_link_retractions,
   public.source_texts, public.source_tags, public.sources, public.tags to xyp_vault;
 grant select on table public.current_songs, public.current_song_links to xyp_vault;
+-- The promotion (xyp_sources_vault_guard): the Vault columns only, never title, uri or checksum.
+grant update (storage, media_class, language, agent_run_id) on table public.sources to xyp_vault;
 
 -- xyp_web: the UI's reads (A4). Never a write.
 grant select on table public.songs, public.song_revisions, public.song_links, public.song_link_retractions, public.source_texts,
@@ -393,8 +418,8 @@ grant select on table public.songs, public.song_revisions, public.song_links, pu
   public.canonical_prompts, public.modules, public.knowledge_versions to xyp_web;
 
 -- xyp_runtime: the Context Engine's vault corpus reads what it ranks.
-grant select on table public.vault_embeddings, public.source_texts, public.research_findings, public.songs, public.song_revisions,
-  public.song_links, public.song_link_retractions, public.current_songs, public.current_song_links to xyp_runtime;
+grant select on table public.vault_embeddings, public.source_texts, public.source_tags, public.research_findings, public.songs,
+  public.song_revisions, public.song_links, public.song_link_retractions, public.current_songs, public.current_song_links to xyp_runtime;
 
 -- xyp_embedder: fills the vault index from the entities' text.
 grant select, insert, update on table public.vault_embeddings to xyp_embedder;
@@ -415,6 +440,10 @@ begin
       execute format('create policy vault_insert on public.%I for insert to xyp_vault with check (true)', v.tbl);
     end if;
   end loop;
+  -- The promotion; xyp_sources_vault_guard and the column grant bound what it may change.
+  if not exists (select from pg_policies where schemaname = 'public' and tablename = 'sources' and policyname = 'vault_update') then
+    create policy vault_update on public.sources for update to xyp_vault using (true) with check (true);
+  end if;
   for v in select * from (values
     ('songs'), ('song_revisions'), ('song_links'), ('song_link_retractions'), ('source_texts'), ('source_tags'), ('vault_embeddings'),
     ('sources'), ('tags'), ('creative_artifacts'), ('approval_queue'), ('agent_runs'), ('workflow_runs'), ('ingestion_runs'),
@@ -427,7 +456,8 @@ begin
     end if;
   end loop;
   for v in select * from (values
-    ('vault_embeddings'), ('source_texts'), ('research_findings'), ('songs'), ('song_revisions'), ('song_links'), ('song_link_retractions')
+    ('vault_embeddings'), ('source_texts'), ('source_tags'), ('research_findings'), ('songs'), ('song_revisions'), ('song_links'),
+    ('song_link_retractions')
   ) as p(tbl) loop
     if not exists (select from pg_policies where schemaname = 'public' and tablename = v.tbl and policyname = 'runtime_select') then
       execute format('create policy runtime_select on public.%I for select to xyp_runtime using (true)', v.tbl);
@@ -451,7 +481,7 @@ end $$;
 
 revoke execute on function
   public.xyp_song_revisions_number(), public.xyp_songs_have_revision(), public.xyp_song_links_guard(),
-  public.xyp_vault_immutable(), public.xyp_vault_embeddings_entity()
+  public.xyp_vault_immutable(), public.xyp_vault_embeddings_entity(), public.xyp_sources_vault_guard()
   from public, anon, authenticated;
 revoke execute on function public.xyp_decide_artifact(uuid, text, text, text) from public, anon, authenticated;
 grant execute on function public.xyp_decide_artifact(uuid, text, text, text) to service_role;

@@ -28,7 +28,8 @@
     "gate": "node knowledge/promotion-gate/cli.ts",
     "evaluate": "node records/x3lius/evaluation/cli.ts",
     "trace:serve": "node tech/trace/serve-cli.ts",
-    "trace:schemas": "node tech/trace/schemas-cli.ts"
+    "trace:schemas": "node tech/trace/schemas-cli.ts",
+    "vault": "node records/vault/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

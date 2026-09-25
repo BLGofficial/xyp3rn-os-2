@@ -178,6 +178,23 @@ type VaultStore = { put(bytes): Promise<{ sha256, size }>; get(sha256): Promise<
 
 No step turns a Vault file into canonical knowledge. That remains the gate's first-party path (`pnpm ingest`), unchanged.
 
+**As built (steps 2–5): where the build differs from the text above, and why.**
+
+- **Provenance goes in `contextRefs`, not `sources`.** The v2 schema's `sources` holds upstream artifacts only (role `structure`), so the Vault file an import was read from is recorded as `contextRefs: [{ kind: 'vault-file', sourceId, sha256, title }]`. An owner edit records `[{ kind: 'owner-edit' }]`. Both carry `knowledge: { authored: 'owner' }` and `sources: []`.
+- **Instrumental sections.** In v2, `instrumental` lists section ids outside `sections`, and the Suno renderer skips them. A tagged section with no sung line is instrumental. The directions under it can't be kept in v2, so they are returned as warnings and stored in the artifact's `warnings`; the sheet (the Vault file) keeps them.
+- **A section tag with a note** (`[Verse 2: whispered]`) is a section plus a direction.
+- **Promotion.** `sources.checksum_sha256` is unique, so bytes `pnpm ingest` already registered can't get a second row. `register_vault_file` sets the Vault columns on that row instead: status `promoted`, and the knowledge title and uri are kept.
+  - The migration grants `xyp_vault` UPDATE on those four columns only.
+  - `xyp_sources_vault_guard` then freezes a Vault file: only the knowledge index's embedding columns may still change (55000 otherwise).
+- **Tags** get a slug from the label. A label with no Latin letter or digit (Cyrillic) gets `t-<12 hex of its sha256>`, with the label kept as written.
+- **Text.** Text files must be valid UTF-8, or they are refused rather than stored garbled; a BOM is stripped. A lyric sheet must yield text.
+- **Import once.** `addAndImport` (`pnpm vault add`) returns the earlier import of the same sheet instead of writing a second lineage. It does not guard two concurrent first adds, because the Vault has one owner.
+- **Owner edits** are the whole sheet as text (`{ edit: { parentId, text, language? } }`), parsed like an import. The parent's rhyme tags and devices are not carried: the owner's text doesn't have them.
+- **Flags for later steps:**
+  - **Step 6 must fix this before merge.** `embedPending` (knowledge) embeds every `sources` row, so after this step `pnpm embed` would put Vault-only files into the knowledge corpus. Step 6 limits the knowledge index to knowledge sources: rows with a successful `ingestion_runs` row, or `storage is null`.
+  - **Step 8:** `register_vault_file` reads any path the OS process can read. That is fine for the local CLI, but the web UI must write an upload to a temp file itself and never take a path from the browser.
+  - **Existing behaviour:** a dispatch timeout marks the run as an error but doesn't cancel the tool, so a slow add can still commit its row. Re-adding returns `existing`.
+
 **The ingestion status view** comes from rows, not a new table. It shows:
 
 - recent `vault-curator` and `x3lius-lyric-editor` runs;

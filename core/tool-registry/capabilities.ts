@@ -20,6 +20,8 @@ export const CAPABILITIES = [
   'catalog.read',
   'catalog.write',
   'trace.write',
+  'vault.write',
+  'vault.read',
   'external.execute',
   'governance.flag',
   'canonical.write',
@@ -58,6 +60,11 @@ export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass
   'catalog.write': ['Execution'],
   // Phase 14: record a TRACE analysis as received and link its mix report, once (tech-audio-tools).
   'trace.write': ['Execution'],
+  // AOS-01 (A2): the owner's Creative Vault writes, through deterministic Execution agents
+  // (vault-curator: files and tags; records-songs: songs and links), each as xyp_vault.
+  'vault.write': ['Execution'],
+  // AOS-01: a Vault file's metadata, tags and text. The lyric editor (Creative) reads a sheet to import it.
+  'vault.read': ['Knowledge', 'Creative', 'Execution'],
   'external.execute': ['Execution'],
   'governance.flag': ['Governance'],
   // No agent class, ever: the Promotion Gate's service account, humans with an RBAC role, and

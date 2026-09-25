@@ -24,6 +24,8 @@ drop type if exists public.song_status;
 
 do $$ begin
   if to_regclass('public.sources') is not null then
+    drop trigger if exists trg_sources_vault_guard on public.sources;
+    drop policy if exists vault_update on public.sources;
     alter table public.sources drop constraint if exists sources_vault_file_check;
     alter table public.sources drop constraint if exists sources_language_check;
     alter table public.sources drop constraint if exists sources_media_class_check;
@@ -33,6 +35,7 @@ do $$ begin
       drop column if exists media_class, drop column if exists storage;
   end if;
 end $$;
+drop function if exists public.xyp_sources_vault_guard();
 
 -- Policies and grants this migration added on tables that existed before it.
 do $$

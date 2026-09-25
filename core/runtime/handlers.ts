@@ -16,6 +16,9 @@ import { releaseCalendar, CALENDAR_AGENT } from '../../records/ops/release-calen
 import { rightsCheck, RIGHTS_AGENT } from '../../records/ops/rights-splits/check.ts';
 import { loadTechSystem, techStub } from '../../tech/tech-system.ts';
 import { AUDIO_TOOLS_AGENT, audioTools } from '../../tech/trace/intake.ts';
+import { VAULT_CURATOR_AGENT, vaultCurator } from '../../knowledge/ingestion/vault-curator.ts';
+import { LYRIC_EDITOR_AGENT, lyricEditor } from '../../records/vault/lyric-editor.ts';
+import { recordsSongs, SONGS_AGENT } from '../../records/vault/songs-agent.ts';
 
 /** X3LIUS sub-domains a phase has built: no longer served by the Phase 7 stub. */
 export const BUILT_SUBDOMAINS: readonly string[] = [...CREATIVE_SUBDOMAINS, 'x3lius-vocal-dna', 'x3lius-mix-master', 'x3lius-evaluation'];
@@ -46,6 +49,11 @@ export const HANDLERS: HandlerMap = {
   // Phase 14: TECH. Audio Tools is the TRACE intake (Execution); R&D is an LLM program
   // (core/runtime/programs.ts); the other components are manifest stubs until a phase builds them.
   [AUDIO_TOOLS_AGENT]: audioTools,
+  // AOS-01: the Creative Vault. The owner's writes go through deterministic agents (A2): files
+  // (Execution), songs and links (Execution), and the owner's own lyric versions (Creative).
+  [VAULT_CURATOR_AGENT]: vaultCurator,
+  [SONGS_AGENT]: recordsSongs,
+  [LYRIC_EDITOR_AGENT]: lyricEditor,
   ...Object.fromEntries(loadTechSystem().components.filter((c) => c.builtIn === null).map((c) => [c.slug, techStub])),
   // Phase 7: one stub per X3LIUS sub-domain no phase has built yet (none since Phase 12): the
   // fallback for a sub-domain a future manifest adds. Built ones run as LLM agents (core/runtime/programs.ts).
