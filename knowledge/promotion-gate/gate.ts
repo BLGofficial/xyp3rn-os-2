@@ -358,44 +358,40 @@ export const runGate = async (sql: Sql, candidateId: string, options: { readonly
       return result('rejected', s);
     }
 
+    // Every candidate that isn't blocked or rejected waits for the owner (F35 D2: no auto-approval).
     let approval: Record<string, unknown>;
     let approvalId: string | undefined;
     let validated: StepRecord;
-    if (decision.outcome === 'auto_approve') {
-      approval = { mode: 'auto', threshold: AUTO_APPROVE_CONFIDENCE, confidence };
-      validated = { step: 'validated-rule', passed: true, reason: `auto-approved: every condition holds (confidence ${confidence} ≥ ${AUTO_APPROVE_CONFIDENCE})` };
-    } else {
-      let [a] = await tx<Approval[]>`
-        select id, status::text, decided_by, decision_reason from approval_queue
-        where item_type = 'knowledge_candidate' and item_id = ${c.id}`;
-      if (!a) {
-        const request = { gate_reasons: decision.reasons, confidence, threshold: AUTO_APPROVE_CONFIDENCE, target_slug: c.target_slug, steps };
-        [a] = await tx<Approval[]>`
-          insert into approval_queue (item_type, item_id, request)
-          values ('knowledge_candidate', ${c.id}, ${tx.json(request as postgres.JSONValue)})
-          returning id, status::text, decided_by, decision_reason`;
-      }
-      approvalId = a!.id;
-      if (a!.status === 'pending') {
-        const s = [...steps, { step: 'validated-rule', passed: false, reason: `routed to human approval: ${decision.reasons.join('; ')}`, approval_id: approvalId } as const];
-        if (c.status === 'proposed') await tx`update knowledge_candidates set status = 'pending_approval' where id = ${c.id}`;
-        await recordRun(tx, { ...base, outcome: 'pending_approval', steps: s, approvalId });
-        return result('pending_approval', s, approvalId);
-      }
-      if (a!.status === 'rejected') {
-        const s = [...steps, { step: 'validated-rule', passed: false, reason: `operator ${a!.decided_by} rejected: ${a!.decision_reason}`, approval_id: approvalId } as const];
-        await tx`update knowledge_candidates set status = 'rejected' where id = ${c.id}`;
-        await recordRun(tx, { ...base, outcome: 'rejected', steps: s, approvalId });
-        return result('rejected', s, approvalId);
-      }
-      approval = { mode: 'human', approver: a!.decided_by, reason: a!.decision_reason, approval_id: approvalId, gate_reasons: decision.reasons };
-      validated = {
-        step: 'validated-rule',
-        passed: true,
-        reason: `operator ${a!.decided_by} approved over [${decision.reasons.join('; ')}]: ${a!.decision_reason}`,
-        approval_id: approvalId,
-      };
+    let [a] = await tx<Approval[]>`
+      select id, status::text, decided_by, decision_reason from approval_queue
+      where item_type = 'knowledge_candidate' and item_id = ${c.id}`;
+    if (!a) {
+      const request = { gate_reasons: decision.reasons, confidence, threshold: AUTO_APPROVE_CONFIDENCE, target_slug: c.target_slug, steps };
+      [a] = await tx<Approval[]>`
+        insert into approval_queue (item_type, item_id, request)
+        values ('knowledge_candidate', ${c.id}, ${tx.json(request as postgres.JSONValue)})
+        returning id, status::text, decided_by, decision_reason`;
     }
+    approvalId = a!.id;
+    if (a!.status === 'pending') {
+      const s = [...steps, { step: 'validated-rule', passed: false, reason: `routed to human approval: ${decision.reasons.join('; ')}`, approval_id: approvalId } as const];
+      if (c.status === 'proposed') await tx`update knowledge_candidates set status = 'pending_approval' where id = ${c.id}`;
+      await recordRun(tx, { ...base, outcome: 'pending_approval', steps: s, approvalId });
+      return result('pending_approval', s, approvalId);
+    }
+    if (a!.status === 'rejected') {
+      const s = [...steps, { step: 'validated-rule', passed: false, reason: `operator ${a!.decided_by} rejected: ${a!.decision_reason}`, approval_id: approvalId } as const];
+      await tx`update knowledge_candidates set status = 'rejected' where id = ${c.id}`;
+      await recordRun(tx, { ...base, outcome: 'rejected', steps: s, approvalId });
+      return result('rejected', s, approvalId);
+    }
+    approval = { mode: 'human', approver: a!.decided_by, reason: a!.decision_reason, approval_id: approvalId, gate_reasons: decision.reasons };
+    validated = {
+      step: 'validated-rule',
+      passed: true,
+      reason: `operator ${a!.decided_by} approved over [${decision.reasons.join('; ')}]: ${a!.decision_reason}`,
+      approval_id: approvalId,
+    };
 
     const { write, canonicalPromptId, version, moduleSlug } = await promote(tx, c, runId, approval, placement);
     const s = [...steps, validated, write, await propagate(tx, runId, [canonicalPromptId], placement ? moduleSlug : undefined)];

@@ -371,6 +371,21 @@ Migration `20260925120000_tech.sql`.
   - `xyp_planner`: INSERT/SELECT `rd_backlog` and `rd_backlog_evidence`, SELECT `research_evidence` and `research_sources`, nothing on `approval_queue`.
   - `xyp_runtime` reads `trace_analyses`. `service_role` reads, and decides approvals as before. `anon`/`authenticated` get nothing.
 
+## AOS-00 prerequisite: `service_role` is read-only
+
+Migration `20260925130000_service_role_read_only.sql` (G20, `docs/artist-os/AOS-00-baseline.md`).
+
+- **What was open:** `service_role` still held INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES and TRIGGER on 28 tables and views.
+  - Phase 1 called those grants "correct for Phase 1 only"; 6D revoked them only on the canonical tables.
+  - The affected tables include `knowledge_candidates`, `research_evidence`, `creative_artifacts`, `critiques`, the Suno trail, `agent_runs` and `workflow_runs`.
+  - TRUNCATE also skips the immutability triggers.
+- **What changes:** every one of those privileges is revoked on every relation in `public`, and the schema's default privileges are revoked too, so a table a later migration creates starts read-only for `service_role`.
+- **What still works:**
+  - `service_role` reads everything (RLS bypass) and decides approvals through `xyp_decide_approval` (EXECUTE is unchanged).
+  - Every write goes through an `xyp_*` role, so every write has its agent run.
+  - Direct maintenance runs as the migration role (`postgres`), never as the app key.
+- **Proof:** `tests/aos-00/prerequisites.test.ts` covers every relation, a new table, and a refused write. The Phase 1 write probe is inverted.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

@@ -101,7 +101,7 @@ Numbered. Each gap names its owner (the module that extends) and the AOS phase t
 | G17 | No evaluation cases; no owner feedback capture; no proposals for agents, workflows or templates | RECORDS (`records/x3lius/evaluation`) + KNOWLEDGE (gate) | AOS-07 |
 | G18 | Served model not recorded on every run | CORE (`core/orchestrator/dispatch`, `core/llm`) | AOS-07 (versioned evaluation needs it); small, can land earlier |
 | G19 | No audit log, approval API or RBAC (old Phase 15) | GOVERNANCE (`governance/`) | AOS-07 (approval API), AOS-08 (audit, RBAC review) |
-| G20 | `service_role` full DML (TRUNCATE included) on `creative_artifacts`, `critiques`, the Suno trail (F32) | CORE (migrations) | Before AOS-01 (the Vault builds on those tables) |
+| G20 | `service_role` full DML (TRUNCATE included) on 28 relations, wider than F32 listed | CORE (migrations) | **Done** (P): migration `20260925130000_service_role_read_only` |
 | G21 | No backup/restore procedure or restore test | CORE (`core/db`) | AOS-08 |
 
 ## 3. Dependency map
@@ -136,9 +136,11 @@ flowchart TD
 
 The plan's order holds. Only the prerequisites (P) are added, and two gaps are placed explicitly.
 
-0. **P (before AOS-01):**
-   - G20, the `service_role` DML fix: one migration.
-   - The decisions in §6, which set the AOS-01 schema.
+0. **P (before AOS-01): done.**
+   - G20: `service_role` is read-only on every relation and by default.
+   - D2: the gate never auto-approves.
+   - The §6 decisions are made.
+   - Proof: `tests/aos-00/prerequisites.test.ts`.
 1. **AOS-01 Vault + songs:** G1–G6 (lyrics), and G7 (the `apps/web` shell and the Vault browser, owner-only). First-release items 1–2.
 2. **AOS-02 Command Center:** G8, and G7 (the catalog dashboard and song workspace).
 3. **AOS-03 Studio + Suno:** G6 (styles, tags), G9, G10, and G11 (optional inputs, approval steps). First-release items 3–5.

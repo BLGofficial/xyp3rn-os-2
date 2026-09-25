@@ -27,8 +27,13 @@ export type GateStep = (typeof GATE_STEPS)[number];
  *   (reliability 0.9) each stated at confidence ≥ 0.89, or vendor pages (0.8) at 1.0;
  * - community (0.4) or unknown-host (0.3) evidence can never reach it at any k.
  * Changing this is a flagged decision (docs/ARCHITECTURE.md F14), never a silent edit.
+ * Since F35 D2 (Artist OS) nothing auto-approves: the threshold is kept as a reason shown to the
+ * owner, who decides every canonical change.
  */
 export const AUTO_APPROVE_CONFIDENCE = 0.8;
+
+/** What the owner sees for a candidate that meets every former auto-approve condition (F35 D2). */
+export const ALL_CONDITIONS_HOLD = `every automatic condition holds (validated experiment, fresh sources, confidence ≥ ${AUTO_APPROVE_CONFIDENCE}); the owner decides (F35 D2)`;
 
 /**
  * Freshness re-check: AI music models ship major versions every few months (Suno v4 → v4.5 → v5
@@ -50,16 +55,17 @@ export type GateInputs = {
 };
 
 export type Decision = {
-  readonly outcome: 'auto_approve' | 'blocked' | 'rejected' | 'human';
+  readonly outcome: 'blocked' | 'rejected' | 'human';
   readonly reasons: readonly string[];
 };
 
 /**
  * Decides a candidate's fate. Precedence: an open contradiction blocks (fixable: resolve it and
- * re-run); inconsistent tags reject (the evidence can't support the rule as scoped); anything
- * short of every auto-approve condition goes to a human, with every failing reason listed.
+ * re-run); inconsistent tags reject (the evidence can't support the rule as scoped); everything else
+ * goes to the owner (F35 D2: no auto-approval), with every failing condition listed — or, when all
+ * hold, a reason saying so.
  * @param i - evaluated gate inputs
- * @returns outcome and the reasons behind it (empty for auto-approve)
+ * @returns outcome and the reasons behind it (never empty for `human`)
  */
 export const decide = (i: GateInputs): Decision => {
   if (!i.eligible) return { outcome: 'blocked', reasons: ['open contradiction'] };
@@ -69,5 +75,5 @@ export const decide = (i: GateInputs): Decision => {
     ...(i.sourcesFresh ? [] : [`sources older than ${SOURCE_MAX_AGE_DAYS} days`]),
     ...(i.confidence >= AUTO_APPROVE_CONFIDENCE ? [] : [`confidence ${i.confidence} below ${AUTO_APPROVE_CONFIDENCE}`]),
   ];
-  return { outcome: reasons.length === 0 ? 'auto_approve' : 'human', reasons };
+  return { outcome: 'human', reasons: reasons.length === 0 ? [ALL_CONDITIONS_HOLD] : reasons };
 };

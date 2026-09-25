@@ -189,6 +189,7 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - Consequence today: nothing auto-approves before Phase 12, because trials are stub-scored until the Critic exists.
 - Phase 12: trials are scored by the Critic (passed / checked, F28); the auto-approve path can now fire.
 - Changing either number is a new flagged decision, never a silent edit (`knowledge/promotion-gate/decide.ts`).
+- **SUPERSEDED by F35 D2 (Artist OS):** nothing auto-approves. A candidate that meets every condition goes to the owner, and its reason says that every automatic condition holds. The thresholds remain as reasons, and the gate has no auto path left (`decide()` returns only blocked, rejected or human).
 
 **F15. Two X3LIUS sub-domains had no building phase.** RESOLVED (user approved the first option).
 - Phase 7 lists ten sub-domains. Phases 8–12 build Songwriting and Lyrics (8), Suno (9), Vocal DNA (10), Production, Arrangement and Mix/Master (11), and Evaluation (12). No phase named Composition or Genre/Style.
@@ -336,7 +337,7 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **No edits or takedowns.** There is no title/position edit, no draft delete, and no `withdrawn` status (a Governance takedown, Phase 15).
 - **Only Suno takes register.** `take_id` is required, as in the guide's "from Phase 9–11 output". A track made outside Suno (an FL Studio bounce with RVC vocals) can't be registered until that is widened (a user decision).
 - **Lead time is not policy.** Any date ≥ today schedules. A DSP lead time is canonical knowledge a later phase can admit, never a constant.
-- **`service_role` holds full DML on earlier-phase tables.** The emulated Supabase default privileges gave it ALL on `creative_artifacts`, `critiques`, `suno_submissions`, `suno_takes` and `take_scores`, contrary to SCHEMA.md ("SELECT only"). The immutability triggers stop UPDATE/DELETE, but not INSERT or TRUNCATE. Phase 13's tables revoke it. The earlier tables need a follow-up migration, not done here because it widens the phase.
+- ~~**`service_role` holds full DML on earlier-phase tables.**~~ RESOLVED in AOS-00 (G20, migration `20260925130000_service_role_read_only`). The hole was wider than listed here: 28 relations. `service_role` is now read-only on every relation and by default.
 
 **F33. XYP3RN Tech (Phase 14).** DECIDED (user, Phase 14).
 - **The guide's premises that don't hold:**

@@ -26,7 +26,10 @@ HANDOFF — Artist OS AOS-00 (baseline) complete; four decisions needed before A
   - D3: old Phases 15–17 absorbed into AOS (the Graph View dropped unless asked).
   - D4: a local content-addressed store (`.vault/<sha256>`) behind one storage interface, with Supabase Storage as a later adapter.
 - **Next phase needs (AOS-01):**
-  1. D2 implemented, plus G20 (the prerequisite step P, before any AOS-01 table).
+  1. Prerequisite step P is done:
+     - D2: the gate never auto-approves;
+     - G20: `service_role` is read-only on every relation and by default. The hole was 28 relations, wider than F32 listed.
+     - Proof: `tests/aos-00/prerequisites.test.ts`.
   2. The G20 prerequisite migration: `service_role` is read-only on the earlier-phase tables.
   3. Owners: the `songs` table in RECORDS; bytes and ingestion in `knowledge/source-registry` + `knowledge/ingestion`; search in `core/context-engine`; the Vault browser in `apps/web` (Next.js 14).
   4. Export / re-import with links (the AOS-01 gate) builds on `knowledge_versions` and artifact lineages. There is no second store.
