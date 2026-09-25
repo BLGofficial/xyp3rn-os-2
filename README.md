@@ -48,7 +48,13 @@ pnpm typecheck   # tsc --noEmit
 
 Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 
-## Build status
+## Artist OS (current sequence)
+
+The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md)) extends this OS into the Command Center, Studio and Research modes over one Creative Vault. Its phases are numbered AOS-00 → AOS-08.
+
+- [x] AOS-00: Baseline. The current-state map, gap list, dependency map, implementation order and an executable no-parallel-kernel gate ([baseline](docs/artist-os/AOS-00-baseline.md), [handoff](docs/handoffs/AOS-00.md)). Four decisions are open before AOS-01.
+
+## Build status (Agentic OS build guide)
 
 - [x] Phase 0: Foundation / Contracts
 - [x] Phase 1: Supabase canonical data model

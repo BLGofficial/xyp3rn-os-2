@@ -104,5 +104,5 @@ Example: `XYP_DATABASE_URL`
 
 ### Handoffs
 
-`docs/handoffs/PHASE-<NN>[<sub>].md`, using the Appendix A template of the build guide.
-Example: `docs/handoffs/PHASE-06B.md`
+`docs/handoffs/PHASE-<NN>[<sub>].md`, using the Appendix A template of the build guide. The Artist OS sequence (`docs/artist-os/PLAN.md`) uses `AOS-<NN>` for its phases, handoffs and phase documents, so the two sequences never share a number.
+Example: `docs/handoffs/PHASE-06B.md`; `docs/handoffs/AOS-00.md` with `docs/artist-os/AOS-00-baseline.md`
