@@ -193,6 +193,7 @@ Checks are never stored, so fixing the data clears them. The Rights check and th
   - credits of exported songs and tracks, with their people and aliases;
   - platform links, artwork and deliveries of exported releases and tracks;
   - tasks of exported songs and releases, with their events.
+- **As built:** every person (with their aliases) and every task (with its events) is exported whole, like songs. A general task, or a collaborator not yet credited, belongs to no song, so the closure alone would drop them. A credit or platform link that was re-added after a retraction is ordered after that retraction, the same rule as song links.
 - The format version stays `v1`: the tables are additive, and an older export imports unchanged.
 - A released release still can't be exported (F37: a restore recreates drafts only), and that includes the gate's own final state (§8). Release history is AOS-08.
 

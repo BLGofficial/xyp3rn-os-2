@@ -41,7 +41,11 @@ const collect = async (tx: postgres.TransactionSql, schema: Schema): Promise<Map
   };
   const idsOf = (table: ExportTable, column = 'id') => [...rows.values()].filter((r) => r.table === table).map((r) => r.obj[column] as string);
 
-  for (const t of ['songs', 'song_revisions', 'song_links', 'song_link_retractions'] as const) add(t, await fetchRows(tx, t, 'true', []));
+  // The owner's own records, whole: songs and their links, and (AOS-02) the people they work with and
+  // their to-dos; everything else comes in through the closure below.
+  for (const t of ['songs', 'song_revisions', 'song_links', 'song_link_retractions', 'people', 'person_aliases', 'tasks', 'task_events'] as const) {
+    add(t, await fetchRows(tx, t, 'true', []));
+  }
   add('sources', await fetchRows(tx, 'sources', 'storage is not null', []));
   const cited = await tx<{ lineage_id: string }[]>`
     select distinct lineage_id from creative_artifacts a
@@ -64,6 +68,13 @@ const collect = async (tx: postgres.TransactionSql, schema: Schema): Promise<Map
     added += add('source_tags', await fetchRows(tx, 'source_tags', 'source_id = any($2::uuid[])', [idsOf('sources')]));
     added += add('approval_queue', await fetchRows(tx, 'approval_queue', `item_type::text = 'artifact_version' and item_id = any($2::uuid[])`, [idsOf('creative_artifacts')]));
     added += add('rights_splits', await fetchRows(tx, 'rights_splits', 'track_id = any($2::uuid[])', [idsOf('tracks')]));
+    // AOS-02: what belongs to an exported song, track or release.
+    added += add('credits', await fetchRows(tx, 'credits', 'song_id = any($2::uuid[]) or track_id = any($3::uuid[])', [idsOf('songs'), idsOf('tracks')]));
+    added += add('credit_retractions', await fetchRows(tx, 'credit_retractions', 'credit_id = any($2::uuid[])', [idsOf('credits')]));
+    added += add('platform_links', await fetchRows(tx, 'platform_links', 'release_id = any($2::uuid[]) or track_id = any($3::uuid[])', [idsOf('releases'), idsOf('tracks')]));
+    added += add('platform_link_retractions', await fetchRows(tx, 'platform_link_retractions', 'platform_link_id = any($2::uuid[])', [idsOf('platform_links')]));
+    added += add('release_artwork', await fetchRows(tx, 'release_artwork', 'release_id = any($2::uuid[])', [idsOf('releases')]));
+    added += add('release_deliveries', await fetchRows(tx, 'release_deliveries', 'release_id = any($2::uuid[])', [idsOf('releases')]));
     if (added === 0) return rows;
   }
 };
@@ -99,9 +110,14 @@ const order = (rows: Map<string, Row>, schema: Schema): Row[] => {
     for (const r of g) for (const p of g.filter((x) => Number(x.obj.version) === Number(r.obj.version) - 1)) dep(r.key, p.key);
   }
   const target = (r: Row) => `${r.obj.song_id}|${r.obj.artifact_lineage_id ?? r.obj.source_id ?? r.obj.take_id ?? r.obj.track_id ?? r.obj.research_question_id}`;
-  for (const g of groups('song_links', target)) {
-    g.sort(byCreated).forEach((r, i) => i > 0 && dep(r.key, `song_link_retractions:${g[i - 1]!.obj.id}`));
-  }
+  // One live row per key (song_links, and since AOS-02 credits and platform links): a row re-added
+  // after a retraction must follow the retraction that freed its key.
+  const relinks = (table: ExportTable, retractions: ExportTable, keyOf: (r: Row) => string) => {
+    for (const g of groups(table, keyOf)) g.sort(byCreated).forEach((r, i) => i > 0 && dep(r.key, `${retractions}:${g[i - 1]!.obj.id}`));
+  };
+  relinks('song_links', 'song_link_retractions', target);
+  relinks('credits', 'credit_retractions', (r) => `${r.obj.person_id}|${r.obj.role}|${r.obj.song_id ?? r.obj.track_id}`);
+  relinks('platform_links', 'platform_link_retractions', (r) => `${r.obj.platform}|${r.obj.release_id ?? r.obj.track_id}`);
 
   // Kahn's algorithm; the ready set is kept sorted, so the order is a function of the data alone.
   const cmp = (x: Row, y: Row) => byCreated(x, y) || x.table.localeCompare(y.table);

@@ -17,6 +17,9 @@ export const EXPORT_TABLES = [
   'sources', 'source_texts', 'source_tags', 'tags',
   'creative_artifacts', 'critiques', 'approval_queue',
   'suno_submissions', 'suno_takes', 'releases', 'tracks', 'rights_splits',
+  // AOS-02 (design §7): the Command Center's records.
+  'people', 'person_aliases', 'credits', 'credit_retractions', 'platform_links', 'platform_link_retractions',
+  'release_artwork', 'release_deliveries', 'tasks', 'task_events',
 ] as const;
 export type ExportTable = (typeof EXPORT_TABLES)[number];
 export const isExportTable = (t: string): t is ExportTable => (EXPORT_TABLES as readonly string[]).includes(t);
