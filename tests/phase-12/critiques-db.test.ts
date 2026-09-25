@@ -1,6 +1,7 @@
 import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRuntimeTools } from '../../core/runtime/tools.ts';
+import { decideQueueItem, pendingApprovals } from '../../knowledge/promotion-gate/gate.ts';
 import { createTestDb, type TestDb } from '../helpers/db.ts';
 
 // Phase 12 proof (part 1): the critiques table, the critique_id link on creative_artifacts and the
@@ -162,5 +163,23 @@ describe('tools: write_critique, read_critique, read_artifact', () => {
     expect(t.authorize('Revision', 'write_critique')).toMatchObject({ allow: false });
     for (const c of ['Critic', 'Revision', 'Governance'] as const) expect(t.authorize(c, 'read_critique')).toEqual({ allow: true, capability: 'critique.read' });
     for (const c of ['Creative', 'Knowledge', 'Execution'] as const) expect(t.authorize(c, 'read_critique')).toMatchObject({ allow: false });
+  });
+});
+
+describe('deciding a critique escalation (the operator path: pnpm gate queue / decide)', () => {
+  it('the queue shows why it was escalated; the decision is recorded without re-running the gate', async () => {
+    const c = await critique(await artifact());
+    const id = await as('xyp_evaluation_loop', async (tx) => (await tx<{ id: string }[]>`
+      select public.xyp_escalate_critique(${c}, ${tx.json({ reason: 'iteration_cap', revisions: 3 })}) as id`)[0]!.id);
+    expect((await pendingApprovals(db.sql)).find((p) => p.approval_id === id)).toMatchObject({
+      item_type: 'critique_escalation', item_id: c, escalation: { reason: 'iteration_cap', revisions: 3 },
+    });
+    const reran: string[] = [];
+    const out = await decideQueueItem(db.sql, id, { decision: 'approve', approver: 'operator:phase-12-test', reason: 'accept the latest version' }, async (candidateId) => {
+      reran.push(candidateId);
+      return null;
+    });
+    expect(out).toEqual({ approval: 'approved', itemType: 'critique_escalation' });
+    expect(reran).toEqual([]);
   });
 });

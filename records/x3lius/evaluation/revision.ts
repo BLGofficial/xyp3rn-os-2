@@ -3,7 +3,7 @@ import type { ArtifactRecord } from '../../../core/tool-registry/tools/read-arti
 import { withoutTrace } from '../creative/artifacts.ts';
 import { scriptFindings, specForSchema } from '../creative/program.ts';
 import { MIX_REPORT_SCHEMA_ID } from '../creative/schemas.ts';
-import { applyEdits, rederive, type Edit } from './edits.ts';
+import { applyEdits, isDerived, rederive, type Edit } from './edits.ts';
 import { REVISION_LLM_SCHEMA, REVISION_LLM_SCHEMA_ID } from './schemas.ts';
 import type { CritiqueRow } from './tools.ts';
 
@@ -50,8 +50,14 @@ export const revisionProgram: LlmProgram = async (ctx, input, llm) => {
   if (a.schemaId === MIX_REPORT_SCHEMA_ID) throw new Error('a mix report measures a render: fixing it is studio work (change the session, render again), not a revision');
   const found = specForSchema(a.schemaId);
   if (!found) throw new Error(`no Creative spec writes ${a.schemaId}: nothing to validate a revision against`);
-  const violations = c.body.violations;
-  if (violations.length === 0) throw new Error(`critique ${c.id} lists no violation: nothing to revise`);
+  if (c.body.violations.length === 0) throw new Error(`critique ${c.id} lists no violation: nothing to revise`);
+  // A violation on a field code derives (a Suno prompt's rendered lyrics, the trace) is fixed upstream,
+  // never here: it is kept from the model so it can't sink the edits that are fixable.
+  const violations = c.body.violations.filter((v) => !isDerived(a.schemaId, v.path));
+  if (violations.length === 0) {
+    const paths = [...new Set(c.body.violations.map((v) => v.path))].join(', ');
+    throw new Error(`every violation in critique ${c.id} is on a field code derives (${paths}): it is fixed upstream (e.g. on the lyrics artifact a Suno prompt renders), not by a revision`);
+  }
 
   const res = await llm.complete({
     system: SYSTEM,

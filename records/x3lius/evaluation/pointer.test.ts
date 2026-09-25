@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAt, isAtOrUnder, setAt, stringsIn } from './pointer.ts';
+import { getAt, isAtOrUnder, scalarsIn, setAt, stringsIn } from './pointer.ts';
 
 const doc = { title: 'a', sections: [{ bars: [{ text: 'one' }, { text: 'two' }] }], 'a/b': { '~k': 1 } };
 
@@ -32,5 +32,9 @@ describe('JSON Pointer (RFC 6901) over artifact bodies', () => {
   it('collects every string under a value', () => {
     expect(stringsIn(doc.sections)).toEqual(['one', 'two']);
     expect(stringsIn(3)).toEqual([]);
+  });
+
+  it('collects every number and true/false under a value as its JSON text', () => {
+    expect(scalarsIn({ a: 1.5, b: [true, 'x', null], c: { d: 0 } })).toEqual(['1.5', 'true', '0']);
   });
 });

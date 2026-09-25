@@ -45,7 +45,7 @@ let db: TestDb;
 let embedder: Embedder;
 let researchRunId: string;
 const rules = { lyrics: '', suno: '', styleLimit: '' };
-const prompts: Record<'critic' | 'revision' | 'loop', string> = { critic: '', revision: '', loop: '' };
+const prompts: Record<'critic' | 'revision' | 'loop' | 'derived', string> = { critic: '', revision: '', loop: '', derived: '' };
 const registry = createAgentRegistry({ dir: join(REPO_ROOT, 'agents') });
 
 const depsWith = (model = fakeModel()): DispatchDeps => ({
@@ -124,7 +124,7 @@ beforeAll(async () => {
     { topic: 'fixture.x3lius-suno-vocal-first', value: 'vocal-first', modelTag: 'model-agnostic' });
   await promote('fixture-phase-12-suno-title-limit', 'Suno v5 accepts at most 80 characters of title (FIXTURE value).', 'x3lius-suno',
     { topic: 'suno.limit.title-chars', value: 80, modelTag: 'suno-v5' });
-  for (const k of ['critic', 'revision', 'loop'] as const) prompts[k] = (await sunoPrompt()).id;
+  for (const k of ['critic', 'revision', 'loop', 'derived'] as const) prompts[k] = (await sunoPrompt()).id;
   // The rule change: the style limit arrives after those prompts were written ([FAKE] style is 19 chars).
   const limitId = await promote('fixture-phase-12-suno-style-limit', 'Suno v5 accepts at most 12 characters of style (FIXTURE value).', 'x3lius-suno',
     { topic: 'suno.limit.style-chars', value: 12, modelTag: 'suno-v5' });
@@ -254,6 +254,27 @@ describe('loop controller (the proof runs)', () => {
     const r = await evaluate(depsWith(model), l.id, { timeoutMs: 60_000 });
     expect(r).toMatchObject({ outcome: 'stall', revisions: 1, counts: [1, 1] });
     expect((await escalation(r.critiqueIds.at(-1)!))[0]?.request).toMatchObject({ reason: 'stall' });
+  });
+
+  it('a violation on a field code derives stays out of the revision; once only it is left, the loop escalates it for an upstream fix', async () => {
+    const suno = `canonical_prompts:${rules.suno}`;
+    const reviser = scripted({
+      critic: (a) => [
+        ...(String(a.style).includes('style prompt') ? [{ ruleRef: suno, path: '/style', quote: '[FAKE] style prompt', expected: 'the vocal descriptor first', found: 'a placeholder' }] : []),
+        { ruleRef: suno, path: '/lyrics', quote: String(a.lyrics).slice(0, 12), expected: 'a rule the rendered lyrics break', found: 'the rendered lyrics' },
+      ],
+      // Edits whatever it is shown: a derived violation reaching it would produce a /lyrics edit.
+      revise: (vs) => [
+        ...(vs.some((x) => x.path === '/style') ? [{ path: '/style', replacement: 'male vox', violationKeys: vs.filter((x) => x.path === '/style').map((x) => x.key) }] : []),
+        ...vs.filter((x) => x.path !== '/style').map((x) => ({ path: x.path, replacement: 'rewritten', violationKeys: [x.key] })),
+      ],
+    });
+    const r = await evaluate(depsWith(reviser), prompts.derived, { timeoutMs: 60_000 });
+    expect(r).toMatchObject({ outcome: 'revision_failed', revisions: 1, counts: [3, 1] });
+    expect(r.error).toMatch(/on a field code derives \(\/lyrics\): it is fixed upstream/);
+    const revisionCalls = reviser.calls.filter((c) => c.user.includes('\n\nVIOLATIONS\n'));
+    expect(revisionCalls).toHaveLength(1);
+    expect(revisionCalls[0]!.user).not.toContain('"path":"/lyrics"');
   });
 
   it('escalates a refused revision, with the error, and writes no version', async () => {

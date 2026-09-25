@@ -57,3 +57,10 @@ export const stringsIn = (value: unknown): string[] =>
     : Array.isArray(value) ? value.flatMap(stringsIn)
       : value !== null && typeof value === 'object' ? Object.values(value).flatMap(stringsIn)
         : [];
+
+/** @returns every number and true/false at or under a value, as its JSON text (140 → "140"), depth first */
+export const scalarsIn = (value: unknown): string[] =>
+  typeof value === 'number' || typeof value === 'boolean' ? [String(value)]
+    : Array.isArray(value) ? value.flatMap(scalarsIn)
+      : value !== null && typeof value === 'object' ? Object.values(value).flatMap(scalarsIn)
+        : [];

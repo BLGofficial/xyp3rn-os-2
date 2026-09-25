@@ -29,7 +29,8 @@ const convert = (current: unknown, replacement: string): { readonly value: unkno
 /**
  * Applies a revision's edits to a copy of the body, or refuses the lot (spec §6). An edit must cite
  * violations of this critique, name an existing field that code doesn't derive, sit at or inside a
- * field a violation points to, keep the field's type, change something, and not repeat a field.
+ * field a violation points to, keep the field's type, change something, not empty a text field, and
+ * not repeat a field.
  * @param schemaId - the artifact's schema id (for derived fields)
  * @param body - the reviewed version's body
  * @param edits - the model's edits
@@ -55,6 +56,8 @@ export const applyEdits = (schemaId: string, body: Record<string, unknown>, edit
     const c = convert(at.value, e.replacement);
     if ('why' in c) return refuse(c.why);
     if (c.value === at.value) return refuse('changes nothing');
+    // Deleting the words would make the Critic's quote vanish and read as a fix (a sung bar left empty).
+    if (typeof at.value === 'string' && at.value.trim() !== '' && String(c.value).trim() === '') return refuse('empties a text field: rewrite it, do not delete it');
     const prior = firstEdit.get(e.path);
     if (prior !== undefined) return refuse(`repeats a field edit ${prior} changes`);
     firstEdit.set(e.path, i);

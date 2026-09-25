@@ -424,6 +424,46 @@ export const decideApproval = async (
     return r!.status;
   });
 
+/** One pending approval as the operator's queue shows it. */
+export type PendingApproval = {
+  readonly approval_id: string; readonly item_type: string; readonly item_id: string; readonly requested_at: Date;
+  readonly gate_reasons: unknown; readonly target_slug: string | null; readonly confidence: unknown;
+  /** A critique_escalation's request (Phase 12): reason, revisions, version chain, counts per pass. */
+  readonly escalation: unknown;
+};
+
+/**
+ * The operator's queue (pnpm gate queue): every pending approval, oldest first.
+ * @param sql - pool allowed to SET ROLE service_role
+ * @returns pending items with the gate's reasons, or an evaluation loop's escalation request
+ */
+export const pendingApprovals = (sql: Sql): Promise<PendingApproval[]> =>
+  asRole(sql, OPERATOR_ROLE, (tx) => tx<PendingApproval[]>`
+    select id as approval_id, item_type::text, item_id, requested_at,
+           request->'gate_reasons' as gate_reasons, request->>'target_slug' as target_slug, request->'confidence' as confidence,
+           case when item_type = 'critique_escalation' then request end as escalation
+    from approval_queue where status = 'pending' order by requested_at`);
+
+/**
+ * The operator's decision on a queued item (pnpm gate decide). A knowledge candidate then goes back
+ * through the gate; a critique escalation's decision is only recorded (acted on from Phase 15/16).
+ * @param sql - pool allowed to SET ROLE service_role
+ * @param approvalId - approval_queue.id (must be pending)
+ * @param d - decision, who decided, and why
+ * @param rerun - re-runs the gate on a knowledge candidate (the CLI also embeds a promotion)
+ * @returns the new status, the item type, and the gate's result for a knowledge candidate
+ */
+export const decideQueueItem = async (
+  sql: Sql,
+  approvalId: string,
+  d: { readonly decision: 'approve' | 'reject'; readonly approver: string; readonly reason: string },
+  rerun: (candidateId: string) => Promise<unknown>,
+): Promise<{ readonly approval: 'approved' | 'rejected'; readonly itemType: string; readonly gate?: unknown }> => {
+  const approval = await decideApproval(sql, approvalId, d);
+  const [item] = await sql<{ item_id: string; item_type: string }[]>`select item_id, item_type::text from approval_queue where id = ${approvalId}`;
+  return { approval, itemType: item!.item_type, ...(item!.item_type === 'knowledge_candidate' ? { gate: await rerun(item!.item_id) } : {}) };
+};
+
 export type FirstPartyAdmission = {
   readonly doc: NormalizedDocument;
   readonly sourceId: string;

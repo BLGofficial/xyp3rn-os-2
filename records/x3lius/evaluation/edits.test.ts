@@ -35,6 +35,7 @@ describe('applying revision edits', () => {
     ['a whole object', [{ path: '/sections/0/bars/0', replacement: 'x', violationKeys: [v('/sections/0/bars/0').key] }], [v('/sections/0/bars/0')], /replaces an object or list, not a text, number or true\/false field/],
     ['text for a number', [{ path: '/sections/0/bars/0/n', replacement: '120 bpm', violationKeys: [section.key] }], [section], /"120 bpm" is not a number/],
     ['text for a true/false field', [{ path: '/sections/0/flag', replacement: 'yes', violationKeys: [section.key] }], [section], /"yes" is not true or false/],
+    ['emptying a text field', [{ path: '/sections/0/bars/0/text', replacement: '  ', violationKeys: [bar0.key] }], [bar0], /empties a text field/],
     ['a no-op', [{ path: '/sections/0/bars/0/text', replacement: 'old one', violationKeys: [bar0.key] }], [bar0], /changes nothing/],
     ['two edits of one field', [
       { path: '/sections/0/bars/0/text', replacement: 'a', violationKeys: [bar0.key] },

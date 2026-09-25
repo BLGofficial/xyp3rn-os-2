@@ -39,6 +39,15 @@ describe('verifying model-reported violations', () => {
     expect(r.unverified).toEqual([{ ruleRef: over.ruleRef ?? A.ref, path: over.path ?? '/sections/0/bars/0/text', quote: over.quote ?? 'Canal Street', reason }]);
   });
 
+  it('verifies a number or true/false field by exact equality with its JSON text, never by substring', () => {
+    const body = { tempoBpm: 140, flags: { live: true }, sections: [] };
+    const at = (path: string, quote: string) => verifyReported([report({ path, quote })], [A], new Set(), body);
+    expect(at('/tempoBpm', '140').violations).toHaveLength(1);
+    expect(at('/flags', 'true').violations).toHaveLength(1);
+    expect(at('/tempoBpm', '14').unverified[0]?.reason).toBe('the quote does not appear at that path');
+    expect(at('/tempoBpm', '140 bpm').unverified[0]?.reason).toBe('the quote does not appear at that path');
+  });
+
   it('merges two reports of the same violation', () => {
     expect(verifyReported([report({}), report({ quote: 'Neon' })], [A], new Set(), BODY).violations).toHaveLength(1);
   });

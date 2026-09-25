@@ -1,6 +1,6 @@
 import { resolveRef } from '../creative/program.ts';
 import type { ContextEntry } from '../creative/types.ts';
-import { getAt, stringsIn } from './pointer.ts';
+import { getAt, scalarsIn, stringsIn } from './pointer.ts';
 import { violationKey, type Unverified, type Violation } from './schemas.ts';
 
 /** One violation as the Critic's model reported it (x3lius.critique-llm/v1). */
@@ -9,7 +9,8 @@ export type ReportedViolation = { readonly ruleRef: string; readonly path: strin
 /**
  * Keeps a model-reported violation only when code can confirm it (spec §5.3): the rule is one the
  * model was asked to judge, the path names a field of the body, and the quote appears there word for
- * word. Everything else is returned as unverified with its reason, and never counts. Two reports of
+ * word: inside a text at or under the path, or equal to the JSON text of a number or true/false there
+ * (140 matches "140", never "14"). Everything else is returned as unverified with its reason, and never counts. Two reports of
  * the same key merge.
  * @param reported - the model's violations
  * @param modelRules - the rules the model was asked to judge
@@ -31,7 +32,7 @@ export const verifyReported = (
     const reason = codeRefs.has(ref) ? 'the rule is checked by code, not by the model'
       : !modelRules.some((e) => e.ref === ref) ? 'not one of the rules given'
         : !at.found ? 'the path does not name a field of the artifact'
-          : r.quote.trim() === '' || !stringsIn(at.value).some((s) => s.includes(r.quote)) ? 'the quote does not appear at that path'
+          : r.quote.trim() === '' || !(stringsIn(at.value).some((s) => s.includes(r.quote)) || scalarsIn(at.value).includes(r.quote)) ? 'the quote does not appear at that path'
             : null;
     if (reason) {
       unverified.push({ ruleRef: r.ruleRef, path: r.path, quote: r.quote, reason });
