@@ -298,10 +298,10 @@ describe('RLS + grants (single-tenant: default deny, service_role bypass)', () =
     await expectPgError(() => asRole(db.sql, 'anon', (tx) => tx`select * from sources`), '42501');
   });
 
-  it('lets service_role read and write (RLS bypass)', async () => {
+  it('lets service_role read (RLS bypass); since AOS-00 (G20) its writes are refused: every write is an xyp_* role\'s', async () => {
     await asRole(db.sql, 'service_role', async (tx) => {
-      await tx`insert into tags (slug, label) values ('service-role-probe', 'probe')`;
-      expect(await tx`select 1 from tags where slug = 'service-role-probe'`).toHaveLength(1);
+      expect(await tx`select 1 from tags limit 1`).toBeDefined();
     });
+    await expectPgError(() => asRole(db.sql, 'service_role', (tx) => tx`insert into tags (slug, label) values ('service-role-probe', 'probe')`), '42501');
   });
 });

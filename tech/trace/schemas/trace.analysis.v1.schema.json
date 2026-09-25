@@ -1,0 +1,334 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/BLGofficial/xyp3rn-os-2/blob/main/tech/trace/schemas/trace.analysis.v1.schema.json",
+  "title": "trace.analysis/v1",
+  "description": "One render of one track (mix bus or master) as TRACE measures it: loudness per ITU-R BS.1770 / EBU R128, tonal balance over seven fixed bands, stereo correlation and width, crest factor. POST it to /v1/trace/analyses.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "enum": [
+        "trace.analysis/v1"
+      ]
+    },
+    "producer": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "What measured it, e.g. TRACE"
+        },
+        "version": {
+          "type": "string",
+          "description": "Its version"
+        }
+      },
+      "required": [
+        "tool",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "subject": {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "mix",
+            "master"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "description": "Which render, e.g. track title and bounce"
+        }
+      },
+      "required": [
+        "stage",
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "audio": {
+      "type": "object",
+      "properties": {
+        "sampleRateHz": {
+          "type": "integer",
+          "description": "Sample rate in Hz"
+        },
+        "durationSec": {
+          "type": "number",
+          "description": "Length in seconds"
+        }
+      },
+      "required": [
+        "sampleRateHz",
+        "durationSec"
+      ],
+      "additionalProperties": false
+    },
+    "loudness": {
+      "type": "object",
+      "properties": {
+        "integratedLufs": {
+          "type": "number",
+          "description": "Integrated loudness, LUFS"
+        },
+        "shortTermMaxLufs": {
+          "type": "number",
+          "description": "Maximum short-term (3 s) loudness, LUFS"
+        },
+        "momentaryMaxLufs": {
+          "type": "number",
+          "description": "Maximum momentary (400 ms) loudness, LUFS"
+        },
+        "rangeLu": {
+          "type": "number",
+          "description": "Loudness range, LU"
+        },
+        "truePeakDbtp": {
+          "type": "number",
+          "description": "True peak, dBTP"
+        }
+      },
+      "required": [
+        "integratedLufs",
+        "shortTermMaxLufs",
+        "momentaryMaxLufs",
+        "rangeLu",
+        "truePeakDbtp"
+      ],
+      "additionalProperties": false
+    },
+    "tonalBalanceDb": {
+      "type": "object",
+      "properties": {
+        "sub": {
+          "type": "number",
+          "description": "Band energy relative to full-band energy, dB (≤ 0)"
+        },
+        "bass": {
+          "type": "number",
+          "description": "Band energy relative to full-band energy, dB (≤ 0)"
+        },
+        "low-mid": {
+          "type": "number",
+          "description": "Band energy relative to full-band energy, dB (≤ 0)"
+        },
+        "mid": {
+          "type": "number",
+          "description": "Band energy relative to full-band energy, dB (≤ 0)"
+        },
+        "high-mid": {
+          "type": "number",
+          "description": "Band energy relative to full-band energy, dB (≤ 0)"
+        },
+        "presence": {
+          "type": "number",
+          "description": "Band energy relative to full-band energy, dB (≤ 0)"
+        },
+        "air": {
+          "type": "number",
+          "description": "Band energy relative to full-band energy, dB (≤ 0)"
+        }
+      },
+      "required": [
+        "sub",
+        "bass",
+        "low-mid",
+        "mid",
+        "high-mid",
+        "presence",
+        "air"
+      ],
+      "additionalProperties": false,
+      "description": "One entry per TRACE band"
+    },
+    "stereo": {
+      "type": "object",
+      "properties": {
+        "correlation": {
+          "type": "number",
+          "description": "L/R correlation, −1..1"
+        },
+        "widthPct": {
+          "type": "number",
+          "description": "Side energy as % of mid + side energy, 0..100"
+        },
+        "bands": {
+          "type": "object",
+          "properties": {
+            "sub": {
+              "type": "object",
+              "properties": {
+                "correlation": {
+                  "type": "number",
+                  "description": "L/R correlation, −1..1"
+                },
+                "widthPct": {
+                  "type": "number",
+                  "description": "Side energy as % of mid + side energy, 0..100"
+                }
+              },
+              "required": [
+                "correlation",
+                "widthPct"
+              ],
+              "additionalProperties": false
+            },
+            "bass": {
+              "type": "object",
+              "properties": {
+                "correlation": {
+                  "type": "number",
+                  "description": "L/R correlation, −1..1"
+                },
+                "widthPct": {
+                  "type": "number",
+                  "description": "Side energy as % of mid + side energy, 0..100"
+                }
+              },
+              "required": [
+                "correlation",
+                "widthPct"
+              ],
+              "additionalProperties": false
+            },
+            "low-mid": {
+              "type": "object",
+              "properties": {
+                "correlation": {
+                  "type": "number",
+                  "description": "L/R correlation, −1..1"
+                },
+                "widthPct": {
+                  "type": "number",
+                  "description": "Side energy as % of mid + side energy, 0..100"
+                }
+              },
+              "required": [
+                "correlation",
+                "widthPct"
+              ],
+              "additionalProperties": false
+            },
+            "mid": {
+              "type": "object",
+              "properties": {
+                "correlation": {
+                  "type": "number",
+                  "description": "L/R correlation, −1..1"
+                },
+                "widthPct": {
+                  "type": "number",
+                  "description": "Side energy as % of mid + side energy, 0..100"
+                }
+              },
+              "required": [
+                "correlation",
+                "widthPct"
+              ],
+              "additionalProperties": false
+            },
+            "high-mid": {
+              "type": "object",
+              "properties": {
+                "correlation": {
+                  "type": "number",
+                  "description": "L/R correlation, −1..1"
+                },
+                "widthPct": {
+                  "type": "number",
+                  "description": "Side energy as % of mid + side energy, 0..100"
+                }
+              },
+              "required": [
+                "correlation",
+                "widthPct"
+              ],
+              "additionalProperties": false
+            },
+            "presence": {
+              "type": "object",
+              "properties": {
+                "correlation": {
+                  "type": "number",
+                  "description": "L/R correlation, −1..1"
+                },
+                "widthPct": {
+                  "type": "number",
+                  "description": "Side energy as % of mid + side energy, 0..100"
+                }
+              },
+              "required": [
+                "correlation",
+                "widthPct"
+              ],
+              "additionalProperties": false
+            },
+            "air": {
+              "type": "object",
+              "properties": {
+                "correlation": {
+                  "type": "number",
+                  "description": "L/R correlation, −1..1"
+                },
+                "widthPct": {
+                  "type": "number",
+                  "description": "Side energy as % of mid + side energy, 0..100"
+                }
+              },
+              "required": [
+                "correlation",
+                "widthPct"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "sub",
+            "bass",
+            "low-mid",
+            "mid",
+            "high-mid",
+            "presence",
+            "air"
+          ],
+          "additionalProperties": false,
+          "description": "One entry per TRACE band"
+        }
+      },
+      "required": [
+        "correlation",
+        "widthPct",
+        "bands"
+      ],
+      "additionalProperties": false
+    },
+    "dynamics": {
+      "type": "object",
+      "properties": {
+        "crestFactorDb": {
+          "type": "number",
+          "description": "Sample peak over RMS, dB"
+        }
+      },
+      "required": [
+        "crestFactorDb"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "producer",
+    "subject",
+    "audio",
+    "loudness",
+    "tonalBalanceDb",
+    "stereo",
+    "dynamics"
+  ],
+  "additionalProperties": false
+}

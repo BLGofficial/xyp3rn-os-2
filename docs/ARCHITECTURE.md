@@ -78,6 +78,12 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
 
 **Purpose.** Products, Audio Tools (TRACE), AI Systems and R&D.
 **Owns.** The versioned TRACE boundary contract, which is defined once and shared with Records' Mix/Master (Phases 11 and 14), plus `rd_backlog`.
+**Built (Phase 14).** Four components come from `tech/tech.manifest.yaml`, admitted through the gate as modules under `xyp3rn-tech` (F33):
+- `tech-products` and `tech-ai-systems`: stubs.
+- `tech-audio-tools`: the TRACE intake (Execution).
+- `tech-r-and-d`: the R&D backlog (Planning, LLM).
+
+The TRACE service (`tech/trace/server.ts`, `pnpm trace:serve`) takes `trace.analysis/v1` in and answers with `trace.report/v1`. `pnpm ask` routes TECH requests through `tech/entrypoint.ts`.
 **Never touches directly.** It never auto-implements backlog items, since a human decides what ships. It never writes canonical knowledge or research evidence, and never writes Records data.
 
 ### GOVERNANCE — Governance
@@ -183,6 +189,7 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - Consequence today: nothing auto-approves before Phase 12, because trials are stub-scored until the Critic exists.
 - Phase 12: trials are scored by the Critic (passed / checked, F28); the auto-approve path can now fire.
 - Changing either number is a new flagged decision, never a silent edit (`knowledge/promotion-gate/decide.ts`).
+- **SUPERSEDED by F35 D2 (Artist OS):** nothing auto-approves. A candidate that meets every condition goes to the owner, and its reason says that every automatic condition holds. The thresholds remain as reasons, and the gate has no auto path left (`decide()` returns only blocked, rejected or human).
 
 **F15. Two X3LIUS sub-domains had no building phase.** RESOLVED (user approved the first option).
 - Phase 7 lists ten sub-domains. Phases 8–12 build Songwriting and Lyrics (8), Suno (9), Vocal DNA (10), Production, Arrangement and Mix/Master (11), and Evaluation (12). No phase named Composition or Genre/Style.
@@ -281,6 +288,9 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
   - Operator values come from `records/x3lius/mix-rubric.yaml` (`xyp-mix-rubric/v1`, user decision), admitted through the gate's first-party path as one versioned row in `x3lius-mix-master`. Admission refuses `REQUIRED` placeholders.
   - Research candidates can bound a metric too, one claim each on their own slug. A metric stated by two current rows is refused as two sources of truth.
 - **The report.** Each check names its claim ref and version, so the Phase 12 Critic can trace a mix note to the rule in force. A metric no claim bounds is `unset`, never defaulted (the F23 pattern).
+- **Phase 14 implemented it** (user decision, F33 D1).
+  - `trace.report/v1` (`tech/trace/report.ts`) is the answer TRACE receives. The check type lives there, and Mix/Master's type and the mix report artifact's check schema import it, so a check is defined once (a grep test fails on a second definition).
+  - JSON Schema files for the plugin are generated from the TS contract (`tech/trace/schemas/`, `pnpm trace:schemas`), with a drift test. They carry shape; ranges are enforced by the service and described per field.
 
 **F25. How the Critic finds a violation.** DECIDED (user, Phase 12).
 - **Hybrid.** Code checks every structured claim it has a check for; the model judges only the prose rules. Today's code checks are the Suno `suno.limit.<field>-chars` claims (measured from the text, never from the stored `limits`) and a mix report's own checks.
@@ -327,4 +337,45 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **No edits or takedowns.** There is no title/position edit, no draft delete, and no `withdrawn` status (a Governance takedown, Phase 15).
 - **Only Suno takes register.** `take_id` is required, as in the guide's "from Phase 9–11 output". A track made outside Suno (an FL Studio bounce with RVC vocals) can't be registered until that is widened (a user decision).
 - **Lead time is not policy.** Any date ≥ today schedules. A DSP lead time is canonical knowledge a later phase can admit, never a constant.
-- **`service_role` holds full DML on earlier-phase tables.** The emulated Supabase default privileges gave it ALL on `creative_artifacts`, `critiques`, `suno_submissions`, `suno_takes` and `take_scores`, contrary to SCHEMA.md ("SELECT only"). The immutability triggers stop UPDATE/DELETE, but not INSERT or TRUNCATE. Phase 13's tables revoke it. The earlier tables need a follow-up migration, not done here because it widens the phase.
+- ~~**`service_role` holds full DML on earlier-phase tables.**~~ RESOLVED in AOS-00 (G20, migration `20260925130000_service_role_read_only`). The hole was wider than listed here: 28 relations. `service_role` is now read-only on every relation and by default.
+
+**F33. XYP3RN Tech (Phase 14).** DECIDED (user, Phase 14).
+- **The guide's premises that don't hold:**
+  - `research_sources` has no tags, so "tagged frontier/emerging" doesn't exist. The Frontier Scanner's output is `research_evidence` with `specialist = 'frontier-tool-scanner-researcher'`, and the Phase 6 schema is unchanged.
+  - That specialist has never run (the 20 specialists need an Anthropic key and have no LLM program), so the backlog is proven on fixtures and the FAKE model.
+  - Products / Audio Tools / AI Systems / R&D are TECH sub-components (the reserved ids), not domains. Registering them as domains would break the six-domain taxonomy.
+- **D1, the TRACE API is a local HTTP service.**
+  - `POST /v1/trace/analyses` validates, records, checks and links, then answers with `trace.report/v1`. `GET /v1/trace/analyses/:id` and `/v1/trace/health` complete it.
+  - It binds 127.0.0.1 by default and requires a bearer token (`XYP_TRACE_TOKEN`, at least 16 characters, compared in constant time).
+  - Rejected: a CLI file drop (no plugin could call it); the contract alone (nothing runs end to end).
+- **D2, the components are a manifest plus agents (Phase 7's pattern).**
+  - `tech/tech.manifest.yaml` is admitted through the gate, with one agent per component named after its module.
+  - The stub handler is shared (`core/agents/manifest-stub.ts`), and X3LIUS is rebound to it unchanged.
+  - Rejected: agents only (no scoped context path); a code constant (not in the registry).
+- **D3, the backlog is an LLM whose proposals code verifies** (the F25 pattern).
+  - A proposal must cite evidence it was given, fit the schema and not repeat a title. Anything else is kept as `unverified` with its reason.
+  - Rejected: deterministic, one item per source (a triage list, not feature ideas).
+- **D4, humans decide in `approval_queue`** (`rd_backlog_item`, F8's one queue).
+  - The DB queues every item by trigger, and `pnpm gate decide` records the decision.
+  - The status is the queue row's (the view `rd_backlog_items`), never copied.
+  - Nothing acts on an approval: "shipped" stays outside the OS until someone decides otherwise.
+  - Rejected: an operator status column (a second decision path).
+
+**F34. Open after Phase 14.**
+- **Take scoring from TRACE.** An analysis can name its Suno take, but turning a mix report into a take score is a scoring decision (the F28 analogue) not taken here. The `take_scores` stubs stay.
+- **The R&D model call hasn't run live.** There is no model key in this container, and no real Frontier Scanner output anywhere, because the specialists need their runner.
+- **The TRACE plugin itself** (VST3/AU) is a separate codebase. Its side of the contract is the generated JSON Schema files.
+- **The service is local-only.** Exposing it beyond localhost (TLS, rotating tokens, per-plugin identities) is a deployment decision.
+- **Approved backlog items.** Nothing reads an approval as a trigger to build anything, and a "shipped" state would be a new decision.
+
+**F35. The Artist OS sequence (AOS-00 → AOS-08).** DECIDED (operator, 2026-09-25).
+- The operator's plan (`docs/artist-os/PLAN.md`) is now the build sequence. It extends this OS; it does not replace it. The baseline and the no-parallel-kernel gate (`tests/aos-00`) are in `docs/artist-os/AOS-00-baseline.md`.
+- **D1:** ids stay UUID v4 (`gen_random_uuid()`) on every table. The plan's "UUID v7" line is superseded.
+- **D2:** F14 auto-approval is turned off, so every canonical change goes to the owner's `approval_queue`. This supersedes F14's rule; its thresholds remain only as reasons shown to the human.
+- **D3:** the old build guide's Phases 15–17 are absorbed:
+  - RBAC, the approval API and the audit log go into AOS-07/08;
+  - the UI is built from AOS-01 on as the Command Center in `apps/web`;
+  - the radial Graph View is dropped unless the operator asks for it;
+  - end-to-end validation becomes each AOS gate.
+- **D4:** Creative Vault bytes live in a local content-addressed store (`.vault/<sha256>`, referenced from `sources`) behind one storage interface. Supabase Storage is a second adapter at deployment.
+

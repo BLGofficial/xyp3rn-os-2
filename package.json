@@ -26,7 +26,9 @@
     "specialists:table": "node research-intelligence/specialists/table-cli.ts",
     "research": "node research-intelligence/cli.ts",
     "gate": "node knowledge/promotion-gate/cli.ts",
-    "evaluate": "node records/x3lius/evaluation/cli.ts"
+    "evaluate": "node records/x3lius/evaluation/cli.ts",
+    "trace:serve": "node tech/trace/serve-cli.ts",
+    "trace:schemas": "node tech/trace/schemas-cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

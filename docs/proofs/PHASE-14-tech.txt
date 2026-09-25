@@ -1,0 +1,131 @@
+Phase 14 — XYP3RN Tech: proof (2026-09-25)
+Produced with the repo's own commands against the local Postgres. Every DB test runs in its own throwaway database. Section 2
+runs the real CLIs, and the real TRACE service over HTTP (curl), against a throwaway database (xyp_proof_phase14), dropped
+afterwards.
+================================================================================
+
+## 0. Status of the guide's deliverables
+# - TRACE contract as a real API surface (D1): tech/trace/server.ts, run by `pnpm trace:serve`.
+#   - Bound to 127.0.0.1, bearer token required.
+#   - POST /v1/trace/analyses takes a trace.analysis/v1, validated by the contract's own validator, and runs
+#     tech/workflows/trace-intake.workflow.yaml: record (tech-audio-tools) → X3LIUS Mix/Master against the canonical
+#     rubric → link. It answers with trace.report/v1.
+# - Contract spec + version: tech/trace/analysis.ts (trace.analysis/v1, unchanged) and tech/trace/report.ts
+#   (trace.report/v1, new).
+#   - The check type moved into tech/trace. Mix/Master and the mix report artifact schema import it; a grep test fails
+#     on any second definition.
+#   - JSON Schema files for the plugin are generated from the TS contract (pnpm trace:schemas), with a drift test.
+# - R&D backlog agent: tech-r-and-d (Planning, LLM; D3). It reads the Frontier Scanner's evidence (research_evidence by
+#   specialist: research_sources carry no tags).
+#   - Code verifies every proposal: evidence given, schema, unique title.
+#   - It writes rd_backlog, where the DB queues each item in approval_queue (rd_backlog_item; D4). A human decides with
+#     `pnpm gate decide`; nothing auto-implements.
+# - Products / Audio Tools / AI Systems / R&D registered (D2) as TECH components, not domains (the six-domain taxonomy
+#   is unchanged): tech/tech.manifest.yaml admitted through the gate, one agent per component, and a TECH entrypoint for
+#   `pnpm ask`.
+# - Migration: 20260925120000_tech (+ rollback).
+# - 5-bullet handoff for Phase 15: docs/handoffs/PHASE-14.md.
+# - Not run live: the R&D model call. No model key exists in this container (section 2g); the agent is proven on the
+#   FAKE model with scripted replies (section 1).
+
+## 1. Tests (tests/phase-14; fixtures are [FIXTURE] rows under their owning roles; FAKE model for the one LLM agent)
+✓ tests/phase-14/rd-backlog.test.ts > tech-r-and-d: proposals from the Frontier Scanner's evidence, verified in code, queued for a human > reads only the scanner's uncited evidence, writes the verified proposals, keeps the rest as unverified with reasons
+✓ tests/phase-14/rd-backlog.test.ts > tech-r-and-d: proposals from the Frontier Scanner's evidence, verified in code, queued for a human > evidence already cited is not offered again: with none left, no model call is made
+✓ tests/phase-14/rd-backlog.test.ts > tech-r-and-d: proposals from the Frontier Scanner's evidence, verified in code, queued for a human > a title already in the backlog is skipped as a duplicate, never fatal
+✓ tests/phase-14/rd-backlog.test.ts > tech-r-and-d: proposals from the Frontier Scanner's evidence, verified in code, queued for a human > the operator decides what ships (pnpm gate queue / decide); the backlog view follows; nothing is built
+✓ tests/phase-14/rd-backlog.test.ts > tech-r-and-d: proposals from the Frontier Scanner's evidence, verified in code, queued for a human > writes nothing but backlog items: no research, candidate or canonical rows
+✓ tests/phase-14/rd-backlog.test.ts > tech-r-and-d: proposals from the Frontier Scanner's evidence, verified in code, queued for a human > the model sees a schema named for the backlog, and every reply is validated against it
+✓ tests/phase-14/trace-service.test.ts > the service boundary > binds 127.0.0.1 by default and refuses to start without a token of at least 16 characters
+✓ tests/phase-14/trace-service.test.ts > the service boundary > health answers without a token and names both contract versions
+✓ tests/phase-14/trace-service.test.ts > the service boundary > 401 without the bearer token or with a wrong one; 415 for a non-JSON body; 413 over the size limit; 404 elsewhere
+✓ tests/phase-14/trace-service.test.ts > the service boundary > 400 with every violation for an invalid analysis, and nothing is stored
+✓ tests/phase-14/trace-service.test.ts > POST /v1/trace/analyses: record → check against the canonical rubric → link → trace.report/v1 > 201 with a valid report; the analysis, the mix report and their link are rows
+✓ tests/phase-14/trace-service.test.ts > POST /v1/trace/analyses: record → check against the canonical rubric → link → trace.report/v1 > records the Suno take a render came from; an unknown take fails the record step (422) and stores nothing
+✓ tests/phase-14/tech-system.test.ts > the TECH manifest, admitted through the gate > declares the parent and the four reserved components, with the phase that builds each
+✓ tests/phase-14/tech-system.test.ts > the TECH manifest, admitted through the gate > becomes five TECH modules, each component subdomain_of the parent, written by the gate
+✓ tests/phase-14/tech-system.test.ts > one agent per component, single-class > registers exactly the manifest's components as tech-* agents; the registry validates
+✓ tests/phase-14/tech-system.test.ts > one agent per component, single-class > capabilities: research.read is Planning's, trace.write is Execution's; each tool declares its own
+✓ tests/phase-14/tech-system.test.ts > pnpm ask → TECH > the router's TECH requests now have an entrypoint
+✓ tests/phase-14/trace-contract.test.ts > trace.report/v1: what the OS answers TRACE with > is versioned and validates a report built from Mix/Master's own check
+✓ tests/phase-14/trace-contract.test.ts > trace.report/v1: what the OS answers TRACE with > names every violation: wrong schema, a bad action, a check without its rule ref, a non-uuid id
+✓ tests/phase-14/trace-contract.test.ts > defined once (the guide's constraint: "if you find yourself defining it twice, that's the bug") > the mix report artifact's checks ARE the TRACE check schema, not a copy
+✓ tests/phase-14/trace-contract.test.ts > defined once (the guide's constraint: "if you find yourself defining it twice, that's the bug") > no source file outside tech/trace declares a TRACE contract id or a check shape
+✓ tests/phase-14/trace-contract.test.ts > JSON Schema files for the plugin (generated, never hand-edited) > every generated file matches the file on disk byte for byte (run pnpm trace:schemas after a contract change)
+✓ tests/phase-14/trace-contract.test.ts > JSON Schema files for the plugin (generated, never hand-edited) > each file is a draft 2020-12 schema with an $id per contract version and the contract's required keys
+✓ tests/phase-14/tech-system.test.ts > pnpm ask → TECH > runs a matching stub component with the request
+✓ tests/phase-14/tech-system.test.ts > pnpm ask → TECH > Audio Tools take measurements, not text: a TRACE request is answered with the service to call
+✓ tests/phase-14/tech-system.test.ts > pnpm ask → TECH > no component matched → clarify naming the components, never a default
+✓ tests/phase-14/tech-db.test.ts > trace_analyses: the measurement as received, linked once to the report that checked it > stores an analysis, optionally with its take; schema_id must be the body's own schema (23514)
+✓ tests/phase-14/tech-db.test.ts > trace_analyses: the measurement as received, linked once to the report that checked it > links its mix report once; the report must be a mix report of this very analysis (23514); relinking is 55000
+✓ tests/phase-14/tech-db.test.ts > trace_analyses: the measurement as received, linked once to the report that checked it > is append-only apart from that link, for every role, the owner included (55000)
+✓ tests/phase-14/tech-db.test.ts > trace_analyses: the measurement as received, linked once to the report that checked it > grants: xyp_trace_intake writes; xyp_runtime and service_role read; nobody else (42501)
+✓ tests/phase-14/tech-db.test.ts > rd_backlog: proposals only, each citing the Frontier Scanner, each queued for a human > an item citing frontier evidence commits and queues exactly one pending rd_backlog_item approval
+✓ tests/phase-14/tech-db.test.ts > rd_backlog: proposals only, each citing the Frontier Scanner, each queued for a human > an item citing no evidence is refused at commit (23514), and nothing is queued
+✓ tests/phase-14/tech-db.test.ts > rd_backlog: proposals only, each citing the Frontier Scanner, each queued for a human > cites only the Frontier Scanner's evidence (23514)
+✓ tests/phase-14/tech-db.test.ts > rd_backlog: proposals only, each citing the Frontier Scanner, each queued for a human > refuses a repeated title (case-insensitive, 23505), a blank or over-long title, an unknown component (23514)
+✓ tests/phase-14/tech-db.test.ts > rd_backlog: proposals only, each citing the Frontier Scanner, each queued for a human > is immutable for every role, the owner included (55000)
+✓ tests/phase-14/tech-db.test.ts > rd_backlog: proposals only, each citing the Frontier Scanner, each queued for a human > a human decides: service_role through xyp_decide_approval; the view follows; the planner cannot decide (42501)
+✓ tests/phase-14/tech-db.test.ts > rd_backlog: proposals only, each citing the Frontier Scanner, each queued for a human > grants: xyp_planner proposes and reads research; it cannot touch the queue, canonical or research writes (42501)
+Tests  37 passed (37)
+
+## 2. The real CLIs and the TRACE service over HTTP, on a throwaway database
+applied: 20260924080000, 20260924080100, 20260924090000, 20260924100000, 20260924110000, 20260924120000, 20260924130000, 20260924140000, 20260924150000, 20260924160000, 20260924170000, 20260924180000, 20260924190000, 20260924200000, 20260925100000, 20260925110000, 20260925120000
+
+### a. First-party admissions through the gate: X3LIUS manifest, the operator's real mix rubric, the TECH manifest
+  records/x3lius/music-system.manifest.yaml: "status": "success"
+  records/x3lius/mix-rubric.yaml: "status": "success"
+  tech/tech.manifest.yaml: "status": "success"
+  TECH modules: tech-ai-systems (TECH, gate), tech-audio-tools (TECH, gate), tech-products (TECH, gate), tech-r-and-d (TECH, gate), xyp3rn-tech (TECH, gate)
+  mix rubric claims in force: 9
+
+### b. The contract's JSON Schema files are what the TS contract generates (pnpm trace:schemas, then git diff)
+  wrote tech/trace/schemas/trace.analysis.v1.schema.json
+  wrote tech/trace/schemas/trace.report.v1.schema.json
+  git diff on tech/trace/schemas: none
+
+### c. pnpm trace:serve (127.0.0.1:8799, bearer token from XYP_TRACE_TOKEN)
+  TRACE service on http://127.0.0.1:8799: POST /v1/trace/analyses (trace.analysis/v1 → trace.report/v1), GET /v1/trace/analyses/:id, GET /v1/trace/health
+  GET /v1/trace/health (no token): {"status":"ok","contracts":["trace.analysis/v1","trace.report/v1"]}
+  POST without a token: 401
+  POST text/plain: 415
+  POST an invalid analysis: {"error":"not a valid trace.analysis/v1","violations":["$.loudness is required"]}
+  trace_analyses rows after the refusals: 0
+
+### d. POST /v1/trace/analyses with a trace.analysis/v1 ([FIXTURE] master bounce) → 201 trace.report/v1
+  status: 201
+  {"schema":"trace.report/v1","analysisId":"97f748c9-ac88-4fdb-ab50-ff59d8435e66","subject":{"stage":"master","label":"[FIXTURE] night drive, master bounce 3"},"rubricClaims":7,"unset":22,"mixReportArtifactId":"2c551345-ca9e-4e46-b92e-d85cb5ffd007"}
+  check loudness.integrated-lufs -12.3 LUFS → raise by 2.8  [x3lius.master.loudness.integrated-lufs v1]
+  check loudness.range-lu 5.2 LU → keep  [x3lius.master.loudness.range-lu v1]
+  check loudness.true-peak-dbtp -0.2 dBTP → lower by 0.8  [x3lius.master.loudness.true-peak-dbtp v1]
+  check tonal.sub-db -9.5 dB → raise by 6.5  [x3lius.master.tonal.sub-db v1]
+  check stereo.correlation 0.62 r → keep  [x3lius.master.stereo.correlation v1]
+  check stereo.sub.width-pct 7 % → keep  [x3lius.master.stereo.sub.width-pct v1]
+  check dynamics.crest-factor-db 9.8 dB → keep  [x3lius.master.dynamics.crest-factor-db v1]
+  validateTraceReport: []
+  row: trace_analyses 97f748c9-ac88-4fdb-ab50-ff59d8435e66 linked to 2c551345-ca9e-4e46-b92e-d85cb5ffd007 (x3lius.mix-report/v1)
+  workflow steps: record=tech-audio-tools (Execution) → check=x3lius-mix-master (Creative) → link=tech-audio-tools (Execution)
+  GET /v1/trace/analyses/97f748c9-ac88-4fdb-ab50-ff59d8435e66 equals the POST answer: yes
+
+### e. The link is set once, to a report of this very analysis (direct UPDATE as the owner)
+  ERROR:  55000: trace_analyses 97f748c9-ac88-4fdb-ab50-ff59d8435e66 is already linked to report 2c551345-ca9e-4e46-b92e-d85cb5ffd007; a link is set once
+  ERROR:  55000: trace_analyses 97f748c9-ac88-4fdb-ab50-ff59d8435e66 is append-only: only its mix report link is set, once
+
+### f. pnpm ask routes TECH requests (F5): a TRACE + backlog request selects Audio Tools and R&D
+  route: {"status":"routed","domain":"TECH","evidence":{"RESEARCH_INTELLIGENCE":[],"RECORDS":[],"TECH":["backlog","feature","meter","plugin","trace"],"GOVERNANCE":[]}}
+  {"status":"success","selected":["tech-audio-tools","tech-r-and-d"],"rd":{"status":"no-frontier-evidence","considered":0,"written":[],"duplicates":[],"unverified":[]},"reason":"TRACE analyses arrive over the TRACE service, not as text: run `pnpm trace:serve` (XYP_TRACE_TOKEN set), then POST /v1/trace/analyses with a trace.analysis/v1 body (tech/trace/schemas/trace.analysis.v1.schema.json); the answer is a trace.report/v1."}
+
+### g. R&D with [FIXTURE] Frontier Scanner evidence: the agent reaches its model call and stops at the missing key
+  evidence: frontier-tool-scanner-researcher, suno-researcher
+  4. execution: error in 34ms — LLM runner unavailable: OPENROUTER_API_KEY is not set (agent tech-r-and-d uses model openrouter:nvidia/nemotron-3-ultra-550b-a55b:free)
+  rd_backlog rows: 0
+
+### h. rd_backlog by direct insert: uncited (as xyp_planner) and as service_role
+  ERROR:  23514: rd_backlog 0741a549-5d33-4e38-be02-1b1629237d09 "[FIXTURE] uncited" cites no evidence
+  ERROR:  42501: permission denied for table rd_backlog
+
+## 3. Gates
+# pnpm test          Test Files 66 passed (66) | Tests 1012 passed (1012)   (957 after Phase 13)
+# pnpm typecheck     clean
+# pnpm agents:validate   validateAll(): 0 failure(s)
+# pnpm db:up → db:down 1 → db:up on the local dev DB: applied / rolled back / applied 20260925120000
+# tests/phase-01 round trip (up, re-up, down, re-down, up; identical schema snapshot) passes with the new migration.

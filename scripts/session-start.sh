@@ -25,6 +25,7 @@ step db:setup ./supabase/local/setup.sh
 step db:up pnpm -s db:up
 step ingest:guide pnpm -s ingest --file XYP3RN_Agentic_OS_Build_Sequence.pdf --origin first_party
 step ingest:x3lius pnpm -s ingest --file records/x3lius/music-system.manifest.yaml --origin first_party
+step ingest:tech pnpm -s ingest --file tech/tech.manifest.yaml --origin first_party
 step embed pnpm -s embed
 
 if [ ${#failed[@]} -eq 0 ]; then

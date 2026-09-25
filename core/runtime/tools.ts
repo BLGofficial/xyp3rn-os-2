@@ -11,6 +11,8 @@ import { loadEmbedder } from '../../knowledge/vector-retrieval/embedder.ts';
 import { ARTIFACT_SCHEMAS } from '../../records/x3lius/creative/schemas.ts';
 import { createReadCritiqueTool, createWriteCritiqueTool } from '../../records/x3lius/evaluation/tools.ts';
 import { createRecordsOpsTools } from '../../records/ops/tools.ts';
+import { createReadFrontierEvidenceTool, createWriteRdBacklogTool } from '../../tech/r-and-d/tools.ts';
+import { createLinkTraceReportTool, createRecordTraceAnalysisTool } from '../../tech/trace/tools.ts';
 import { createCaptureSunoTakesTool, createSubmitSunoTool } from '../../records/x3lius/suno/tools.ts';
 import { createFetchSourceTool } from '../../research-intelligence/tools/fetch-source.ts';
 import { createWriteEvidenceTool } from '../../research-intelligence/tools/write-evidence.ts';
@@ -22,7 +24,8 @@ import { createWriteEvidenceTool } from '../../research-intelligence/tools/write
  * @returns registry with log_message, retrieve_context, retrieve_claims, fetch_source, write_evidence,
  *   write_artifact, read_artifact, write_critique, read_critique, submit_suno, capture_suno_takes, and the
  *   Records ops tools (Phase 13): resolve_take, read_catalog, register_track, write_splits, assign_codes,
- *   schedule_release
+ *   schedule_release; and TECH (Phase 14): record_trace_analysis, link_trace_report, read_frontier_evidence,
+ *   write_rd_backlog
  */
 export const createRuntimeTools = (deps: {
   readonly sql: Sql;
@@ -45,5 +48,9 @@ export const createRuntimeTools = (deps: {
     createSubmitSunoTool(external),
     createCaptureSunoTakesTool(external),
     ...createRecordsOpsTools(deps),
+    createRecordTraceAnalysisTool(deps),
+    createLinkTraceReportTool(deps),
+    createReadFrontierEvidenceTool(deps),
+    createWriteRdBacklogTool(deps),
   ]);
 };

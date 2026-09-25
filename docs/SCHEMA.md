@@ -355,6 +355,37 @@ Migration `20260925110000_records_ops.sql`.
   - `service_role`: SELECT only. The Supabase default ALL is revoked, so every write has an `agent_runs` row.
   - `anon`/`authenticated`: nothing. RLS is on.
 
+## Phase 14 additions: `trace_analyses`, `rd_backlog`, the R&D queue
+
+Migration `20260925120000_tech.sql`.
+
+- **`trace_analyses`:** a `trace.analysis/v1` as received, with columns `schema_id`, `body`, `take_id` (FK `suno_takes`, optional), `mix_report_artifact_id` and `agent_run_id`.
+  - The body is validated in code by the contract's own validator (`tech/trace/analysis.ts`). The DB never re-states the contract; it only requires `body->>'schema' = schema_id` (23514).
+  - `mix_report_artifact_id` is set **once**, null → value, and only to a `x3lius.mix-report/v1` whose `body.analysis` equals this row's body (23514). Anything else is append-only (55000), for every role, the owner included.
+- **`rd_backlog`:** `title` (unique on `lower(btrim(title))`, at most 120 characters), `component` (`products` | `audio-tools` | `ai-systems` | `r-and-d`), `proposal`, `rationale`, `model`, `agent_run_id`. It is immutable (55000).
+  - **`rd_backlog_evidence`** (`rd_backlog_id`, `research_evidence_id`): the evidence must be the Frontier Scanner's (`specialist = 'frontier-tool-scanner-researcher'`, 23514). Every item cites at least one piece (a deferred constraint trigger, 23514 at commit).
+  - **Every item is queued:** an AFTER INSERT trigger inserts its `approval_queue` row (`item_type rd_backlog_item`, request with title, component, proposal, rationale, model, run). `approval_item_type` gains `rd_backlog_item`; the rollback cannot drop an enum value.
+  - **`rd_backlog_items`** (view, `security_invoker`, SELECT to `service_role`): each item with its evidence ids and its approval status, read from the queue row and never copied.
+- **Roles:**
+  - `xyp_trace_intake`: INSERT/SELECT `trace_analyses`, UPDATE (`mix_report_artifact_id`) only.
+  - `xyp_planner`: INSERT/SELECT `rd_backlog` and `rd_backlog_evidence`, SELECT `research_evidence` and `research_sources`, nothing on `approval_queue`.
+  - `xyp_runtime` reads `trace_analyses`. `service_role` reads, and decides approvals as before. `anon`/`authenticated` get nothing.
+
+## AOS-00 prerequisite: `service_role` is read-only
+
+Migration `20260925130000_service_role_read_only.sql` (G20, `docs/artist-os/AOS-00-baseline.md`).
+
+- **What was open:** `service_role` still held INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES and TRIGGER on 28 tables and views.
+  - Phase 1 called those grants "correct for Phase 1 only"; 6D revoked them only on the canonical tables.
+  - The affected tables include `knowledge_candidates`, `research_evidence`, `creative_artifacts`, `critiques`, the Suno trail, `agent_runs` and `workflow_runs`.
+  - TRUNCATE also skips the immutability triggers.
+- **What changes:** every one of those privileges is revoked on every relation in `public`, and the schema's default privileges are revoked too, so a table a later migration creates starts read-only for `service_role`.
+- **What still works:**
+  - `service_role` reads everything (RLS bypass) and decides approvals through `xyp_decide_approval` (EXECUTE is unchanged).
+  - Every write goes through an `xyp_*` role, so every write has its agent run.
+  - Direct maintenance runs as the migration role (`postgres`), never as the app key.
+- **Proof:** `tests/aos-00/prerequisites.test.ts` covers every relation, a new table, and a refused write. The Phase 1 write probe is inverted.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

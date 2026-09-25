@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AUTO_APPROVE_CONFIDENCE, decide, GATE_STEPS, SOURCE_MAX_AGE_DAYS } from './decide.ts';
+import { ALL_CONDITIONS_HOLD, AUTO_APPROVE_CONFIDENCE, decide, GATE_STEPS, SOURCE_MAX_AGE_DAYS } from './decide.ts';
 
 // The gate's decision rule, as a pure function. The DB path can't exercise auto-approval until
 // Phase 12 provides a real scorer, so its branches are proven here.
@@ -26,8 +26,8 @@ describe('gate decision rule', () => {
     expect(SOURCE_MAX_AGE_DAYS).toBe(180);
   });
 
-  it('auto-approves only when every condition holds', () => {
-    expect(decide(ok)).toEqual({ outcome: 'auto_approve', reasons: [] });
+  it('never auto-approves (F35 D2): when every condition holds, the owner decides, and is told so', () => {
+    expect(decide(ok)).toEqual({ outcome: 'human', reasons: [ALL_CONDITIONS_HOLD] });
   });
 
   it('blocks on an open contradiction before anything else', () => {

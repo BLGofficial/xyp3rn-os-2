@@ -3,6 +3,7 @@ import type { LlmRunner } from '../orchestrator/dispatch.ts';
 import { CREATIVE_PROGRAMS } from '../../records/x3lius/creative/program.ts';
 import { CRITIC_AGENT, criticProgram } from '../../records/x3lius/evaluation/critic.ts';
 import { REVISION_AGENT, revisionProgram } from '../../records/x3lius/evaluation/revision.ts';
+import { RD_AGENT, rdBacklogProgram } from '../../tech/r-and-d/backlog.ts';
 
 /**
  * LLM-backed agent programs, keyed by agent name. Checked in and typechecked, like HANDLERS:
@@ -17,6 +18,8 @@ export const LLM_PROGRAMS: Readonly<Record<string, LlmProgram>> = {
   [CRITIC_AGENT]: criticProgram,
   // Phase 12: Revision (x3lius-revision), run by the loop controller after each critique.
   [REVISION_AGENT]: revisionProgram,
+  // Phase 14: the R&D backlog (tech-r-and-d, Planning): proposals from the Frontier Scanner's evidence.
+  [RD_AGENT]: rdBacklogProgram,
 };
 
 /**
