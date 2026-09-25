@@ -52,7 +52,15 @@ Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 
 The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md)) extends this OS into the Command Center, Studio and Research modes over one Creative Vault. Its phases are numbered AOS-00 → AOS-08.
 
-- [x] AOS-00: Baseline. The current-state map, gap list, dependency map, implementation order and an executable no-parallel-kernel gate ([baseline](docs/artist-os/AOS-00-baseline.md), [handoff](docs/handoffs/AOS-00.md)). Four decisions are open before AOS-01.
+- [x] AOS-00: Baseline. The current-state map, gap list, dependency map, implementation order and an executable no-parallel-kernel gate ([baseline](docs/artist-os/AOS-00-baseline.md), [handoff](docs/handoffs/AOS-00.md)). Its four decisions were taken (F35).
+- [x] AOS-01: Creative Vault + song schema ([design](docs/artist-os/AOS-01-design.md), [proof](docs/proofs/AOS-01-vault.txt), [handoff](docs/handoffs/AOS-01.md)):
+  - songs with revisions and typed links;
+  - Vault files (bytes in `.vault/`, text, tags);
+  - lyric sheets → lyric versions, which the owner approves;
+  - vault search next to knowledge;
+  - byte-identical export and import;
+  - the first UI (`pnpm web:build && XYP_WEB_TOKEN=… pnpm web`, on 127.0.0.1:3100).
+- [ ] AOS-02: Command Center and catalog (credits, tasks, platform links). Decisions are listed in the AOS-01 handoff.
 
 ## Build status (Agentic OS build guide)
 

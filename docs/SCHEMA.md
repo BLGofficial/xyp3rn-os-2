@@ -386,6 +386,34 @@ Migration `20260925130000_service_role_read_only.sql` (G20, `docs/artist-os/AOS-
   - Direct maintenance runs as the migration role (`postgres`), never as the app key.
 - **Proof:** `tests/aos-00/prerequisites.test.ts` covers every relation, a new table, and a refused write. The Phase 1 write probe is inverted.
 
+## AOS-01 additions: songs, the Creative Vault, version approvals, the vault index
+
+Migration `20260925140000_vault_songs.sql` (+ rollback). Design: `docs/artist-os/AOS-01-design.md`.
+
+- **Songs (RECORDS, A1):**
+  - `songs` holds the identity: `id`, `agent_run_id`, `created_at`.
+  - `song_revisions` holds `title`, `artist`, `language`, `genre`, `status` (`song_status`: idea → archived) and `notes`. The revision number is derived by trigger (max + 1, under an advisory lock), and a song must commit with a revision (a deferred trigger).
+  - `current_songs` is the latest revision per song.
+- **`song_links` (A1):** one typed target per row, with exactly one of `artifact_lineage_id` (a lineage root, checked by trigger), `source_id`, `take_id`, `track_id` and `research_question_id`, plus an optional `role`.
+  - There is one live link per song and target (23505).
+  - Unlinking inserts a `song_link_retractions` row (with a reason), and `current_song_links` shows live links with `kind` and `target_id`.
+- **Vault files (KNOWLEDGE):**
+  - `sources` gains `storage` (`local-vault`), `media_class` (`document`, `lyric_sheet`, `audio`, `image`, `other`), `language` and `agent_run_id`. A Vault file has all four; a knowledge source has none.
+  - `source_texts` holds extracted text (`utf8` or `unpdf`), and `source_tags` holds tags (reusing `tags`).
+  - `xyp_sources_vault_guard` freezes a Vault file, except for the knowledge index's embedding columns. It also allows the one promotion: a knowledge source with the same bytes becomes a Vault file, once, through a column-level UPDATE held by `xyp_vault`.
+- **`knowledge_sources` (view):** a row is a knowledge source when `storage is null` or it has a successful `ingestion_runs` row. `embedPending` and the Context Engine's generation read it, so Vault-only files stay out of every agent's grounding.
+- **Approvals:**
+  - `approval_item_type` gains `artifact_version`.
+  - `xyp_decide_artifact(artifact, decision, approver, reason)` is SECURITY DEFINER, with EXECUTE held by `service_role` only. It records an already-decided row, one per version.
+  - `artifact_approvals` gives each version's status (`draft` when there is no row) and the lineage's highest approved version.
+- **Vault index:** `vault_embeddings (entity_kind, entity_id, model)` covers artifact versions, Vault files and research findings, with the input hash and truncation. An entity-exists trigger raises 23503. `xyp_match_vault(query, limit, model)` has EXECUTE held by `xyp_runtime` and `xyp_web`.
+- **Roles:**
+  - `xyp_vault` writes songs, links, Vault files, texts and tags (INSERT/SELECT), and runs the promotion (UPDATE on the four Vault columns only).
+  - `xyp_web` reads what the UI renders and writes nothing.
+  - `xyp_runtime` also reads `ingestion_runs` and `knowledge_sources` for the generation, and `source_tags` for `read_vault_file`.
+  - `xyp_embedder` also reads `source_tags`, `tags`, `ingestion_runs` and `knowledge_sources`.
+- **Export (not a table):** `xyp-vault-export/v1` (`knowledge/vault-io`) holds only the tables listed in `spec.ts`. It leaves out `updated_at` and the knowledge-embedding columns, because both are derived.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

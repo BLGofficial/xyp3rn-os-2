@@ -74,6 +74,10 @@ export const searchVault = async (tx: postgres.TransactionSql, embedder: Embedde
   const findings = new Map((await tx<{ id: string; claim: string }[]>`
     select id, claim from research_findings where id = any(${findingIds}::uuid[])`).map((r) => [r.id, r]));
   const lineageIds = [...new Set([...artifacts.values()].map((a) => a.lineage_id))];
+  // A lineage is named by its first version's brief: a later version's brief ("Owner edit of …")
+  // says how it was made, not what it is.
+  const lineageTitle = new Map((await tx<{ id: string; brief: string }[]>`
+    select id, brief from creative_artifacts where id = any(${lineageIds}::uuid[])`).map((r) => [r.id, r.brief]));
   const songsOf = new Map<string, { id: string; title: string }[]>();
   for (const l of await tx<{ target_id: string; song_id: string; title: string }[]>`
     select l.target_id, s.id as song_id, s.title from current_song_links l join current_songs s on s.id = l.song_id
@@ -97,7 +101,7 @@ export const searchVault = async (tx: postgres.TransactionSql, embedder: Embedde
     if (kind === 'artifact') {
       const a = artifacts.get(id)!;
       return {
-        ...base, kind: 'artifact', id, title: a.brief, snippet: snippet(artifactText(a.body)), similarity,
+        ...base, kind: 'artifact', id, title: lineageTitle.get(a.lineage_id) ?? a.brief, snippet: snippet(artifactText(a.body)), similarity,
         lineage: { id: a.lineage_id, version: a.version, schemaId: a.schema_id }, songs: songsOf.get(a.lineage_id) ?? UNLINKED,
       };
     }

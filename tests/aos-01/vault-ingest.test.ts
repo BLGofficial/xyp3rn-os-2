@@ -289,7 +289,7 @@ describe('lyric sheets → x3lius.lyrics/v2 lineages (owner-authored, draft unti
     expect(await decideArtifact(db.sql, v2.artifactId as string, { decision: 'approve', approver: 'owner', reason: '[FIXTURE] the edit is better' }))
       .toMatchObject({ status: 'approved', approvedVersion: 2 });
     await expect(decideArtifact(db.sql, v2.artifactId as string, { decision: 'reject', approver: 'owner', reason: '[FIXTURE] changed my mind' }))
-      .rejects.toMatchObject({ code: '23505' });
+      .rejects.toMatchObject({ code: '23505', message: expect.stringMatching(/already has a decision/) });
     const [edited] = await db.sql<{ body: { sections: { label: string }[] }; context_refs: unknown; parent_id: string }[]>`
       select body, context_refs, parent_id from creative_artifacts where id = ${v2.artifactId as string}`;
     expect(edited).toMatchObject({ parent_id: v1.artifactId, context_refs: [{ kind: 'owner-edit' }] });

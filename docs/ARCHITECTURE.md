@@ -52,6 +52,13 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
 
 **Purpose.** The system of record for what the OS knows.
 **Owns.** `sources`, `modules`, `canonical_prompts`, `prompt_variants`, `tags`, `prompt_tags`, `relations`, `ingestion_runs`, `quality_reports`, `knowledge_versions`, and the embedding columns. It also owns the Source Registry, Prompt Library, Vector Retrieval, Knowledge Graph and Versioning + Provenance. Finally it owns the **Knowledge Promotion Gate**, the only code path in the OS allowed to INSERT/UPDATE canonical knowledge (F2).
+It also owns the Creative Vault's files and bytes (AOS-01, F36). The main pieces:
+- `vault-curator` (Execution) and `knowledge/source-registry/vault-store.ts`;
+- `source_texts`, `source_tags` and `vault_embeddings`;
+- the `knowledge_sources` view;
+- `knowledge/vault-io`, for export and import.
+
+A Vault file is the owner's material, not knowledge. It becomes canonical only through `pnpm ingest` and the gate.
 **Never touches directly.** It accepts no canonical write from any agent or from any non-gate service. The only exception was the Phase 2 temporary bootstrap write (F1), revoked in 6D; first-party documents now enter through the gate's first-party admission path. It never writes research evidence or creative outputs. It never overwrites a canonical row in place: every change is a new `knowledge_versions` row.
 
 ### RESEARCH_INTELLIGENCE — Research Intelligence
@@ -70,8 +77,11 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
   - `records-catalog` also writes split sets and assigns ISRC/UPC.
   - `records-rights-splits` (Governance) → `records-release-calendar` (Execution), in `schedule-release.workflow.yaml`.
   - The split sum, the unassigned share and the scheduling guard are DB rules (F31).
+- Songs and the owner's lyrics (AOS-01, `records/vault/`, F36):
+  - `records-songs` (Execution) writes song revisions and typed song links;
+  - `x3lius-lyric-editor` (Creative, deterministic) turns Vault lyric sheets and owner edits into `x3lius.lyrics/v2` versions, each a draft until the owner decides.
 
-**Owns.** Creative artifacts (song structures, lyrics, Suno prompts, takes, critiques, revisions) plus `releases`, `tracks` and `rights_splits`.
+**Owns.** Creative artifacts (song structures, lyrics, Suno prompts, takes, critiques, revisions) plus `releases`, `tracks`, `rights_splits`, `songs`, `song_revisions` and `song_links`.
 **Never touches directly.** It never writes canonical knowledge. It reads style, vocal and mix rules through the Context Engine. A Vocal DNA change goes through the gate like any other canonical write. It never writes research tables and never hardcodes voice or style rules, which would make Research Intelligence updates have no effect. It never approves anything; that's Governance plus humans.
 
 ### TECH — XYP3RN Tech
@@ -378,4 +388,25 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
   - the radial Graph View is dropped unless the operator asks for it;
   - end-to-end validation becomes each AOS gate.
 - **D4:** Creative Vault bytes live in a local content-addressed store (`.vault/<sha256>`, referenced from `sources`) behind one storage interface. Supabase Storage is a second adapter at deployment.
+
+**F36. Creative Vault + songs (AOS-01).** DECIDED (operator, 2026-09-25; design `docs/artist-os/AOS-01-design.md`).
+- **A1:** songs link to existing work through a typed `song_links` table: one FK per target kind, exactly one set, append-only with retractions.
+- **A2:** the owner's writes go through deterministic agents: `vault-curator` and `records-songs` (Execution, `vault.write`), and `x3lius-lyric-editor` (Creative, `artifact.write` + `vault.read`). Approval is the owner's decision (`xyp_decide_artifact`, `service_role`); no agent approves.
+- **A3:** one Context Engine, two corpora.
+  - `knowledge`, the default, is unchanged; a test pins every agent-facing bundle as identical, generation included.
+  - `vault` (`retrieve(q, { corpus: 'vault' })`) ranks knowledge hits and `vault_embeddings` hits together.
+- **A4:** `apps/web` (Next.js 14) runs on 127.0.0.1 behind `XYP_WEB_TOKEN`. Its server modules are loaded natively through `lib/os.ts` (no OS module is bundled or re-implemented). Reads run as `xyp_web`, read only.
+- **Built beyond the design:**
+  - the owner can edit lyrics as a lyric sheet in the UI and with `pnpm vault edit` (each edit is a new draft version);
+  - `pnpm context --vault` gives search from the CLI.
+
+**F37. Open after AOS-01.**
+- **Releases past draft can't be restored.** A restore recreates draft releases only, because `xyp_releases_guard` registers a release as a draft. The export refuses a linked scheduled or released release. Release history belongs in AOS-08.
+- **An import doesn't remap ids.** A tag whose slug already exists in the target under another id is refused. A promoted knowledge source imports as a Vault-only file: its ingestion runs are not exported, so it is not knowledge in the target.
+- **Two known concurrency gaps (one owner, not guarded):**
+  - two first adds of the same lyric sheet at once can each import it;
+  - the export orders re-links by `created_at` (transaction start).
+- **Instrumental sections.** v2 lyrics can't hold directions on an instrumental section. They are reported as warnings, and the sheet keeps them.
+- **The UI's session** is one shared token (single owner, no RBAC); AOS-07/08 bring owner identity. An unauthenticated GET gets a 401 with a relative refresh to `/login`, because Next rewrites absolute redirects to `localhost` and the cookie belongs to a host.
+- **`pnpm embed` is manual.** New material is searchable only after it runs; `/ingest` shows the backlog.
 

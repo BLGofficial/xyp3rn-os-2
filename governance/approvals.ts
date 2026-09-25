@@ -29,7 +29,16 @@ export const decideArtifact = (
   d: { readonly decision: 'approve' | 'reject'; readonly approver: string; readonly reason: string },
 ): Promise<ArtifactDecision> =>
   asRole(sql, OPERATOR_ROLE, async (tx) => {
-    const [q] = await tx<{ id: string }[]>`select xyp_decide_artifact(${artifactId}, ${d.decision}, ${d.approver}, ${d.reason})::text as id`;
+    let q: { id: string } | undefined;
+    try {
+      [q] = await tx<{ id: string }[]>`select xyp_decide_artifact(${artifactId}, ${d.decision}, ${d.approver}, ${d.reason})::text as id`;
+    } catch (e) {
+      // The DB's refusal, said in the owner's terms; the SQLSTATE stays on the error.
+      if ((e as { code?: string }).code === '23505') {
+        throw Object.assign(new Error(`version ${artifactId} already has a decision: one per version (a change of mind is a new version)`), { code: '23505' });
+      }
+      throw e;
+    }
     const [a] = await tx<{ lineage_id: string; version: number; status: 'approved' | 'rejected'; approved_version: number | null }[]>`
       select lineage_id, version, status, approved_version from artifact_approvals where id = ${artifactId}`;
     return { approvalId: q!.id, artifactId, lineageId: a!.lineage_id, version: a!.version, status: a!.status, approvedVersion: a!.approved_version };

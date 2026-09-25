@@ -1,0 +1,284 @@
+AOS-01 — Creative Vault + song schema: proof (2026-09-25)
+Produced with the repo's own commands against the local Postgres. Every DB test runs in its own throwaway database. Section 2
+runs the real CLIs against two throwaway databases (xyp_proof_aos01_a, xyp_proof_aos01_b, dropped afterwards) with temporary
+Vault stores ($PROOF). Section 3 drives the real UI (next start) in Chromium against a third throwaway database.
+================================================================================
+
+## 0. Status of the gate (PLAN.md §5 Phase 1: "every asset has an ID, owner, source, and linked creative object")
+# - Songs (A1): a stable id with append-only revisions (derived, gap-free numbers) and typed links: exactly one of a lyrics
+#   lineage root, a Vault file, a take, a track, a research question. Unlink is a retraction row; history is kept.
+# - Vault files: `sources` rows with storage/media_class/language and the agent run that added them; bytes in a
+#   content-addressed store (.vault/<sha256>, XYP_VAULT_DIR) verified on every read; text for documents and lyric sheets.
+# - Owner writes through three deterministic agents (A2): vault-curator, records-songs (Execution), x3lius-lyric-editor
+#   (Creative). Every change has its agent_runs row. Approval is the owner's decision (xyp_decide_artifact, service_role).
+# - Search (A3): one Context Engine, two corpora. The knowledge corpus every agent grounds on is unchanged by Vault rows
+#   (pinned item for item, generation included); `corpus: 'vault'` finds lyrics, files and findings next to knowledge.
+# - Export (G5): xyp-vault-export/v1. A → B → re-export is byte-identical; re-import is a no-op; conflicts refuse it all.
+# - UI (A4): apps/web (Next.js 14) on 127.0.0.1 behind XYP_WEB_TOKEN: /vault, /vault/files/[id], /vault/lineages/[id],
+#   /ingest, /songs, /songs/[id]. Reads as xyp_web (read only); writes through dispatch and the owner's decision.
+# - Not proven live: an MP3 upload (no MP3 exists in the repo; a generated WAV stands in, same code path: `audio`, no text).
+
+## 1. Tests (AOS-01 files, the Phase 7 membership pin, the AOS-00 single-kernel gate)
+ ✓ tests/aos-01/vault-ingest.test.ts > three deterministic agents; vault.write is Execution, vault.read Knowledge + Creative + Execution > validateAll() is clean and each agent has its class, domain and narrowed tools
+ ✓ tests/aos-01/vault-ingest.test.ts > three deterministic agents; vault.write is Execution, vault.read Knowledge + Creative + Execution > each tool declares its capability; nothing else can call it
+ ✓ tests/aos-01/vault-ingest.test.ts > addToVault: bytes in the store, a sources row, the text, tags; one run per step > media class: --as wins, else the extension; a lyric sheet is always named explicitly
+ ✓ tests/aos-01/vault-ingest.test.ts > addToVault: bytes in the store, a sources row, the text, tags; one run per step > a text file, a Markdown file and the build guide PDF: stored, registered, their text extracted
+ ✓ tests/aos-01/vault-ingest.test.ts > addToVault: bytes in the store, a sources row, the text, tags; one run per step > audio and an image are stored as they are, with no text
+ ✓ tests/aos-01/vault-ingest.test.ts > addToVault: bytes in the store, a sources row, the text, tags; one run per step > the same bytes again return the existing file: no second row, no second text
+ ✓ tests/aos-01/vault-ingest.test.ts > addToVault: bytes in the store, a sources row, the text, tags; one run per step > bytes `pnpm ingest` already registered: the knowledge source becomes a Vault file (once), keeping its title
+ ✓ tests/aos-01/vault-ingest.test.ts > addToVault: bytes in the store, a sources row, the text, tags; one run per step > tags attach once and are shared across files; a label with no Latin letters still gets a valid slug
+ ✓ tests/aos-01/vault-ingest.test.ts > addToVault: bytes in the store, a sources row, the text, tags; one run per step > refuses a missing file, and a file whose bytes no longer match the hash it was registered with
+ ✓ tests/aos-01/vault-ingest.test.ts > records-songs: a song identity, revisions, typed links > creates a song, revises only what is given, links a file and a lineage, unlinks with a reason
+ ✓ tests/aos-01/vault-ingest.test.ts > records-songs: a song identity, revisions, typed links > refuses: zero or two operations, two link targets, an unknown song, an unlink without a reason
+ ✓ tests/aos-01/vault-ingest.test.ts > lyric sheets → x3lius.lyrics/v2 lineages (owner-authored, draft until approved) > a tagged sheet: the file is linked as the lyric sheet, the new lineage as the lyrics; the artifact cites its file
+ ✓ tests/aos-01/vault-ingest.test.ts > lyric sheets → x3lius.lyrics/v2 lineages (owner-authored, draft until approved) > an untagged Bulgarian sheet: stanzas become verses in the file's language; instrumental directions are reported
+ ✓ tests/aos-01/vault-ingest.test.ts > lyric sheets → x3lius.lyrics/v2 lineages (owner-authored, draft until approved) > addAndImport: a lyric sheet is imported once; adding the same sheet again finds the lineage instead of writing a second one
+ ✓ tests/aos-01/vault-ingest.test.ts > lyric sheets → x3lius.lyrics/v2 lineages (owner-authored, draft until approved) > the owner edits a version: a child version, still a draft; the approved pointer moves only on approval
+ ✓ tests/aos-01/vault-ingest.test.ts > lyric sheets → x3lius.lyrics/v2 lineages (owner-authored, draft until approved) > refuses: a mixed-script word in a sung line (F22), a file that is not a lyric sheet, an edit of a non-lyrics artifact
+ ✓ tests/aos-01/vault-search.test.ts > the knowledge corpus is unchanged by the Vault > pnpm embed leaves Vault-only files out of the knowledge index; every agent-facing bundle is identical, generation included
+ ✓ tests/aos-01/vault-search.test.ts > embedVault: artifacts, Vault files and research findings, one row per entity and model > embeds each once; an unchanged input is skipped; the knowledge index is untouched
+ ✓ tests/aos-01/vault-search.test.ts > the vault corpus: the owner's material next to canonical knowledge > finds a lyric line twice over: the lyrics lineage (its version, its song) and the sheet it came from
+ ✓ tests/aos-01/vault-search.test.ts > the vault corpus: the owner's material next to canonical knowledge > finds a file by its text, and a file with no text by its name and tags
+ ✓ tests/aos-01/vault-search.test.ts > the vault corpus: the owner's material next to canonical knowledge > finds a research finding, and canonical knowledge in the same search
+ ✓ tests/aos-01/vault-search.test.ts > the vault corpus: the owner's material next to canonical knowledge > one item per lineage (its best version), ordered by similarity
+ ✓ tests/aos-01/vault-cli.test.ts > pnpm vault > song create → add a lyric sheet to it → edit → approve; the store is XYP_VAULT_DIR
+ ✓ tests/aos-01/vault-cli.test.ts > pnpm vault > song revise, link and unlink
+ ✓ tests/aos-01/vault-export.test.ts > xyp-vault-export/v1: A → B → A' round trip > exports the Vault and the closure of its links, with a manifest and one blob per stored file
+ ✓ tests/aos-01/vault-export.test.ts > xyp-vault-export/v1: A → B → A' round trip > imports into a fresh database: every link resolves, the approved pointer and revisions hold
+ ✓ apps/web/server/loaders.test.ts > ops: the UI's writes, each an agent run or the owner's decision > uploads: bytes go to a server-side temp file (never a browser path), removed after; a lyric sheet becomes a lineage
+ ✓ tests/aos-01/vault-export.test.ts > xyp-vault-export/v1: A → B → A' round trip > re-exporting B is byte-identical; re-importing changes nothing
+ ✓ tests/aos-01/vault-export.test.ts > import refuses, and changes nothing, when > a row differs from the one already there: every conflict is listed
+ ✓ tests/aos-01/vault-export.test.ts > import refuses, and changes nothing, when > records.ndjson does not match the manifest, a blob is corrupt, or a blob is missing
+ ✓ apps/web/server/loaders.test.ts > loaders: read as xyp_web, read only > listVault: files and lyric lineages, filtered by kind, song, tag and language
+ ✓ apps/web/server/loaders.test.ts > loaders: read as xyp_web, read only > fileDetail: metadata, provenance (the run that added it), text, tags, songs
+ ✓ apps/web/server/loaders.test.ts > loaders: read as xyp_web, read only > lineageDetail: versions with their approval state and sheet text; the approved version marked
+ ✓ apps/web/server/loaders.test.ts > loaders: read as xyp_web, read only > songList and songDetail: revisions and every link, grouped by kind, with the approved lyrics marked
+ ✓ apps/web/server/loaders.test.ts > loaders: read as xyp_web, read only > ingestStatus: recent Vault runs, knowledge ingestion runs, and the unembedded Vault backlog
+ ✓ apps/web/server/loaders.test.ts > loaders: read as xyp_web, read only > the loaders cannot write: they run as xyp_web in a read-only transaction
+ ✓ tests/aos-01/vault-export.test.ts > import refuses, and changes nothing, when > a record names a table outside the Vault export, or the schema version differs
+ ✓ tests/aos-01/vault-export.test.ts > export refuses what a restore could not recreate > a linked release that is no longer a draft (a release is registered as a draft; its history is AOS-08)
+ ✓ tests/aos-01/vault-db.test.ts > songs: a stable identity with append-only, derived revisions > a song and its first revision commit together; revisions number themselves 1, 2, …; the current view shows the latest
+ ✓ tests/aos-01/vault-db.test.ts > songs: a stable identity with append-only, derived revisions > a song with no revision is refused at commit (23514)
+ ✓ tests/aos-01/vault-db.test.ts > songs: a stable identity with append-only, derived revisions > refuses a blank title or artist, an unknown language or status (23514 / 22P02)
+ ✓ tests/aos-01/vault-db.test.ts > songs: a stable identity with append-only, derived revisions > songs and revisions are immutable for every role, the owner included (55000)
+ ✓ tests/aos-00/prerequisites.test.ts > G20: service_role is read-only on every relation > holds no privilege but SELECT on any table or view in public
+ ✓ tests/aos-00/prerequisites.test.ts > G20: service_role is read-only on every relation > a table a future migration creates is read-only for service_role by default too
+ ✓ tests/aos-00/prerequisites.test.ts > G20: service_role is read-only on every relation > can still read (RLS bypass) and still decide approvals through xyp_decide_approval
+ ✓ tests/aos-00/prerequisites.test.ts > G20: service_role is read-only on every relation > a direct write as service_role is refused (42501)
+ ✓ tests/aos-00/prerequisites.test.ts > F35 D2: the Promotion Gate never auto-approves > routes even a candidate meeting every former auto-approve condition to the owner, saying so
+ ✓ tests/aos-01/vault-db.test.ts > song_links: one typed target per link, history kept > links each kind of target: a lineage root, a Vault file, a take, a research question
+ ✓ tests/aos-01/vault-db.test.ts > song_links: one typed target per link, history kept > refuses no target or two targets (23514), and a lineage that is not a root (23514)
+ ✓ tests/aos-01/vault-db.test.ts > song_links: one typed target per link, history kept > one live link per song and target (23505); a retraction frees it, and history is kept
+ ✓ tests/aos-01/vault-db.test.ts > song_links: one typed target per link, history kept > links and retractions are append-only (55000)
+ ✓ tests/aos-01/vault-db.test.ts > Vault files: sources, extended (no parallel item table) > a Vault file has storage, a media class and its agent run; a knowledge source has none of them (23514 otherwise)
+ ✓ tests/aos-01/vault-db.test.ts > Vault files: sources, extended (no parallel item table) > extracted text and tags attach once and never change (55000)
+ ✓ tests/aos-01/vault-db.test.ts > Vault files: sources, extended (no parallel item table) > a knowledge source is promoted to a Vault file once; a Vault file never changes after (55000); xyp_vault touches no other column (42501)
+ ✓ tests/aos-01/vault-db.test.ts > approvals of creative versions: a human decision, recorded once; the approved pointer never moves by itself > draft → approved; a new version is a draft and the approved version stays; approving it moves the pointer; a rejection does not
+ ✓ tests/aos-01/vault-db.test.ts > approvals of creative versions: a human decision, recorded once; the approved pointer never moves by itself > one decision per version (23505); needs an existing artifact, a decision and a reason
+ ✓ tests/aos-01/vault-db.test.ts > approvals of creative versions: a human decision, recorded once; the approved pointer never moves by itself > only service_role (the owner) decides: no agent role can (42501)
+ ✓ tests/aos-01/vault-db.test.ts > vault_embeddings and xyp_match_vault > indexes artifacts, Vault files and research findings; the entity must exist (23503); ranks by similarity
+ ✓ tests/aos-01/vault-db.test.ts > vault_embeddings and xyp_match_vault > research findings are indexable too
+ ✓ tests/aos-01/vault-db.test.ts > grants: least privilege per new role > xyp_web reads the Vault and writes nothing (42501)
+ ✓ tests/aos-01/vault-db.test.ts > grants: least privilege per new role > xyp_vault writes songs, links and files; never artifacts, canonical knowledge or approvals (42501)
+ ✓ tests/aos-01/vault-db.test.ts > grants: least privilege per new role > anon and authenticated get nothing
+ ✓ tests/aos-01/vault-cli.test.ts > pnpm vault > export, then import into the same database: nothing new, every record skipped
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > createAgentRegistry is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > createToolRegistry is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > CAPABILITIES is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > compileWorkflow is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > runWorkflow is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > dispatch is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > createLlmRunner is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > createLlmClient is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > ingestSource is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > runGate is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > admitFirstParty is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > createContextEngine is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > migrateUp is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > DOMAINS is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > AGENT_CLASSES is defined once, in its owner
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > has one migrations directory (supabase/migrations) and one rollbacks directory
+ ✓ tests/aos-00/single-kernel.test.ts > AOS-00 gate: one kernel, extended, never duplicated > keeps every agent definition in agents/ (one registry directory; registry test fixtures aside)
+ ✓ apps/web/lib/session.test.ts > web session > the app refuses to run without a token of at least 16 characters
+ ✓ apps/web/lib/session.test.ts > web session > a session issued under the token verifies until it expires
+ ✓ apps/web/lib/session.test.ts > web session > refuses a cookie signed with another token, a changed timestamp, a future one, or garbage
+ ✓ apps/web/lib/session.test.ts > web session > checks a typed token without comparing the strings directly
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one agent per sub-domain > every manifest sub-domain has a built agent (Phase 12 built Evaluation, the last stub)
+ ✓ tests/phase-07/subdomains.test.ts > Agent Registry: one agent per sub-domain > has no x3lius-* agent outside the manifest, and the whole registry still validates
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Write a Suno style prompt for the next X3LIUS single
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Master the new X3LIUS track to -9 LUFS
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Write the hook and chorus for an X3LIUS song
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Write rhymes and lyric bars for X3LIUS
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Describe the X3LIUS vocal DNA and ad-lib style
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects by scope keywords: Pick the chord progression and melody for the X3LIUS intro
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > selects nothing when no sub-domain matches — never a default
+ ✓ tests/phase-07/subdomains.test.ts > routing into the sub-domains > RECORDS requests go to the X3LIUS Music System entrypoint
+ ✓ knowledge/source-registry/vault-store.test.ts > local VaultStore > stores bytes under their sha256 and reads them back
+ ✓ knowledge/source-registry/vault-store.test.ts > local VaultStore > a second put of the same bytes is a no-op; nothing temporary is left behind
+ ✓ knowledge/source-registry/vault-store.test.ts > local VaultStore > refuses to read bytes that no longer match their name (corruption), and an unknown or malformed hash
+ ✓ apps/web/lib/diff.test.ts > lineDiff > keeps common lines, marks removed and added ones, in order
+ ✓ apps/web/lib/diff.test.ts > lineDiff > identical and empty inputs
+ ✓ records/vault/lyric-sheet.test.ts > parseLyricSheet > maps Suno-style section tags to kinds, numbers verses, keeps other tags as directions
+ ✓ records/vault/lyric-sheet.test.ts > parseLyricSheet > v2 cannot hold directions on an instrumental section: they are reported, not silently lost
+ ✓ records/vault/lyric-sheet.test.ts > parseLyricSheet > untagged lines before the first tag are a verse of their own
+ ✓ records/vault/lyric-sheet.test.ts > parseLyricSheet > reads tag variants: case, spacing, numbers, Hook, Bridge, Post-Chorus, Breakdown
+ ✓ records/vault/lyric-sheet.test.ts > parseLyricSheet > with no section tags, stanzas separated by blank lines are verses; CRLF and trailing spaces are handled
+ ✓ records/vault/lyric-sheet.test.ts > parseLyricSheet > a direction before the first section belongs to it; a sheet with no sung line is refused
+ ✓ records/vault/lyric-sheet.test.ts > sheetText > renders sung sections back as a sheet the parser reads to the same sections (the UI edits this text)
+ ✓ tests/aos-01/vault-cli.test.ts > pnpm vault > usage errors exit 2 with the reason; a refused operation exits 1 with the agent's error
+ Test Files  13 passed (13)
+      Tests  107 passed (107)
+
+## 2. The CLIs, end to end
+## 2a. Migrate A and B
+applied: 20260924080000, 20260924080100, 20260924090000, 20260924100000, 20260924110000, 20260924120000, 20260924130000, 20260924140000, 20260924150000, 20260924160000, 20260924170000, 20260924180000, 20260924190000, 20260924200000, 20260925100000, 20260925110000, 20260925120000, 20260925130000, 20260925140000
+applied: 20260924080000, 20260924080100, 20260924090000, 20260924100000, 20260924110000, 20260924120000, 20260924130000, 20260924140000, 20260924150000, 20260924160000, 20260924170000, 20260924180000, 20260924190000, 20260924200000, 20260925100000, 20260925110000, 20260925120000, 20260925130000, 20260925140000
+
+## 2b. Knowledge first: the build guide through the gate's first-party path, then the knowledge index
+{"status":"success","sourceId":"3d1b8af1-fe4e-4709-83e6-4cf3638e7c37"}
+{"model":"Supabase/gte-small","sources":{"embedded":1,"skipped":0,"truncated":0},"canonical_prompts":{"embedded":31,"skipped":0,"truncated":0},"vault":{"model":"Supabase/gte-small","artifact":{"embedded":0,"skipped":0,"truncated":0},"source":{"embedded":0,"skipped":0,"truncated":0},"research_finding":{"embedded":0,"skipped":0,"truncated":0}}}
+
+## 2c. A song, its lyric sheet, a demo, the build guide (already knowledge: promoted), an owner edit, an approval
+song: 51a5d3c8-b894-4f2b-8edb-3e7aad01846f
+$ pnpm vault add night-city.txt --as lyric_sheet --language en --song $SONG --tags new-era
+{"file":{"status":"added","mediaClass":"lyric_sheet","textChars":145,"linkId":true},"lyrics":{"version":1,"instrumental":["s1"],"warnings":["s1 (Intro) has no sung lines, so it is instrumental; its directions \"Guitar swell\" stay only in the sheet"],"alreadyImported":false}}
+$ pnpm vault add night-city.txt ... (again)
+{"file":"existing","lyrics":{"alreadyImported":true,"sameLineage":true}}
+$ pnpm vault add night-city-demo.wav --song $SONG
+{"status":"added","mediaClass":"audio","textChars":null}
+$ pnpm vault add XYP3RN_Agentic_OS_Build_Sequence.pdf --tags guide
+{"status":"promoted","mediaClass":"document","textChars":47429}
+$ pnpm vault edit $V1 v2.txt
+{"version":2,"sameLineage":true}
+$ pnpm vault approve $V1 --reason 'v1 is the take'
+{"status":"approved","version":1,"approvedVersion":1}
+$ pnpm vault approve $V1 --reason again   (one decision per version)
+version 00b6c0b0-980e-4058-9bd2-871fd2e8bcf8 already has a decision: one per version (a change of mind is a new version)
+(exit 1)
+$ pnpm vault add missing.txt   (a refused operation exits 1)
+ENOENT: no such file or directory, open '$PROOF/files/missing.txt'
+(exit 1)
+
+artifact_approvals: v1 approved (approved_version 1)
+artifact_approvals: v2 draft (approved_version 1)
+song link: source as lyric-sheet
+song link: artifact_lineage as lyrics
+song link: source as audio
+run: records-songs success 4
+run: vault-curator success 4
+run: x3lius-lyric-editor success 2
+
+## 2d. Search: pnpm embed fills both indexes; the vault corpus finds a line; the knowledge corpus has no Vault file
+{"sources":{"embedded":0,"skipped":1,"truncated":0},"vault":{"model":"Supabase/gte-small","artifact":{"embedded":2,"skipped":0,"truncated":0},"source":{"embedded":3,"skipped":0,"truncated":1},"research_finding":{"embedded":0,"skipped":0,"truncated":0}}}
+knowledge-embedded Vault-only files: 0
+$ pnpm -s context sodium lamps and a midnight train --vault
+query: sodium lamps and a midnight train
+corpus: vault  model: Supabase/gte-small
+
+#1  0.8793  artifact  Lyric sheet "night-city.txt" (Vault file 06985759-6a64-47bf-b91c-ce100c218577)
+    row:    e49b71fc-1d18-4727-b056-03893371b736  lineage 00b6c0b0-980e-4058-9bd2-871fd2e8bcf8 v2 (x3lius.lyrics/v2)
+    songs:  Night City
+
+#2  0.8556  file  night-city.txt
+    row:    06985759-6a64-47bf-b91c-ce100c218577  lyric_sheet
+    songs:  Night City
+
+#3  0.8052  file  night-city-demo.wav
+    row:    cd4be640-ce2a-4ab9-b0e1-53b73b4495b6  audio
+    songs:  Night City
+
+#4  0.7816  canonical  Phase 12 — Critic + Revision System
+    row:    f5758b2f-c4e1-4082-bddf-1e790c413be6
+    songs:  none
+
+#5  0.7746  canonical  Phase 9 — Suno Generation System
+    row:    7e158487-4ad3-45b1-bced-97ba4b0b9222
+    songs:  none
+
+#6  0.7715  canonical  Phase 17 — End-to-End Validation
+    row:    297ee68f-050f-45a3-90f1-87a69e128c3c
+    songs:  none
+
+#7  0.7701  canonical  Phase 11 — Production / Mix / Master
+    row:    e489e140-0fce-4525-a64b-080e2748a8fb
+    songs:  none
+
+#8  0.7688  canonical  Phase 4D — Orchestrator Stub (single-agent dispatch)
+    row:    e0613a74-a012-4d0b-b0bc-fb73dedb91aa
+    songs:  none
+
+#9  0.7660  canonical  Phase 2 — Knowledge Ingestion + Normalization
+    row:    c0b4daf5-a297-407e-bb62-ff34b087eb7d
+    songs:  none
+
+#10  0.7635  canonical  How to use this
+    row:    0a27bcac-b6eb-4d6c-9877-a0648a9b99bc
+    songs:  none
+
+diagnostics: {"knowledgeHits":10,"vaultHits":5}
+(exit 0)
+
+
+## 2e. Export A → import into B → re-export B: byte-identical
+$ pnpm -s vault export $PROOF/export-a
+{
+  "dir": "$PROOF/export-a",
+  "records": 26,
+  "blobs": 3
+}
+(exit 0)
+
+$ pnpm -s vault import $PROOF/export-a
+{
+  "records": 26,
+  "inserted": 26,
+  "skipped": 0,
+  "blobs": 3
+}
+(exit 0)
+
+$ pnpm -s vault export $PROOF/export-b
+{
+  "dir": "$PROOF/export-b",
+  "records": 26,
+  "blobs": 3
+}
+(exit 0)
+
+$ cmp export-a/records.ndjson export-b/records.ndjson && diff <(sha256sum blobs of A) <(… of B)
+records.ndjson: byte-identical (26 records, sha256 f7ec8bacfbf92841…)
+blobs: identical (3 files, each named by its sha256)
+$ pnpm -s vault import $PROOF/export-a
+{
+  "records": 26,
+  "inserted": 0,
+  "skipped": 26,
+  "blobs": 3
+}
+(exit 0)
+
+B: v1 approved (approved_version 1)
+B: v2 draft (approved_version 1)
+
+(throwaway databases dropped)
+
+## 3. The UI in a real browser (pnpm web:build && pnpm web:smoke): next start, Chromium, throwaway DB
+ok  without a session, /vault answers 401 and sends the browser to /login on the same host
+ok  the raw file route is guarded too (401)
+ok  a wrong token is refused (wrong token)
+ok  the token opens a session and lands on /vault
+ok  a song is created (records-songs) and opens
+ok  the uploaded lyric sheet became a lineage (vault-curator → x3lius-lyric-editor) and opens
+ok  v1 is a draft until the owner decides
+ok  approve records the owner's decision; v1 is marked approved (v1 ◆approvedx3lius-lyric-editor2026-09-25 12:45:52Zowner (smoke) at 2026-09-25 12:45:52Z: the first take is the one)
+ok  the song shows its lyric sheet file and its lyrics
+ok  pnpm embed indexed the version and the file ({"model":"Supabase/gte-small","artifact":{"embedded":1,"skipped":0,"truncated":0},"source":{"embedded":1,"skipped":0,"truncated":0},"research_finding":{"embedded":0,"skipped":0,"truncated":0}})
+ok  vault search finds the lyrics by a line
+smoke: all checks passed
+
+## 4. Gates at the final commit
+$ pnpm typecheck                        → exit 0 (TypeScript 7; apps/web/server, lib and e2e included)
+$ pnpm test                             → Test Files 78 passed (78) · Tests 1127 passed (1127)
+$ pnpm agents:validate                  → validateAll(): 0 failure(s)
+$ pnpm web:build                        → ✓ Compiled successfully (Next 14 type check with TypeScript 5.9 over the OS modules the app loads)
+$ pnpm db:down && pnpm db:up (×2)       → 20260925140000 rolled back / applied, twice, on the dev database

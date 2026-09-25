@@ -143,6 +143,8 @@ describe('the vault corpus: the owner\'s material next to canonical knowledge', 
     const b = await search('neon bleeding on the glass, sodium lamps');
     const lineages = b.items.filter((i) => i.kind === 'artifact').map((i) => i.lineage!.id);
     expect(lineages).toEqual([...new Set(lineages)]);
+    // Whichever version matches best, the item is named by the lineage (its first version's brief).
+    expect(b.items.find((i) => i.lineage?.id === lyrics.lineageId)!.title).toBe('Lyric sheet "night-city.txt" (Vault file ' + b.items.find((i) => i.kind === 'file' && i.title === 'night-city.txt')!.id + ')');
     const sims = b.items.map((i) => i.similarity);
     expect(sims).toEqual([...sims].sort((x, y) => y - x));
   });
