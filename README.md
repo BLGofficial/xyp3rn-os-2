@@ -41,6 +41,8 @@ XYP_TRACE_TOKEN=<16+ chars> pnpm trace:serve   # Phase 14: TRACE service on 127.
 pnpm trace:schemas               # Phase 14: regenerate tech/trace/schemas/*.schema.json from the contract
 pnpm dispatch tech-r-and-d '{"request":"..."}'   # Phase 14: R&D backlog proposals from Frontier Scanner evidence, each queued for pnpm gate decide
 pnpm ingest --file tech/tech.manifest.yaml --origin first_party   # Phase 14: TECH components via the gate
+pnpm dispatch records-catalog '{"credit":{"person":"X3LIUS","role":"writer","songId":"<uuid>"}}'   # AOS-02: people, credits, links, artwork, deliveries
+pnpm dispatch records-tasks '{"create":{"title":"...","releaseId":"<uuid>","dueDate":"YYYY-MM-DD"}}'   # AOS-02: the owner's tasks
 pnpm workflow records/workflows/schedule-release.workflow.yaml '{"releaseId":"<uuid>","releaseDate":"YYYY-MM-DD"}'   # Phase 13: Rights check, then schedule
 pnpm test        # vitest: phase proofs + unit tests (DB tests use throwaway databases)
 pnpm typecheck   # tsc --noEmit
@@ -60,7 +62,13 @@ The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md))
   - vault search next to knowledge;
   - byte-identical export and import;
   - the first UI (`pnpm web:build && XYP_WEB_TOKEN=… pnpm web`, on 127.0.0.1:3100).
-- [ ] AOS-02: Command Center and catalog (credits, tasks, platform links). Decisions are listed in the AOS-01 handoff.
+- [x] AOS-02: Command Center + catalog ([design](docs/artist-os/AOS-02-design.md), [proof](docs/proofs/AOS-02-command-center.txt), [handoff](docs/handoffs/AOS-02.md)):
+  - people with aliases, and credits by role on songs and tracks;
+  - tasks with status history, and readiness checks computed from the data (`catalog_checks`);
+  - platform links (fixed list, host-checked), artwork from the Vault, delivery status;
+  - tracks from your own Vault audio as well as Suno takes;
+  - the dashboard at `/`, and the `/releases`, `/people` and `/tasks` screens; the song page is the song's workspace.
+- [ ] AOS-03: Studio mode and Suno-ready workflows (styles, meta-tag sets, generation tracking). Decisions are listed in the AOS-02 handoff.
 
 ## Build status (Agentic OS build guide)
 

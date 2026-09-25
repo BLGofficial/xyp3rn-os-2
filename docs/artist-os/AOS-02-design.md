@@ -186,6 +186,11 @@ Checks are never stored, so fixing the data clears them. The Rights check and th
 - **`/songs/[id]` workspace** adds credits, tasks, the derived release stage, the song's checks, and a "new release from this song" path.
 - **`/people`**: people with aliases and their credits; add a person or an alias.
 - **`/tasks`**: open and done tasks, with create and move.
+- **As built:**
+  - `/tasks` also lists cancelled tasks; a move takes an optional note.
+  - The release workspace offers "add a track" on drafts only (Phase 13: tracks join drafts), and "schedule" or "mark released" by status.
+  - The song workspace registers the song's own Vault audio on a new release; a Suno take is registered from `/releases` (F39).
+  - A form's return path is kept on this origin (`lib/paths.ts`), control characters included: the URL parser drops tabs and newlines, so `/\t/host` would reach `//host`.
 
 ## 7. Export
 

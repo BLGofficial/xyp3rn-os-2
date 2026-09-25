@@ -410,3 +410,21 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **The UI's session** is one shared token (single owner, no RBAC); AOS-07/08 bring owner identity. An unauthenticated GET gets a 401 with a relative refresh to `/login`, because Next rewrites absolute redirects to `localhost` and the cookie belongs to a host.
 - **`pnpm embed` is manual.** New material is searchable only after it runs; `/ingest` shows the backlog.
 
+
+**F38. Command Center + catalog (AOS-02).** DECIDED (operator, 2026-09-25; design `docs/artist-os/AOS-02-design.md`).
+- **B1:** people (name + aliases, one case-insensitive namespace) and credits by role on a song or a track. Append-only, with retractions.
+- **B2:** tasks are their own table, with status events (`open`, `done`, `cancelled`). Readiness is computed (`catalog_checks`), never stored, and shown as alerts; a task is never an approval item (F8).
+- **B3:** platform links from a fixed list, on a release or a track. The URL must be https on the platform's host; one live link per platform per target; history kept.
+- **B4:** a track's recording is a Suno take or a Vault audio file, exactly one. Closes that F32 item.
+- **Writes:** `records-catalog` gains the metadata operations (`catalog.write`, Execution); `records-tasks` is new (`task.write`, Execution). The UI calls them through dispatch and the Records workflows, as in A2.
+- **Song status** stays the owner's to set. The release stage is derived from the song's tracks; a mismatch is a check (`status_behind`, `status_ahead`), never an automatic change.
+
+**F39. Open after AOS-02.**
+- **Payee identity** (F32): split payees are free text, not people. The next step is an optional `person_id` on split rows.
+- **Master vs publishing splits** (F32): one split set per track.
+- **Past-draft releases can't be exported** (F37): the gate's own final state is refused; release history is AOS-08.
+- **No distributor or platform connectors:** deliveries and links are recorded by hand; connectors and analytics are AOS-06.
+- **No edits in place:** a person's name, a task's title or due date. A wrong name is a new alias; a wrong task is cancelled and re-added.
+- **Tasks have no assignee:** one owner until AOS-07/08 bring identities.
+- **The UI keeps typed values after a write.** A successful form redirects to the same page, and React keeps uncontrolled inputs, so a second click re-submits. The DB refuses duplicate people, credits and links (23505); a duplicate task or delivery event would be written. Resetting forms on success is not in AOS-02's scope.
+- **The song workspace registers Vault audio only.** A song's linked Suno takes are registered from `/releases`.
