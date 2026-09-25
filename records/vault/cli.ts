@@ -7,6 +7,9 @@ import { dispatch, type DispatchDeps } from '../../core/orchestrator/dispatch.ts
 import { HANDLERS } from '../../core/runtime/handlers.ts';
 import { createRuntimeTools } from '../../core/runtime/tools.ts';
 import { decideArtifact } from '../../governance/approvals.ts';
+import { createLocalVaultStore, defaultVaultDir, type VaultStore } from '../../knowledge/source-registry/vault-store.ts';
+import { exportVault } from '../../knowledge/vault-io/export.ts';
+import { importVault } from '../../knowledge/vault-io/import.ts';
 import { addAndImport } from './import.ts';
 import { LYRIC_EDITOR_AGENT } from './lyric-editor.ts';
 import { SONGS_AGENT } from './songs-agent.ts';
@@ -21,6 +24,8 @@ import { SONGS_AGENT } from './songs-agent.ts';
 //   pnpm vault song revise <songId> [--title --artist --language --genre --status --notes]
 //   pnpm vault song link <songId> --artifact|--file|--take|--track|--question <id> [--role <r>]
 //   pnpm vault song unlink <linkId> --reason "<why>"
+//   pnpm vault export <dir>          xyp-vault-export/v1: manifest.json, records.ndjson, blobs/ (an empty or new dir)
+//   pnpm vault import <dir>          a restore into this database (identical rows skipped; any conflict refuses it all)
 // Exit codes: 2 usage, 1 a refused or failed operation (the run row records why).
 // The byte store is XYP_VAULT_DIR, default .vault/ at the repo root.
 
@@ -69,8 +74,12 @@ const song = async (deps: DispatchDeps, [sub, ...rest]: string[]): Promise<unkno
   }
 };
 
-const main = async (deps: DispatchDeps, [cmd, ...rest]: string[]): Promise<unknown> => {
+const main = async (deps: DispatchDeps, store: VaultStore, [cmd, ...rest]: string[]): Promise<unknown> => {
   switch (cmd) {
+    case 'export':
+      return exportVault(deps.sql, store, parse(rest, {}, ['dir']).positionals[0]!);
+    case 'import':
+      return importVault(deps.sql, store, parse(rest, {}, ['dir']).positionals[0]!);
     case 'add': {
       const { values, positionals } = parse(rest, { as: s, title: s, language: s, tags: s, song: s }, ['file']);
       return addAndImport(deps, {
@@ -102,10 +111,11 @@ const main = async (deps: DispatchDeps, [cmd, ...rest]: string[]): Promise<unkno
 
 const sql = connect(undefined, { max: 2 });
 try {
+  const store = createLocalVaultStore(defaultVaultDir());
   const deps: DispatchDeps = {
-    sql, registry: createAgentRegistry({ dir: join(import.meta.dirname, '..', '..', 'agents') }), tools: createRuntimeTools({ sql }), handlers: HANDLERS,
+    sql, registry: createAgentRegistry({ dir: join(import.meta.dirname, '..', '..', 'agents') }), tools: createRuntimeTools({ sql, vault: store }), handlers: HANDLERS,
   };
-  console.log(JSON.stringify(await main(deps, process.argv.slice(2)), null, 2));
+  console.log(JSON.stringify(await main(deps, store, process.argv.slice(2)), null, 2));
 } catch (e) {
   console.error((e as Error).message);
   process.exitCode = isUsage(e) ? 2 : 1;

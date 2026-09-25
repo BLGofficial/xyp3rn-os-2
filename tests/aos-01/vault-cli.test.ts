@@ -75,6 +75,19 @@ describe('pnpm vault', () => {
     expect(unlink.json()).toMatchObject({ retracted: true });
   });
 
+  it('export, then import into the same database: nothing new, every record skipped', () => {
+    const out = join(files, 'export');
+    const exported = vault('export', out);
+    expect(exported.code, exported.err).toBe(0);
+    const { records, blobs } = exported.json();
+    expect(records).toBeGreaterThan(0);
+    expect(blobs).toBe(2);
+    const imported = vault('import', out);
+    expect(imported.code, imported.err).toBe(0);
+    expect(imported.json()).toEqual({ records, inserted: 0, skipped: records, blobs });
+    expect(vault('export', out)).toMatchObject({ code: 1, err: expect.stringMatching(/not empty/) });
+  });
+
   it('usage errors exit 2 with the reason; a refused operation exits 1 with the agent\'s error', () => {
     expect(vault('approve', '00000000-0000-4000-8000-000000000000')).toMatchObject({ code: 2, err: expect.stringMatching(/--reason/) });
     expect(vault('frobnicate')).toMatchObject({ code: 2, err: expect.stringMatching(/unknown command/) });

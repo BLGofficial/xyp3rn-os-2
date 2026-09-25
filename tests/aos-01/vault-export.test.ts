@@ -97,7 +97,7 @@ describe('xyp-vault-export/v1: A → B → A\' round trip', () => {
     expect(manifest.counts).toMatchObject({
       songs: 1, song_revisions: 2, song_links: 7, song_link_retractions: 1, source_texts: 2, source_tags: 3, tags: 2,
       // the lyrics lineage (v1, v2) and the take's formula artifact
-      creative_artifacts: 3 + 1, approval_queue: 2, suno_takes: 1, suno_submissions: 1, tracks: 1, releases: 1, rights_splits: 1,
+      creative_artifacts: 2 + 1, approval_queue: 2, suno_takes: 1, suno_submissions: 1, tracks: 1, releases: 1, rights_splits: 1,
       research_questions: 1, research_projects: 1,
     });
     expect(manifest.counts.sources).toBe(2);
@@ -187,7 +187,7 @@ describe('export refuses what a restore could not recreate', () => {
   it('a linked release that is no longer a draft (a release is registered as a draft; its history is AOS-08)', async () => {
     await a.sql.begin(async (tx) => {
       await tx`set local session_replication_role = replica`;
-      await tx`update releases set status = 'scheduled', release_date = current_date + 30`;
+      await tx`update releases set status = 'scheduled', release_date = current_date + 30, rights_check_run_id = agent_run_id`;
     });
     await expect(exportVault(a.sql, storeA, dir('export-scheduled'))).rejects.toThrow(/release .* is scheduled/);
   });

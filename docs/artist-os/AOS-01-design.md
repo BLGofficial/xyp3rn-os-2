@@ -191,7 +191,7 @@ No step turns a Vault file into canonical knowledge. That remains the gate's fir
 - **Import once.** `addAndImport` (`pnpm vault add`) returns the earlier import of the same sheet instead of writing a second lineage. It does not guard two concurrent first adds, because the Vault has one owner.
 - **Owner edits** are the whole sheet as text (`{ edit: { parentId, text, language? } }`), parsed like an import. The parent's rhyme tags and devices are not carried: the owner's text doesn't have them.
 - **Flags for later steps:**
-  - **Step 6 must fix this before merge.** `embedPending` (knowledge) embeds every `sources` row, so after this step `pnpm embed` would put Vault-only files into the knowledge corpus. Step 6 limits the knowledge index to knowledge sources: rows with a successful `ingestion_runs` row, or `storage is null`.
+  - **Resolved in step 6.** `embedPending` (knowledge) embedded every `sources` row, so `pnpm embed` would have put Vault-only files into the knowledge corpus; the vault-search red test confirmed it. The view `knowledge_sources` (`storage is null`, or a successful `ingestion_runs` row) is now what `embedPending` and the Context Engine's cache generation read, and a test pins every agent-facing bundle as identical, generation included.
   - **Step 8:** `register_vault_file` reads any path the OS process can read. That is fine for the local CLI, but the web UI must write an upload to a temp file itself and never take a path from the browser.
   - **Existing behaviour:** a dispatch timeout marks the run as an error but doesn't cancel the tool, so a slow add can still commit its row. Re-adding returns `existing`.
 
@@ -233,6 +233,18 @@ No step turns a Vault file into canonical knowledge. That remains the gate's fir
   2. Every link resolves in B.
   3. Re-exporting B gives a byte-identical `records.ndjson` and identical blobs.
   4. Re-importing into B changes nothing.
+
+**As built (step 7).**
+
+- **Which rows.** The closure is computed from the catalog: every outgoing single-column foreign key of an exported row is followed. The rows that belong to an exported row are then added (a file's text and tags, a version's approval, a track's splits), and this repeats until nothing new is found. Lineages come in whole: those a song links, and those imported from an exported Vault file.
+- **Only the export tables.** Only the tables in `knowledge/vault-io/spec.ts` can appear. An import refuses any other, so an edited file can't write canonical knowledge. An edited file can still write run history (`agent_runs`): import is a restore, run by the owner.
+- **Row rendering.** Each row is Postgres's own `to_jsonb` rendering, in UTC, kept verbatim, so numeric scale and microseconds survive. `updated_at` and the knowledge-embedding columns are left out: they are derived, and differ between two databases holding the same data. `pnpm embed` rebuilds both indexes after an import.
+- **Order.** Rows follow foreign-key order, with ties broken by `created_at`, table and key. A revision follows the previous one, a split set follows the previous version, and a re-link follows the retraction that freed it.
+- **Checks on import.** Every inserted row is compared with its record after the triggers ran; a difference refuses the import. The migration head must match exactly.
+- **Limits (flagged):**
+  - A linked release that is not a draft is refused at export: `xyp_releases_guard` registers releases as drafts only, so a restore with the triggers on can't recreate one. Release history belongs to AOS-08.
+  - A tag whose slug already exists in the target under another id is a unique-key refusal. Ids are preserved, never remapped.
+  - The ordering by `created_at` (transaction start) could misplace two concurrent re-link operations; there is one owner.
 
 ## 9. UI (G7, A4): `apps/web`
 
