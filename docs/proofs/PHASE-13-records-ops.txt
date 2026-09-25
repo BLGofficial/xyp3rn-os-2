@@ -1,0 +1,152 @@
+Phase 13 — XYP3RN Records (Records ops): proof (2026-09-25)
+Produced with the repo's own commands against the local Postgres. Every DB test runs in its own throwaway database, and
+section 2 runs the real CLIs against a throwaway database (xyp_proof_phase13), dropped afterwards.
+================================================================================
+
+## 0. Status of the guide's deliverables
+# - Migration 20260925110000_records_ops (+ rollback): releases, tracks (FK releases, FK suno_takes), rights_splits
+#   (FK tracks, payee, percentage).
+#   Split integrity is a DB rule (user decision D1, ARCHITECTURE F31):
+#   - every committed split set sums to exactly 100 (a deferred constraint trigger, for every role, the owner
+#     included);
+#   - an unassigned share is an explicit payee-null row that the sum counts;
+#   - a release can't enter scheduled/released while any track has no set or an unassigned share.
+# - Catalog agent, "Knowledge/Execution hybrid" (F10, user decision D2: split + workflow):
+#   records-catalog-lookup (Knowledge) → records-catalog (Execution), in records/workflows/register-track.workflow.yaml.
+#   A finished take (Phase 9 suno_takes) is registered with ISRC/UPC present but nullable until assigned.
+# - Rights agent: records-rights-splits (Governance, deterministic). It checks four rules, each reported, and flags every
+#   unassigned percentage. A flag is a successful run whose flags are data.
+# - Release-calendar agent: records-release-calendar (Execution, D3). Scheduling only, and only on a passing Rights check
+#   for the same release. records/workflows/schedule-release.workflow.yaml runs Rights first. The DB guard re-checks the
+#   splits and verifies the Rights run the release records (a forged pass gains nothing).
+# - The split-sum constraint test and proof: tests/phase-13/records-db.test.ts (section 1) and the direct-insert
+#   attempts in section 2c, 2f and 2h.
+# - 5-bullet handoff for Phase 14: docs/handoffs/PHASE-13.md.
+
+## 1. Tests (tests/phase-13 and records/ops; fixtures are [FIXTURE] rows inserted under their owning roles; no model)
+✓ records/ops/rights-splits/check.test.ts > checkRights > passes thirds that sum to exactly 100 in thousandths (no float drift)
+✓ records/ops/rights-splits/check.test.ts > checkRights > reports every rule, skipping the split rules when there is nothing to check
+✓ records/ops/rights-splits/check.test.ts > checkRights > flags each track on its own: a missing set, an unassigned share, a sum the DB should never have let through
+✓ tests/phase-13/records-db.test.ts > rights_splits: every committed split set sums to exactly 100 (deferred, every role) > a set summing to 100 commits and is the track's current set
+✓ tests/phase-13/records-db.test.ts > rights_splits: every committed split set sums to exactly 100 (deferred, every role) > a set summing to 90 or 110 is refused at commit (23514) for xyp_catalog and for the owner
+✓ tests/phase-13/records-db.test.ts > rights_splits: every committed split set sums to exactly 100 (deferred, every role) > service_role and the read roles cannot insert at all (42501)
+✓ tests/phase-13/records-db.test.ts > rights_splits: every committed split set sums to exactly 100 (deferred, every role) > set constraints all immediate fires the sum check inside the transaction
+✓ tests/phase-13/records-db.test.ts > rights_splits: every committed split set sums to exactly 100 (deferred, every role) > a row added to a committed set pushes it past 100 and is refused (23514)
+✓ tests/phase-13/records-db.test.ts > rights_splits: every committed split set sums to exactly 100 (deferred, every role) > versions start at 1 and never skip (23514); a new version becomes the current set, history kept
+✓ tests/phase-13/records-db.test.ts > rights_splits: every committed split set sums to exactly 100 (deferred, every role) > refuses a zero, negative or over-100 share, a blank payee, a repeated payee, two unassigned rows
+✓ tests/phase-13/records-db.test.ts > rights_splits: every committed split set sums to exactly 100 (deferred, every role) > is append-only for every role, the owner included (55000)
+✓ tests/phase-13/records-db.test.ts > the unassigned share and the scheduling guard > an unassigned share is a null-payee row the sum counts: 70 + unassigned 30 commits
+✓ tests/phase-13/records-db.test.ts > the unassigned share and the scheduling guard > a release with an unassigned share cannot be scheduled (55000)
+✓ tests/phase-13/records-db.test.ts > the unassigned share and the scheduling guard > a release with no tracks, or a track with no split set, cannot be scheduled (55000)
+✓ tests/phase-13/records-db.test.ts > the unassigned share and the scheduling guard > needs a passing records-rights-splits run for this release (55000 otherwise)
+✓ tests/phase-13/records-db.test.ts > the unassigned share and the scheduling guard > refuses a scheduled date in the past (55000); a reschedule is checked again
+✓ tests/phase-13/records-db.test.ts > the unassigned share and the scheduling guard > once scheduled: no unassigned share (55000), no new track (55000); a complete correction commits
+✓ tests/phase-13/records-db.test.ts > the unassigned share and the scheduling guard > transitions: draft → scheduled → draft; scheduled → released on or after its date; nothing else (55000)
+✓ tests/phase-13/records-db.test.ts > ISRC / UPC: nullable until assigned, format-checked, assigned once > checks the ISRC format (ISO 3901, no hyphens) and the UPC/EAN check digit (23514)
+✓ tests/phase-13/records-db.test.ts > ISRC / UPC: nullable until assigned, format-checked, assigned once > an assigned code never changes or clears (55000)
+✓ tests/phase-13/records-db.test.ts > ISRC / UPC: nullable until assigned, format-checked, assigned once > an ISRC names one recording: two takes under one ISRC are refused (23514); one take on a single and an album is fine
+✓ tests/phase-13/records-db.test.ts > ISRC / UPC: nullable until assigned, format-checked, assigned once > unique per release: a UPC across releases, a position, a take (23505)
+✓ tests/phase-13/records-db.test.ts > tracks > a mix report link must be a x3lius.mix-report/v1 artifact (23514)
+✓ tests/phase-13/records-db.test.ts > tracks > refuses a blank title or artist, an unknown kind, a position below 1 (23514)
+✓ tests/phase-13/records-db.test.ts > grants: least privilege per role > xyp_catalog registers and assigns codes, nothing else (42501)
+✓ tests/phase-13/records-db.test.ts > grants: least privilege per role > xyp_release_calendar moves the calendar, nothing else (42501)
+✓ tests/phase-13/records-db.test.ts > grants: least privilege per role > xyp_runtime and service_role read; anon and authenticated get nothing
+✓ tests/phase-13/records-db.test.ts > concurrency: a split write and a schedule never both commit past each other's check > schedule first: the concurrent unassigned-share write waits, then is refused (55000)
+✓ tests/phase-13/records-db.test.ts > concurrency: a split write and a schedule never both commit past each other's check > split first: the concurrent schedule waits, then sees the unassigned share and is refused (55000)
+✓ tests/phase-13/records-db.test.ts > concurrency: a split write and a schedule never both commit past each other's check > two writers of the same new version: the second waits, then its set sums past 100 (23514)
+✓ tests/phase-13/records-agents.test.ts > the four agents are registered, single-class, deterministic (F10 resolved: split + workflow) > validateAll() is clean and each agent has its class, domain and narrowed tools
+✓ tests/phase-13/records-agents.test.ts > the four agents are registered, single-class, deterministic (F10 resolved: split + workflow) > capabilities: catalog.read is Knowledge + Governance, catalog.write is Execution only
+✓ tests/phase-13/records-agents.test.ts > register-track: Knowledge lookup → Execution write > registers a Phase 9 take on a new draft release; the title comes from the formula artifact
+✓ tests/phase-13/records-agents.test.ts > register-track: Knowledge lookup → Execution write > adds a second take to the same draft by id, with an explicit title
+✓ tests/phase-13/records-agents.test.ts > register-track: Knowledge lookup → Execution write > the lookup refuses: an unknown take, a non-mix-report link, a taken position, a take already on the release
+✓ tests/phase-13/records-agents.test.ts > records-catalog: splits and codes, exactly the operation given > writes a split set as the next version and reports the unassigned share
+✓ tests/phase-13/records-agents.test.ts > records-catalog: splits and codes, exactly the operation given > the DB decides the sum: a set of 90 fails the run with the DB reason, and nothing is written
+✓ tests/phase-13/records-agents.test.ts > records-catalog: splits and codes, exactly the operation given > assigns an ISRC and a UPC once; refuses an input naming more than one operation
+✓ tests/phase-13/records-agents.test.ts > records-rights-splits: rule-based verdicts, flags as data > flags an unassigned share with its percentage; the run itself succeeds
+✓ tests/phase-13/records-agents.test.ts > records-rights-splits: rule-based verdicts, flags as data > flags a track with no split set; refuses an unknown release
+✓ tests/phase-13/records-agents.test.ts > records-rights-splits: rule-based verdicts, flags as data > passes a release whose every track has a complete set
+✓ tests/phase-13/records-agents.test.ts > schedule-release: Rights first, then the calendar; the DB is the hard stop > a flagged release stops at the calendar step with every flag named, and stays a draft
+✓ tests/phase-13/records-agents.test.ts > schedule-release: Rights first, then the calendar; the DB is the hard stop > once the share is assigned it schedules, and the release points at the Rights run that cleared it
+✓ tests/phase-13/records-agents.test.ts > schedule-release: Rights first, then the calendar; the DB is the hard stop > the calendar unschedules; a forged pass (a flagged run's id) is refused by the DB
+✓ tests/phase-13/records-agents.test.ts > schedule-release: Rights first, then the calendar; the DB is the hard stop > refuses a rights check for another release before any DB call
+✓ tests/phase-13/records-agents.test.ts > pnpm ask: Records ops requests are named, never guessed (F5) > a catalog / rights / calendar request that matches no X3LIUS sub-domain gets the ops commands
+Tests  46 passed (46)
+
+## 2. The real CLIs on a throwaway database
+applied: 20260924080000, 20260924080100, 20260924090000, 20260924100000, 20260924110000, 20260924120000, 20260924130000, 20260924140000, 20260924150000, 20260924160000, 20260924170000, 20260924180000, 20260924190000, 20260924200000, 20260925100000, 20260925110000
+
+### a. Phase 9 output to register: a [FIXTURE] formula artifact, submitted with the real manual adapter, one take captured
+formula artifact: 9d7a1fdd-1f91-4e84-8df8-cdb68b7e7424
+suno-submitter submit (manual): submission de6f3bad-0334-481d-b001-8706a3e30cc2
+suno-submitter capture: take d202afd1-6a76-48bf-91b3-605251aea38d
+
+### b. pnpm workflow records/workflows/register-track.workflow.yaml (lookup: Knowledge → catalog: Execution)
+  spec: records-register-track (records/workflows/register-track.workflow.yaml, sha256 98978f628230…) steps: lookup=records-catalog-lookup → catalog=records-catalog
+  status: success
+  "releaseId": "c1d50b0e-89bc-4e68-b747-ecfd7fb5911b",
+  "trackId": "ef9828cc-0e42-4300-a72c-dcd4e8887ed6",
+  "createdRelease": true
+  "status": "success",
+  "agent_name": "records-catalog-lookup",
+  "class": "Knowledge",
+  "status": "success",
+  "agent_name": "records-catalog",
+  "class": "Execution",
+  "status": "success",
+  tracks row: [FIXTURE] Night City | isrc=null | take=d202afd1-6a76-48bf-91b3-605251aea38d
+
+### c. The split-sum constraint, by direct insert (no agent): 60 + 30 as xyp_catalog; 90 as the owner (postgres); 100 as service_role
+  ERROR:  23514: rights_splits: track ef9828cc-0e42-4300-a72c-dcd4e8887ed6 version 1 sums to 90.000, not 100
+  ERROR:  23514: rights_splits: track ef9828cc-0e42-4300-a72c-dcd4e8887ed6 version 1 sums to 90.000, not 100
+  ERROR:  42501: permission denied for table rights_splits
+  rows for the track: 0
+
+### d. pnpm dispatch records-catalog splits: X3LIUS 70 + unassigned 30 (payee null)
+  records-catalog run: success {"rows": 2, "trackId": "ef9828cc-0e42-4300-a72c-dcd4e8887ed6", "version": 1, "unassigned": 30}
+
+### e. pnpm workflow schedule-release: Rights flags the unassigned share; the calendar refuses, naming it
+[workflow] records-schedule-release FAILED at step calendar: records-release-calendar: release c1d50b0e-89bc-4e68-b747-ecfd7fb5911b is not cleared by rights check 5d513da9-b675-4269-9465-c1bdbfcda724 (flag) — rights.no-unassigned-share (track ef9828cc-0e42-4300-a72c-dcd4e8887ed6): track 1 "[FIXTURE] Night City" has 30% unassigned (split set v1) (run a918cd58-fafc-4e47-bd5f-222e2456be37; not run: none)
+  status: error (failed at calendar: records-release-calendar: release c1d50b0e-89bc-4e68-b747-ecfd7fb5911b is not cleared by rights check 5d513da9-b675-4269-9465-c1bdbfcda724 (flag) — rights.no-unassigned-share (track ef9828cc-0e42-4300-a72c-dcd4e8887ed6): track 1 "[FIXTURE] Night City" has 30% unassigned (split set v1))
+  rights verdict (agent_runs.output.result): flag [{"rule": "rights.no-unassigned-share", "detail": "track 1 \"[FIXTURE] Night City\" has 30% unassigned (split set v1)", "trackId": "ef9828cc-0e42-4300-a72c-dcd4e8887ed6", "unassignedPercentage": 30}]
+  release status: draft
+
+### f. Bypass attempt: schedule by direct UPDATE citing the flagged Rights run, as xyp_release_calendar, then as the owner
+  ERROR:  55000: releases: track ef9828cc-0e42-4300-a72c-dcd4e8887ed6 has an unassigned share (30.000 percent)
+  ERROR:  55000: releases: track ef9828cc-0e42-4300-a72c-dcd4e8887ed6 has an unassigned share (30.000 percent)
+
+### g. The operator assigns the share (split set v2), then schedule-release passes
+  records-catalog run: success {"rows": 2, "trackId": "ef9828cc-0e42-4300-a72c-dcd4e8887ed6", "version": 2, "unassigned": 0}
+  status: success
+  "status": "scheduled",
+  "releaseDate": "2026-10-25"
+  release: scheduled 2026-10-25 cleared by records-rights-splits 87cac9cc-e234-44c9-ba78-fc4903917d85 (pass)
+  split history: v1 X3LIUS 70.000, v1 <unassigned> 30.000, v2 X3LIUS 70.000, v2 [FIXTURE] Producer 30.000
+  current set: X3LIUS 70.000, [FIXTURE] Producer 30.000
+
+### h. Once scheduled: an unassigned share is refused (direct insert, as xyp_catalog)
+  ERROR:  55000: rights_splits: track ef9828cc-0e42-4300-a72c-dcd4e8887ed6 is on a scheduled release; an unassigned share is refused
+
+### i. Codes: pnpm dispatch records-catalog assign (ISRC, UPC), then a reassignment
+  records-catalog run: success {"isrc": "QZAB12600001", "trackId": "ef9828cc-0e42-4300-a72c-dcd4e8887ed6"}
+  records-catalog run: success {"upc": "036000291452", "releaseId": "c1d50b0e-89bc-4e68-b747-ecfd7fb5911b"}
+  records-catalog run: error tracks: ef9828cc-0e42-4300-a72c-dcd4e8887ed6 already has ISRC QZAB12600001; an assigned code never changes
+
+### j. pnpm ask: a Records ops request gets the ops commands (F5), never a guess
+  route: {"status":"routed","domain":"RECORDS","evidence":{"RESEARCH_INTELLIGENCE":[],"RECORDS":["catalog","isrc","release"],"TECH":[],"GOVERNANCE":[]}}
+  "status": "clarify",
+  "reason": "Records ops (catalog, rights splits, release calendar) take ids, dates and percentages, not free text. Use: register a take: pnpm workflow records/workflows/register-track.workflow.yaml … | splits … | codes … | rights check + schedule: pnpm workflow records/workflows/schedule-release.workflow.yaml …"
+
+## 3. Mutations of the migration (each run of tests/phase-13/records-db.test.ts; the migration restored after each)
+# baseline                                          27 passed
+# 1. no release row lock in the split guard         2 failed: both race tests (schedule-first, split-first)
+# 2. no per-track advisory lock                     1 failed: two writers of the same new version
+# 3. sum trigger not deferred                       12 failed: every multi-row set is refused mid-write
+# 4. guard skips the unassigned-share check         2 failed: unassigned share scheduled; split-first race
+# 4/4 caught; each fails cleanly (a held transaction is always released, so a missing lock fails, never hangs).
+
+## 4. Gates
+# pnpm test          Test Files 61 passed (61) | Tests 957 passed (957)   (893 before Phase 13)
+# pnpm typecheck     clean
+# pnpm agents:validate   validateAll(): 0 failure(s)
+# pnpm db:up → db:down 1 → db:up on the local dev DB: applied / rolled back / applied 20260925110000
+# tests/phase-01 round trip (up, re-up, down, re-down, up; identical schema snapshot) passes with the new migration.

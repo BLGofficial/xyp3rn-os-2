@@ -34,6 +34,10 @@ pnpm gate run <candidateId>     # 6D Promotion Gate: the nine-step state machine
 pnpm gate queue                 # pending human approvals with the gate's reasons
 pnpm gate decide <approvalId> approve|reject "<approver>" "<reason>"   # operator decision, then re-run the gate
 pnpm workflow core/workflows/retrieve-and-summarize.workflow.yaml '{"query":"..."}'
+pnpm workflow records/workflows/register-track.workflow.yaml '{"takeId":"<uuid>","release":{"title":"...","artist":"X3LIUS","kind":"single"},"position":1,"title":null,"mixReportArtifactId":null}'   # Phase 13: catalog a Suno take
+pnpm dispatch records-catalog '{"splits":{"trackId":"<uuid>","splits":[{"payee":"X3LIUS","percentage":70},{"payee":null,"percentage":30}]}}'   # Phase 13: split set (null = unassigned); must sum to 100
+pnpm dispatch records-catalog '{"assign":{"trackId":"<uuid>","isrc":"QZAB12600001"}}'   # Phase 13: ISRC / UPC, once
+pnpm workflow records/workflows/schedule-release.workflow.yaml '{"releaseId":"<uuid>","releaseDate":"YYYY-MM-DD"}'   # Phase 13: Rights check, then schedule
 pnpm test        # vitest: phase proofs + unit tests (DB tests use throwaway databases)
 pnpm typecheck   # tsc --noEmit
 ```
@@ -55,7 +59,10 @@ Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 - [~] Phase 10: Vocal / Artist DNA. Built and proven on a fixture; waiting on the operator's real Vocal DNA values ([handoff](docs/handoffs/PHASE-10.md))
 - [~] Phase 11: Production / Mix / Master. Built and proven; the operator's mix rubric is admitted and embedded (PR #9). Waiting on a real render's `trace.analysis/v1` for the first live mix check ([handoff](docs/handoffs/PHASE-11.md))
 - [~] Phase 12: Critic + Revision System. Built and proven on the FAKE model (both loop proofs, 6C scoring through the Critic); Critic run live once (converged, 1 rule, 0 violations); Revision not yet live, since no lyrics rules are admitted to trigger it ([handoff](docs/handoffs/PHASE-12.md))
-- [ ] Phase 13: XYP3RN Records
+- [x] Phase 13: XYP3RN Records (Records ops).
+  - `releases`, `tracks` and `rights_splits`. Each split set sums to exactly 100 at commit for every role; an unassigned share is an explicit null-payee row, and it blocks scheduling (F31).
+  - Catalog lookup (Knowledge) → catalog (Execution) (F10), Rights (Governance) and the release calendar (Execution).
+  - Proven on a throwaway DB with the real CLIs ([handoff](docs/handoffs/PHASE-13.md)).
 - [ ] Phase 14: XYP3RN Tech
 - [ ] Phase 15: Legal / Governance
 - [ ] Phase 16: UI / Observability / Graph View / Command Center (16A–16D)

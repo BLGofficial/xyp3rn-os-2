@@ -1,6 +1,6 @@
 # Phase 13 — XYP3RN Records (Records ops): design
 
-Status: the four decisions below were made by the user in conversation (2026-09-25). Everything else is the default stated here, open to review before or during the implementation plan.
+Status: the four decisions below were made by the user in conversation (2026-09-25). Everything else is the default stated here. The spec is updated to match what was built; the deviations are listed in §11.
 Branch: `claude/build-audit-next-steps-ffve76`, cut from `main` at `cd0717f` (PR #10 merged).
 
 ## 1. Intent
@@ -125,14 +125,14 @@ On any change into `scheduled` or `released` (a reschedule included), the releas
 2. every track has a current split set;
 3. no current set contains a null-payee row;
 4. `release_date ≥ current_date` when entering `scheduled` or rescheduling, and `release_date ≤ current_date` when entering `released`;
-5. `rights_check_run_id` names a `records-rights-splits` run with status `success`, `output.verdict = 'pass'` and `output.releaseId = id`.
+5. `rights_check_run_id` names a `records-rights-splits` run with status `success`, `output.result.verdict = 'pass'` and `output.result.releaseId = id`. Dispatch stores a run's output as `{ result, logs }`.
 
 - Rule 5 ties the calendar to the Rights check: a release can't be scheduled without a passing verdict on record.
 - Rules 1–3 are the substance. They hold even if a stale verdict is replayed, because they re-check the current splits.
 
 ### 4.6 Roles and grants
 
-- `xyp_catalog` (new): INSERT/SELECT `releases`, `tracks`, `rights_splits`; UPDATE (`upc`) on `releases`, UPDATE (`isrc`) on `tracks`; SELECT `suno_takes`, `creative_artifacts` (the FK and schema checks). Nothing canonical, nothing creative-writable.
+- `xyp_catalog` (new): INSERT/SELECT `releases`, `tracks`, `rights_splits`; UPDATE (`upc`) on `releases`, UPDATE (`isrc`) on `tracks`. FK and schema checks run as the owner or in `SECURITY DEFINER` triggers, so it needs no grant on the Suno trail or artifacts. Nothing canonical, nothing creative-writable.
 - `xyp_release_calendar` (new): SELECT `releases`, `tracks`, `rights_splits`; UPDATE (`status`, `release_date`, `rights_check_run_id`) on `releases`.
 - `xyp_runtime`: SELECT on the three tables and the view (`read_catalog`), and EXECUTE on `xyp_resolve_take(take_id)` (`resolve_take`). It still has no SELECT on the Suno trail, the Phase 9 boundary: the function returns one take's chain (ids, titles, schema id) and nothing else.
 - `service_role`: SELECT only. Every write goes through an agent, so every write has an `agent_runs` row (the Phase 15 audit join).
@@ -143,7 +143,7 @@ On any change into `scheduled` or `released` (a reschedule included), the releas
 
 | Tool | Capability | Input → output |
 |---|---|---|
-| `resolve_take` | `catalog.read` | `{ takeId }` → `{ take: { id, audioUrl, title, durationSeconds }, submission: { id, adapter, sunoModel }, formula: { artifactId, schemaId, title } }`. Unknown take → error |
+| `resolve_take` | `catalog.read` | `{ takeId, mixReportArtifactId? }` → `{ take: { id, audioUrl, title, durationSeconds }, submission: { id, adapter, sunoModel }, formula: { artifactId, schemaId, title }, mixReport: { artifactId, schemaId } \| null }`. It goes through `xyp_resolve_take`. Unknown take → error |
 | `read_catalog` | `catalog.read` | `{ releaseId }` → `{ release, tracks: [{ …, splits: { version, rows: [{ payee, percentage }] } \| null }] }` |
 | `register_track` | `catalog.write` | `{ release: { title, artist, kind } \| { id }, track: { position, title, takeId, mixReportArtifactId? } }` → `{ releaseId, trackId, createdRelease }`. One transaction |
 | `write_splits` | `catalog.write` | `{ trackId, splits: [{ payee: string \| null, percentage }] }` → `{ trackId, version, unassigned }`. Writes version max + 1 in one transaction; the DB decides the sum |
@@ -156,7 +156,7 @@ On any change into `scheduled` or `released` (a reschedule included), the releas
 
 ### 6.1 `records-catalog-lookup` (Knowledge)
 
-- **Input:** `{ takeId, release: { title, artist, kind } | { id }, position, title?, mixReportArtifactId? }`.
+- **Input:** `{ takeId, release: { title, artist, kind } | { id }, position, title, mixReportArtifactId }`. A null `title` or `mixReportArtifactId` means "not given". Both keys are required because the Phase 5 workflow engine has no optional inputs, and extending it would widen the phase.
 - **It reads, and never writes:**
   - `resolve_take` gives the chain;
   - `read_catalog` confirms an existing release is `draft` and that the position and take are free on it.
@@ -188,7 +188,7 @@ On any change into `scheduled` or `released` (a reschedule included), the releas
 ### 6.4 `records-release-calendar` (Execution)
 
 - **Input:** exactly one of:
-  - `{ schedule: { releaseId, releaseDate, rightsCheck } }`, where `rightsCheck` is the Rights run's `{ runId, output }`;
+  - `{ schedule: { releaseId, releaseDate, rightsCheck } }`, where `rightsCheck` is the Rights agent's output, which carries its own `runId`;
   - `{ unschedule: { releaseId } }`;
   - `{ release: { releaseId } }`.
 - `schedule` refuses unless `rightsCheck.output.verdict === 'pass'` for the same release, and the error names each flag.
@@ -199,9 +199,9 @@ On any change into `scheduled` or `released` (a reschedule included), the releas
 
 - `register-track.workflow.yaml`: `lookup` → `catalog` (`register: { $from: steps.lookup.output.registration }`).
 - `schedule-release.workflow.yaml`: `rights` → `calendar`.
-  - The calendar's `rightsCheck` is `{ runId, output }`, but the workflow engine passes step outputs only, not run ids.
-  - So the Rights agent returns its own `runId` in its output (from `ctx.runId`), and the calendar reads `rightsCheckRunId` from it.
-  - The DB verifies that run's row (§4.5 rule 5), so the value can't be forged into a pass.
+  - The workflow engine passes step outputs, not run ids, so the Rights agent returns its own `runId` in its output (from `ctx.runId`).
+  - The calendar records that `runId` on the release.
+  - The DB verifies that run's row (§4.5 rule 5), so a forged pass gains nothing.
 
 Splits and codes are dispatched directly: `pnpm dispatch records-catalog '{"splits":{…}}'`.
 
@@ -252,3 +252,13 @@ Splits and codes are dispatched directly: `pnpm dispatch records-catalog '{"spli
 - **Edits.** A title or position can't be edited, and a draft can't be deleted. Those operations get their own tool when needed.
 - **Tracks made outside Suno** (an FL Studio bounce with RVC vocals) can't be registered, because `take_id` is required. That follows the guide's "from Phase 9–11 output"; widening it is a user decision.
 - **`withdrawn`** (takedown) is Governance's, Phase 15.
+
+## 11. Deviations found while building (all written into the sections above)
+
+- **`xyp_resolve_take` instead of a table grant.** A Phase 9 test pins that `xyp_runtime` can't read the Suno trail. `resolve_take` calls a `SECURITY DEFINER` function that returns one take's chain (ids, titles, schema id), and EXECUTE is `xyp_runtime`'s alone. So the boundary holds.
+- **Rule 5 reads `output.result`.** Dispatch stores a run's output as `{ result, logs }`.
+- **Required-null workflow inputs.** `title` and `mixReportArtifactId` are required keys in `register-track`, and null means "not given".
+- **`service_role` is revoked explicitly.** The emulated Supabase default privileges grant it ALL on every new table. Phase 13's tables revoke that first, so it reads only.
+- **Concurrency locks.** These were added beyond the spec, and race tests pin them:
+  - split writes take an advisory lock per track;
+  - split, track and calendar writes lock the release row.

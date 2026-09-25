@@ -65,7 +65,11 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
 **Purpose.** The label and artist system. It has two parts:
 
 - The X3LIUS Music System: ten creative sub-domains (Phases 7–12). Built in Phase 7 as gate-written modules from `records/x3lius/music-system.manifest.yaml`, with one read-only stub agent per sub-domain. A promoted rule tagged with a sub-domain's slug lands in that module and is consumable on its scoped context path. Phase 8 replaced the Songwriting, Lyrics and Composition stubs with Creative agents of the same names. They write versioned, schema-validated artifacts to `creative_artifacts` from canonical rules and claims pulled at run time. Phase 9 did the same for Genre/Style and Suno (the Prompt-Formula), and added `suno-submitter` (Execution), which submits a formula artifact and records submissions, takes and stub scores in an append-only trail.
-- Records ops: catalog, releases, rights splits and release calendar (Phase 13).
+- Records ops: catalog, releases, rights splits and release calendar (Phase 13, `records/ops/`). Four deterministic agents:
+  - `records-catalog-lookup` (Knowledge) → `records-catalog` (Execution), in `records/workflows/register-track.workflow.yaml`. F10: the guide's Knowledge/Execution hybrid, split. They register a Phase 9 take as a track.
+  - `records-catalog` also writes split sets and assigns ISRC/UPC.
+  - `records-rights-splits` (Governance) → `records-release-calendar` (Execution), in `schedule-release.workflow.yaml`.
+  - The split sum, the unassigned share and the scheduling guard are DB rules (F31).
 
 **Owns.** Creative artifacts (song structures, lyrics, Suno prompts, takes, critiques, revisions) plus `releases`, `tracks` and `rights_splits`.
 **Never touches directly.** It never writes canonical knowledge. It reads style, vocal and mix rules through the Context Engine. A Vocal DNA change goes through the gate like any other canonical write. It never writes research tables and never hardcodes voice or style rules, which would make Research Intelligence updates have no effect. It never approves anything; that's Governance plus humans.
@@ -152,11 +156,16 @@ Phase 2 wrote `canonical_prompts`/`modules` through a dedicated `xyp_ingest_boot
 
 A `research_sources` row may carry a nullable FK to `sources.id` when the cited document is already ingested. They are different tables with different writers, not duplicates.
 
-**F10. "Hybrid" agents vs a single-valued `class`.** RESOLVED for Phase 11 (user: the recommendation); Phase 13 still to decide. Phase 11 has "Creative+Execution" and Phase 13 has "Knowledge/Execution" agents, but `class` holds exactly one value. Recommendation: split each hybrid into two single-class agents chained by a Phase 5 workflow. The alternative is a multi-class field, which weakens class-level authorization.
+**F10. "Hybrid" agents vs a single-valued `class`.** RESOLVED for Phases 11 and 13 (user: the recommendation both times). Phase 11 has "Creative+Execution" and Phase 13 has "Knowledge/Execution" agents, but `class` holds exactly one value. Recommendation: split each hybrid into two single-class agents chained by a Phase 5 workflow. The alternative is a multi-class field, which weakens class-level authorization.
 - Phase 11 ships single-class agents and no hybrid:
   - `x3lius-arrangement` and `x3lius-production` are Creative, LLM-backed, on the shared creative program;
   - `x3lius-mix-master` is Creative and deterministic (`model: none`). It checks a TRACE analysis against the canonical rubric and writes a report artifact, with no LLM.
 - The guide's Execution half (taking TRACE output from the real plugin) is Phase 14's TRACE integration. Phase 11 defines the contract it will implement (F24).
+- Phase 13 splits the Catalog agent in two:
+  - `records-catalog-lookup` (Knowledge) resolves a take's chain (take → Suno submission → formula artifact) and the target release. It answers with a fully specified registration and its provenance, and writes nothing.
+  - `records-catalog` (Execution) performs it.
+  - `register-track.workflow.yaml` chains them.
+  - The new capabilities `catalog.read` (Knowledge, Governance) and `catalog.write` (Execution) keep class-level authorization intact.
 
 **F11. Phase 16 says "Knowledge Layer's 6" satellites.** PROPOSED. Under F2 the gate is a seventh Knowledge component, and the counts are live.
 
@@ -296,3 +305,26 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **Revision makes no structural edits** (adding or removing a section). A violation that needs one persists, the stall rule fires, and a human takes it.
 - **Take scoring waits on TRACE.** A Suno take is audio; the Critic reads structured artifacts. New `take_scores` stubs carry `stub:needs-trace-analysis` until Phase 14's `trace.analysis/v1` of a render exists.
 - **No live-model run yet** of the Critic or Revision (no model key); both are proven on the FAKE model with scripted replies.
+
+**F31. Splits sum to 100, and "unassigned" is a row.** DECIDED (user, Phase 13).
+- The guide asks for two things that can't both hold literally:
+  - per-track percentages "must sum to 100", enforced in the DB;
+  - the Rights agent "flags any unassigned percentage" before scheduling.
+- Resolution:
+  - Every committed split set sums to exactly 100 (a deferred constraint trigger, every role, the owner included).
+  - An unassigned share is an explicit `payee` null row that the sum counts.
+  - A release can't enter `scheduled`/`released` while any track has no set or an unassigned share, and an unassigned row is refused once it is scheduled.
+- Rejected:
+  - ≤ 100 always and = 100 only at scheduling (then "must sum to 100" holds only for scheduled releases);
+  - = 100 with no null payee ("unassigned" could then only mean "no splits at all").
+- The Rights check is Governance class (F3: Records owns the data, Governance reads it). A `flag` verdict is a successful run whose flags are data, and the calendar (Execution) schedules only on a `pass` for the same release (D3).
+- The release records the Rights run that cleared it, and the DB verifies that run. So the calendar can't be bypassed by a forged verdict or a direct UPDATE.
+
+**F32. Open after Phase 13.**
+- **Master vs publishing.** The guide has one split per track. A real release has a master split and a publishing split, each summing to 100. The fix is additive: a `kind` column and a per-kind sum.
+- **Payee identity.** `payee` is free text, so "X3LIUS" and "x3lius" are two payees. Phase 15's rights-conflict will want a payee table.
+- **Splits per track row, not per recording.** One take on a single and an album carries two split sets that can diverge. That is a Phase 15 rights-conflict check.
+- **No edits or takedowns.** There is no title/position edit, no draft delete, and no `withdrawn` status (a Governance takedown, Phase 15).
+- **Only Suno takes register.** `take_id` is required, as in the guide's "from Phase 9–11 output". A track made outside Suno (an FL Studio bounce with RVC vocals) can't be registered until that is widened (a user decision).
+- **Lead time is not policy.** Any date ≥ today schedules. A DSP lead time is canonical knowledge a later phase can admit, never a constant.
+- **`service_role` holds full DML on earlier-phase tables.** The emulated Supabase default privileges gave it ALL on `creative_artifacts`, `critiques`, `suno_submissions`, `suno_takes` and `take_scores`, contrary to SCHEMA.md ("SELECT only"). The immutability triggers stop UPDATE/DELETE, but not INSERT or TRUNCATE. Phase 13's tables revoke it. The earlier tables need a follow-up migration, not done here because it widens the phase.
