@@ -163,7 +163,8 @@ describe('Vault files: sources, extended (no parallel item table)', () => {
     const runId = await insertRun(db.sql, 'vault-curator', 'Execution');
     await as('xyp_vault', async (tx) => {
       await tx`insert into source_texts (source_id, text, extractor, agent_run_id) values (${f}, '[FIXTURE] [Verse 1] night city', 'text/plain', ${runId})`;
-      const [t] = await tx<{ id: string }[]>`insert into tags (slug, label) values ('aos01-fixture-tag', 'fixture') on conflict (slug) do update set slug = excluded.slug returning id`;
+      await tx`insert into tags (slug, label) values ('aos01-fixture-tag', 'fixture') on conflict (slug) do nothing`;
+      const [t] = await tx<{ id: string }[]>`select id from tags where slug = 'aos01-fixture-tag'`;
       await tx`insert into source_tags (source_id, tag_id, agent_run_id) values (${f}, ${t!.id}, ${runId})`;
     });
     await expect(db.sql`update source_texts set text = 'x' where source_id = ${f}`).rejects.toMatchObject(code('55000'));

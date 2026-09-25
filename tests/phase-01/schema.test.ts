@@ -61,6 +61,8 @@ describe('foreign keys (catalog)', () => {
     ['quality_reports', 'canonical_prompt_id', 'canonical_prompts', 'r'],
     ['quality_reports', 'ingestion_run_id', 'ingestion_runs', 'r'],
     ['quality_reports', 'source_id', 'sources', 'r'],
+    // AOS-01: a Vault file records the agent run that added it (docs/artist-os/AOS-01-design.md §4.3).
+    ['sources', 'agent_run_id', 'agent_runs', 'r'],
   ];
 
   it('declares exactly the expected FK set on the Phase 1 tables, with the expected on-delete action', async () => {
