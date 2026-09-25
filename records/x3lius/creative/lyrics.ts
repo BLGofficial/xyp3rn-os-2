@@ -3,7 +3,7 @@ import {
   LYRICS_LLM_SCHEMA, LYRICS_LLM_SCHEMA_ID, LYRICS_SCHEMA, LYRICS_SCHEMA_ID, LYRICS_SECTION_LLM_SCHEMA, LYRICS_SECTION_LLM_SCHEMA_ID, SONG_STRUCTURE_SCHEMA_ID,
 } from './schemas.ts';
 import { mixedScriptWords } from './script-check.ts';
-import type { Completion, CreativeSpec } from './types.ts';
+import { CLAIM_NAMESPACE, type Completion, type CreativeSpec } from './types.ts';
 
 /**
  * Lyrics (agent x3lius-lyrics), x3lius.lyrics/v2: the whole song, against the song structure.
@@ -162,6 +162,8 @@ export const LYRICS_SPEC: CreativeSpec = {
   generate,
   finalize,
   check,
+  // lyrics.*: craft claims code checks (the word blacklist, records/x3lius/lyrics-rules.yaml).
+  claimNamespaces: [CLAIM_NAMESPACE, 'lyrics.'],
   // Rendered into Suno's lyrics field as-is: each bar, and the label as the [label] meta-tag.
   sunoTextPaths: [/^\$\.sections\[\d+\]\.bars\[\d+\]\.text$/, /^\$\.sections\[\d+\]\.label$/],
 };

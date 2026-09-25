@@ -1,4 +1,4 @@
-import { SUNO_PROMPT_SCHEMA_ID } from '../creative/schemas.ts';
+import { LYRICS_SCHEMA_ID, SUNO_PROMPT_SCHEMA_ID } from '../creative/schemas.ts';
 import type { ContextEntry } from '../creative/types.ts';
 import type { MixCheck } from '../mix-master/agent.ts';
 import { LIMIT_TOPIC, measureSunoText } from '../suno/formula.ts';
@@ -16,16 +16,56 @@ export type CodeCheckResult = { readonly rules: readonly CheckedRule[]; readonly
 const SUNO_FIELD_PATH: Readonly<Record<string, string>> = { title: '/title', style: '/style', 'exclude-styles': '/excludeStyles', lyrics: '/lyrics' };
 const excerpt = (v: unknown): string => (Array.isArray(v) ? v.join(', ') : String(v)).slice(0, 200);
 
+export const BLACKLIST_TOPIC = 'lyrics.word-blacklist';
+
+/** A blacklist term as a whole-word, case-insensitive pattern; `[x]` stands for any one word. */
+const termPattern = (term: string): string =>
+  `\\b${term.trim().split(/\s+/).map((w) => (w === '[x]' ? "[\\p{L}\\p{N}'’]+" : w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).join('\\s+')}\\b`;
+
 /**
- * Code checks for the entries that have one. Today: `suno.limit.<field>-chars` claims on a Suno
- * prompt, measured from the text itself (never from the stored `limits`, which a later rule change
- * leaves stale).
+ * The lyrics word blacklist (`lyrics.word-blacklist` = `{ maxHits, terms }`): counts hits across every
+ * sung bar. Overlapping hits count once, longest first ("lost in darkness" is one hit, not "lost" too).
+ * Over maxHits, each bar with a hit is a violation quoting its first hit.
+ */
+const blacklistCheck = (e: ContextEntry & { kind: 'claim' }, body: Record<string, unknown>): CodeCheckResult | null => {
+  const v = e.value as { maxHits?: unknown; terms?: unknown };
+  if (!Number.isInteger(v?.maxHits) || !Array.isArray(v.terms) || !v.terms.every((t) => typeof t === 'string' && t.trim() !== '')) return null;
+  const terms = (v.terms as string[]).map((t) => new RegExp(termPattern(t), 'giu'));
+  const bars = ((body.sections ?? []) as { bars?: { text?: unknown }[] }[]).flatMap((s, i) =>
+    (s.bars ?? []).map((b, j) => ({ path: `/sections/${i}/bars/${j}/text`, text: typeof b.text === 'string' ? b.text : '' })));
+  const hits = bars.map((b) => {
+    const found = terms.flatMap((re) => [...b.text.matchAll(re)].map((m) => ({ at: m.index, end: m.index + m[0].length, text: m[0] })))
+      .sort((x, y) => x.at - y.at || y.end - x.end);
+    const kept: typeof found = [];
+    for (const h of found) if (!kept.some((k) => h.at < k.end && k.at < h.end)) kept.push(h);
+    return { path: b.path, words: kept.map((h) => h.text) };
+  }).filter((b) => b.words.length > 0);
+  const total = hits.reduce((n, b) => n + b.words.length, 0);
+  const max = v.maxHits as number;
+  return {
+    rules: [{ ref: e.ref, kind: 'claim', method: 'code' }],
+    violations: total <= max ? [] : hits.map((b) => ({
+      key: violationKey(e.ref, b.path), ruleRef: e.ref, method: 'code' as const, path: b.path, quote: b.words[0]!,
+      expected: `at most ${max} blacklisted words or phrases in the song (${BLACKLIST_TOPIC})`,
+      found: `${total} in the song; here: ${b.words.map((w) => `"${w}"`).join(', ')}`,
+    })),
+  };
+};
+
+/**
+ * Code checks for the entries that have one: `suno.limit.<field>-chars` claims on a Suno prompt,
+ * measured from the text itself (never from the stored `limits`, which a later rule change leaves
+ * stale), and the `lyrics.word-blacklist` claim on lyrics.
  * @param schemaId - the artifact's schema id
  * @param entries - rules and claims in force for it
  * @param body - the artifact body
  * @returns the code-checked rules and the violations among them
  */
 export const codeChecks = (schemaId: string, entries: readonly ContextEntry[], body: Record<string, unknown>): CodeCheckResult => {
+  if (schemaId === LYRICS_SCHEMA_ID) {
+    const r = entries.flatMap((e) => (e.kind === 'claim' && e.topic === BLACKLIST_TOPIC ? [blacklistCheck(e, body)] : [])).filter((x) => x !== null);
+    return { rules: r.flatMap((x) => x.rules), violations: r.flatMap((x) => x.violations) };
+  }
   if (schemaId !== SUNO_PROMPT_SCHEMA_ID) return { rules: [], violations: [] };
   const measured = measureSunoText(body);
   const rules: CheckedRule[] = [];

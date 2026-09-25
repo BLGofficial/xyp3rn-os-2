@@ -3,6 +3,7 @@ import { detectBuildSequence, parseBuildSequence } from './build-sequence.ts';
 import { NORMALIZER_ID, normalizeBuildSequence } from './build-sequence-normalize.ts';
 import { detectMixRubric, MIX_RUBRIC_NORMALIZER_ID, normalizeMixRubric } from './mix-rubric.ts';
 import { detectModuleManifest, MODULE_MANIFEST_NORMALIZER_ID, normalizeModuleManifest } from './module-manifest.ts';
+import { detectRuleSet, normalizeRuleSet, RULE_SET_NORMALIZER_ID } from './rule-set.ts';
 import { detectVocalDna, normalizeVocalDna, VOCAL_DNA_NORMALIZER_ID } from './vocal-dna.ts';
 
 export type Normalizer = {
@@ -24,6 +25,7 @@ export const NORMALIZERS: readonly Normalizer[] = [
   { id: MODULE_MANIFEST_NORMALIZER_ID, detect: detectModuleManifest, normalize: normalizeModuleManifest },
   { id: VOCAL_DNA_NORMALIZER_ID, detect: detectVocalDna, normalize: normalizeVocalDna },
   { id: MIX_RUBRIC_NORMALIZER_ID, detect: detectMixRubric, normalize: normalizeMixRubric },
+  { id: RULE_SET_NORMALIZER_ID, detect: detectRuleSet, normalize: normalizeRuleSet },
 ];
 
 /**

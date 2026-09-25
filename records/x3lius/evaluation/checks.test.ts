@@ -31,6 +31,32 @@ describe('code checks', () => {
     expect(codeChecks(SUNO_PROMPT_SCHEMA_ID, [claim('suno.limit.style-chars', '10')], SUNO)).toEqual({ rules: [], violations: [] });
   });
 
+  describe('lyrics word blacklist (lyrics.word-blacklist)', () => {
+    const BL = claim('lyrics.word-blacklist', { maxHits: 2, terms: ['neon', 'alone', 'cold', 'lost', 'lost in [x]', 'city lights'] });
+    const ref = `canonical_prompts:${ID}#lyrics.word-blacklist`;
+    const lyrics = (...bars: string[][]) => ({ sections: bars.map((texts) => ({ bars: texts.map((text, n) => ({ n: n + 1, text })) })) });
+
+    it('passes at maxHits: whole words only, so "Neonate" and "colder" never count', () => {
+      const r = codeChecks(LYRICS_SCHEMA_ID, [BL, rule], lyrics(['Neonate cries, colder than', 'neon on the glass'], ['I ride alone']));
+      expect(r).toEqual({ rules: [{ ref, kind: 'claim', method: 'code' }], violations: [] });
+    });
+
+    it('fails over maxHits with one violation per bar, quoting the first hit verbatim; overlapping hits count once', () => {
+      const r = codeChecks(LYRICS_SCHEMA_ID, [BL], lyrics(['NEON on wet asphalt, alone again'], ['clean line', 'lost in darkness, cold']));
+      expect(r.violations).toEqual([
+        { key: `${ref}@/sections/0/bars/0/text`, ruleRef: ref, method: 'code', path: '/sections/0/bars/0/text', quote: 'NEON',
+          expected: 'at most 2 blacklisted words or phrases in the song (lyrics.word-blacklist)', found: '4 in the song; here: "NEON", "alone"' },
+        { key: `${ref}@/sections/1/bars/1/text`, ruleRef: ref, method: 'code', path: '/sections/1/bars/1/text', quote: 'lost in darkness',
+          expected: 'at most 2 blacklisted words or phrases in the song (lyrics.word-blacklist)', found: '4 in the song; here: "lost in darkness", "cold"' },
+      ]);
+    });
+
+    it('is not a code check on another schema, or with a malformed value', () => {
+      expect(codeChecks(SUNO_PROMPT_SCHEMA_ID, [BL], SUNO)).toEqual({ rules: [], violations: [] });
+      expect(codeChecks(LYRICS_SCHEMA_ID, [claim('lyrics.word-blacklist', { terms: ['neon'] })], lyrics(['neon']))).toEqual({ rules: [], violations: [] });
+    });
+  });
+
   it('turns a mix report’s checks into rules, and each raise/lower into a violation', () => {
     const ref = `canonical_prompts:${ID}#x3lius.master.loudness.integrated-lufs`;
     const body = {
