@@ -8,3 +8,8 @@ coverage/
 .local-db/
 # Embedding model weights (Phase 3) — downloaded on first use
 .local-models/
+# Next.js build output (apps/web, AOS-01+)
+.next/
+*.tsbuildinfo
+# Creative Vault bytes (AOS-01, D4): content-addressed, local; exported with pnpm vault export
+.vault/

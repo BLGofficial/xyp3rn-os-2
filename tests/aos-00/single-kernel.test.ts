@@ -8,7 +8,7 @@ import { REPO_ROOT } from '../helpers/db.ts';
 // is one migrations directory, and agent files live only in agents/. A later phase that adds a
 // second registry, engine, runner, gate or bootstrap fails here and must extend the owner instead.
 
-const SKIP = new Set(['node_modules', '.git', '.local-db', '.local-models', 'docs']);
+const SKIP = new Set(['node_modules', '.git', '.local-db', '.local-models', '.next', '.vault', 'docs']);
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap((f) => {
     if (SKIP.has(f)) return [];

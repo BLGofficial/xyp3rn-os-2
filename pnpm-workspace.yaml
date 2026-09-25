@@ -1,0 +1,3 @@
+# The OS itself is the root package; apps/* are its user interfaces (Artist OS AOS-01+).
+packages:
+  - 'apps/*'

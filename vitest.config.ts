@@ -7,6 +7,6 @@ export default defineConfig({
     // file in parallel the 5s default is a harness limit, not a signal.
     testTimeout: 60_000,
     hookTimeout: 120_000,
-    exclude: ['node_modules/**'],
+    exclude: ['**/node_modules/**', '**/.next/**'],
   },
 });

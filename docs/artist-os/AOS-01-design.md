@@ -232,7 +232,10 @@ No step turns a Vault file into canonical knowledge. That remains the gate's fir
   - **`/songs`:** the catalog;
   - **`/songs/[id]`:** revisions, linked lyrics with the approved version marked, files, takes, tracks and research; plus create, revise, link and unlink.
 - **Design direction:** the operator's modern brutalism: mono type, hard rules, high contrast, the RECORDS red accent from `taxonomy.ts`. Every figure shows its source and time.
-- **Spike first:** Next.js must import the OS modules (`.ts` imports, Node type stripping) server-side. If that doesn't build cleanly, the fallback is a small local OS API on the TRACE service's `node:http` pattern, with the web app as its client. The spike's result is recorded before any screen is built.
+- **Spike: done (2026-09-25).** Server code imports OS modules at run time, outside the webpack bundle: `apps/web/lib/os.ts` calls `import(/* webpackIgnore: true */ file://…)`. Node 22 then runs them natively (`.ts` type stripping, `import.meta.dirname`, the repo's `node_modules`), so the app never re-implements or bundles an OS module.
+  - **Proven:** under `next build` + `next start`, a server component read `agent_runs` and dispatched `health-check`, which succeeded and wrote its run.
+  - **The fallback OS API is not needed.**
+  - **One snag:** Next 14's build type check needs TypeScript 5's JS API, but the repo pins TypeScript 7 (the native port). The web package pins `typescript@5.9` for itself, and the root keeps TS 7 for `pnpm typecheck`.
 
 ## 10. Tests (written first)
 
