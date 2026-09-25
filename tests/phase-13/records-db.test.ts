@@ -127,10 +127,10 @@ describe('rights_splits: every committed split set sums to exactly 100 (deferred
     const t = await track(await release(), 1);
     await splits(t, 1, [['X3LIUS', 60], ['[FIXTURE] Producer', 40]]);
     const rows = await db.sql<{ payee: string; percentage: string; version: number }[]>`
-      select payee, percentage::text, version from current_rights_splits where track_id = ${t} order by payee`;
+      select payee, percentage::text, version from current_rights_splits where track_id = ${t} order by percentage desc`;
     expect(rows).toEqual([
-      { payee: '[FIXTURE] Producer', percentage: '40.000', version: 1 },
       { payee: 'X3LIUS', percentage: '60.000', version: 1 },
+      { payee: '[FIXTURE] Producer', percentage: '40.000', version: 1 },
     ]);
   });
 
@@ -367,5 +367,88 @@ describe('grants: least privilege per role', () => {
         await expect(as(role, (tx) => tx.unsafe(`select 1 from ${rel}`))).rejects.toMatchObject(code('42501'));
       }
     }
+  });
+});
+
+describe('concurrency: a split write and a schedule never both commit past each other\'s check', { timeout: 15_000 }, () => {
+  /** Resolves once some backend in this database waits on a lock (deterministic, no sleep). */
+  const someoneWaits = async (): Promise<void> => {
+    for (let i = 0; i < 80; i++) {
+      const [row] = await db.sql<{ n: number }[]>`
+        select count(*)::int as n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`;
+      if (row!.n > 0) return;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    throw new Error('no backend ever waited on a lock');
+  };
+
+  it('schedule first: the concurrent unassigned-share write waits, then is refused (55000)', async () => {
+    const { releaseId: r, trackId: t } = await readyRelease();
+    const run = await rightsRun(r);
+    let commit!: () => void;
+    const held = new Promise<void>((res) => (commit = res));
+    const scheduling = as('xyp_release_calendar', async (tx) => {
+      await tx`update releases set status = 'scheduled', release_date = ${inDays(30)}::date, rights_check_run_id = ${run} where id = ${r}`;
+      await held;
+    });
+    const writing = splits(t, 2, [['X3LIUS', 80], [null, 20]]);
+    try {
+      await someoneWaits();
+    } finally {
+      commit();
+    }
+    await scheduling;
+    await expect(writing).rejects.toMatchObject(code('55000'));
+    expect(await db.sql`select 1 from rights_splits where track_id = ${t} and version = 2`).toHaveLength(0);
+  });
+
+  it('split first: the concurrent schedule waits, then sees the unassigned share and is refused (55000)', async () => {
+    const { releaseId: r, trackId: t } = await readyRelease();
+    const run = await rightsRun(r);
+    const runId = await runRow('records-catalog', 'Execution');
+    let commit!: () => void;
+    const held = new Promise<void>((res) => (commit = res));
+    let locked!: () => void;
+    const hasLocks = new Promise<void>((res) => (locked = res));
+    const writing = as('xyp_catalog', async (tx) => {
+      await tx`insert into rights_splits (track_id, version, payee, percentage, agent_run_id) values (${t}, 2, 'X3LIUS', 80, ${runId})`;
+      await tx`insert into rights_splits (track_id, version, payee, percentage, agent_run_id) values (${t}, 2, null, 20, ${runId})`;
+      locked();
+      await held;
+    });
+    await hasLocks;
+    const scheduling = setStatus(r, 'scheduled', inDays(30), run);
+    try {
+      await someoneWaits();
+    } finally {
+      commit();
+    }
+    await writing;
+    await expect(scheduling).rejects.toMatchObject({ code: '55000', message: expect.stringMatching(/unassigned/) });
+    expect(await statusOf(r)).toBe('draft');
+  });
+
+  it('two writers of the same new version: the second waits, then its set sums past 100 (23514)', async () => {
+    const t = await track(await release(), 1);
+    const runId = await runRow('records-catalog', 'Execution');
+    let commit!: () => void;
+    const held = new Promise<void>((res) => (commit = res));
+    let locked!: () => void;
+    const hasLocks = new Promise<void>((res) => (locked = res));
+    const first = as('xyp_catalog', async (tx) => {
+      await tx`insert into rights_splits (track_id, version, payee, percentage, agent_run_id) values (${t}, 1, 'X3LIUS', 100, ${runId})`;
+      locked();
+      await held;
+    });
+    await hasLocks;
+    const second = splits(t, 1, [['[FIXTURE] Other', 100]]);
+    try {
+      await someoneWaits();
+    } finally {
+      commit();
+    }
+    await first;
+    await expect(second).rejects.toMatchObject(code('23514'));
+    expect(await db.sql`select payee from current_rights_splits where track_id = ${t}`).toEqual([{ payee: 'X3LIUS' }]);
   });
 });
