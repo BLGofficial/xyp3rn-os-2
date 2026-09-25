@@ -170,6 +170,31 @@ describe('Vault files: sources, extended (no parallel item table)', () => {
     await expect(db.sql`update source_texts set text = 'x' where source_id = ${f}`).rejects.toMatchObject(code('55000'));
     await expect(db.sql`delete from source_tags where source_id = ${f}`).rejects.toMatchObject(code('55000'));
   });
+
+  // The checksum is unique, so adding bytes that `pnpm ingest` already registered can't insert a
+  // second row: xyp_vault marks the existing knowledge source as a Vault file instead, once.
+  it('a knowledge source is promoted to a Vault file once; a Vault file never changes after (55000); xyp_vault touches no other column (42501)', async () => {
+    const sha = createHash('sha256').update(randomUUID()).digest('hex');
+    const [k] = await db.sql<{ id: string }[]>`
+      insert into sources (kind, uri, title, checksum_sha256, mime_type, byte_size)
+      values ('file', ${`/docs/${sha}.pdf`}, '[FIXTURE] build guide', ${sha}, 'application/pdf', 42) returning id`;
+    const runId = await insertRun(db.sql, 'vault-curator', 'Execution');
+    const promote = (id: string, mediaClass: string | null) => as('xyp_vault', (tx) => tx`
+      update sources set storage = 'local-vault', media_class = ${mediaClass}, language = 'en', agent_run_id = ${runId} where id = ${id}`);
+    await expect(promote(k!.id, null)).rejects.toMatchObject(code('23514'));
+    await promote(k!.id, 'document');
+    expect((await db.sql`select storage, media_class, language, title from sources where id = ${k!.id}`)[0]).toEqual({
+      storage: 'local-vault', media_class: 'document', language: 'en', title: '[FIXTURE] build guide',
+    });
+    await expect(promote(k!.id, 'lyric_sheet')).rejects.toMatchObject(code('55000'));
+    await expect(db.sql`update sources set title = 'renamed' where id = ${k!.id}`).rejects.toMatchObject(code('55000'));
+    await expect(db.sql`update sources set storage = null, media_class = null where id = ${k!.id}`).rejects.toMatchObject(code('55000'));
+    const other = (await db.sql<{ id: string }[]>`
+      insert into sources (kind, uri, title, checksum_sha256) values ('file', '/docs/other.md', '[FIXTURE] other', ${createHash('sha256').update(randomUUID()).digest('hex')})
+      returning id`)[0]!.id;
+    await expect(as('xyp_vault', (tx) => tx`update sources set title = 'x' where id = ${other}`)).rejects.toMatchObject(code('42501'));
+    await expect(db.sql`update sources set title = 'a knowledge source still updates' where id = ${other}`).resolves.toBeDefined();
+  });
 });
 
 describe('approvals of creative versions: a human decision, recorded once; the approved pointer never moves by itself', () => {
