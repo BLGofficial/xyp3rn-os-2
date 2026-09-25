@@ -111,14 +111,16 @@ describe('the vault corpus: the owner\'s material next to canonical knowledge', 
     return b;
   };
 
-  it('finds a lyric line: the lyrics lineage, its version and its song', async () => {
+  it('finds a lyric line twice over: the lyrics lineage (its version, its song) and the sheet it came from', async () => {
     const b = await search('neon on the glass, sodium lamps, a midnight train');
-    expect(b.items[0]).toMatchObject({
-      kind: 'artifact', id: lyrics.artifactId,
-      lineage: { id: lyrics.lineageId, version: 1, schemaId: 'x3lius.lyrics/v2' },
+    const top2 = b.items.slice(0, 2);
+    const art = top2.find((i) => i.kind === 'artifact');
+    expect(art).toMatchObject({
+      id: lyrics.artifactId, lineage: { id: lyrics.lineageId, version: 1, schemaId: 'x3lius.lyrics/v2' },
       songs: [{ id: songId, title: '[FIXTURE] Night City' }],
     });
-    expect(b.items[0]!.snippet).toContain('Neon bleeding on the glass');
+    expect(art!.snippet).toContain('Neon bleeding on the glass');
+    expect(top2.find((i) => i.kind === 'file')).toMatchObject({ title: 'night-city.txt', mediaClass: 'lyric_sheet', songs: [{ id: songId }] });
   });
 
   it('finds a file by its text, and a file with no text by its name and tags', async () => {

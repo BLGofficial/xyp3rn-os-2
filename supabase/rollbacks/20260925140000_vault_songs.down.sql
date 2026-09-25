@@ -3,6 +3,7 @@
 -- here and the grants revoked below. The enum value artifact_version stays in approval_item_type
 -- (Postgres cannot drop an enum value); its decided rows stay too: a human decision is history.
 
+drop view if exists public.knowledge_sources;
 drop view if exists public.artifact_approvals;
 drop view if exists public.current_song_links;
 drop view if exists public.current_songs;
@@ -68,6 +69,15 @@ begin
   if to_regclass('public.creative_artifacts') is not null then
     drop policy if exists embedder_select on public.creative_artifacts;
     revoke select on table public.creative_artifacts from xyp_embedder;
+  end if;
+  if to_regclass('public.tags') is not null then
+    drop policy if exists embedder_select on public.tags;
+    revoke select on table public.tags from xyp_embedder;
+  end if;
+  if to_regclass('public.ingestion_runs') is not null then
+    drop policy if exists embedder_select on public.ingestion_runs;
+    drop policy if exists runtime_select on public.ingestion_runs;
+    revoke select on table public.ingestion_runs from xyp_embedder, xyp_runtime;
   end if;
 end $$;
 

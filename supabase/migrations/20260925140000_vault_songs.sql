@@ -223,6 +223,15 @@ $$;
 create or replace trigger trg_sources_vault_guard before update on public.sources
   for each row execute function public.xyp_sources_vault_guard();
 
+-- The knowledge corpus's sources (A3): everything `pnpm ingest` registered or normalized, and every
+-- source that is not a Vault file. A Vault-only file (added by vault-curator, never ingested) is the
+-- owner's material, not knowledge: the knowledge index (embedPending) and the Context Engine's
+-- cache generation read this view, so Vault rows leave every agent's grounding unchanged.
+create or replace view public.knowledge_sources with (security_invoker = true) as
+  select s.* from public.sources s
+  where s.storage is null
+     or exists (select from public.ingestion_runs r where r.source_id = s.id and r.status = 'success');
+
 create table if not exists public.source_texts (
   source_id    uuid primary key references public.sources (id) on delete restrict,
   text         text not null,
@@ -394,12 +403,14 @@ begin
   end loop;
 end $$;
 revoke all on table public.songs, public.song_revisions, public.song_links, public.song_link_retractions, public.source_texts,
-  public.source_tags, public.vault_embeddings, public.current_songs, public.current_song_links, public.artifact_approvals
+  public.source_tags, public.vault_embeddings, public.current_songs, public.current_song_links, public.artifact_approvals,
+  public.knowledge_sources
   from anon, authenticated, service_role;
 
 -- service_role reads everything new (G20: reads only).
 grant select on table public.songs, public.song_revisions, public.song_links, public.song_link_retractions, public.source_texts,
-  public.source_tags, public.vault_embeddings, public.current_songs, public.current_song_links, public.artifact_approvals to service_role;
+  public.source_tags, public.vault_embeddings, public.current_songs, public.current_song_links, public.artifact_approvals,
+  public.knowledge_sources to service_role;
 
 -- xyp_vault: the owner's writes, through vault-curator / records-songs (A2).
 grant select, insert on table public.songs, public.song_revisions, public.song_links, public.song_link_retractions,
@@ -421,9 +432,13 @@ grant select on table public.songs, public.song_revisions, public.song_links, pu
 grant select on table public.vault_embeddings, public.source_texts, public.source_tags, public.research_findings, public.songs,
   public.song_revisions, public.song_links, public.song_link_retractions, public.current_songs, public.current_song_links to xyp_runtime;
 
--- xyp_embedder: fills the vault index from the entities' text.
+-- xyp_embedder: fills the vault index from the entities' text (a file's tags included), and reads
+-- the knowledge corpus through knowledge_sources (which reads ingestion_runs).
 grant select, insert, update on table public.vault_embeddings to xyp_embedder;
-grant select on table public.creative_artifacts, public.source_texts, public.research_findings to xyp_embedder;
+grant select on table public.creative_artifacts, public.source_texts, public.research_findings, public.source_tags, public.tags,
+  public.ingestion_runs, public.knowledge_sources to xyp_embedder;
+-- xyp_runtime: the Context Engine's generation reads knowledge_sources too.
+grant select on table public.ingestion_runs, public.knowledge_sources to xyp_runtime;
 
 do $$
 declare
@@ -457,13 +472,14 @@ begin
   end loop;
   for v in select * from (values
     ('vault_embeddings'), ('source_texts'), ('source_tags'), ('research_findings'), ('songs'), ('song_revisions'), ('song_links'),
-    ('song_link_retractions')
+    ('song_link_retractions'), ('ingestion_runs')
   ) as p(tbl) loop
     if not exists (select from pg_policies where schemaname = 'public' and tablename = v.tbl and policyname = 'runtime_select') then
       execute format('create policy runtime_select on public.%I for select to xyp_runtime using (true)', v.tbl);
     end if;
   end loop;
-  for v in select * from (values ('vault_embeddings'), ('creative_artifacts'), ('source_texts'), ('research_findings')) as p(tbl) loop
+  for v in select * from (values ('vault_embeddings'), ('creative_artifacts'), ('source_texts'), ('research_findings'), ('source_tags'),
+    ('tags'), ('ingestion_runs')) as p(tbl) loop
     if not exists (select from pg_policies where schemaname = 'public' and tablename = v.tbl and policyname = 'embedder_select') then
       execute format('create policy embedder_select on public.%I for select to xyp_embedder using (true)', v.tbl);
     end if;

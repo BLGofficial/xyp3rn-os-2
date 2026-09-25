@@ -5,6 +5,9 @@ import { quoteIdent, type Sql } from '../db/client.ts';
 import { toVectorLiteral, type Embedder } from '../../knowledge/vector-retrieval/embedder.ts';
 import { createLruCache } from './lru-cache.ts';
 import { rankContext, type ContextTable, type Edge, type EntityRef, type RankLimits, type Reason } from './rank.ts';
+import { DEFAULT_VAULT_LIMIT, searchVault, type VaultBundle } from './vault-corpus.ts';
+
+export type { VaultBundle, VaultItem, VaultItemKind } from './vault-corpus.ts';
 
 /** The runtime's read-only DB role (Phase 3 migration). Retrieval can't write anything. */
 export const CONTEXT_ROLE = 'xyp_runtime';
@@ -72,8 +75,17 @@ export type ClaimItem = {
 
 export type ClaimBundle = { readonly topicPrefix: string; readonly items: readonly ClaimItem[] };
 
+/** The knowledge corpus (the default): what every agent grounds on. `corpus` may be omitted. */
+export type KnowledgeRetrieveOptions = { readonly corpus?: 'knowledge'; readonly limits?: RankLimits; readonly scope?: ContextScope };
+/** The vault corpus (AOS-01, A3): the owner's search, knowledge and Vault together. */
+export type VaultRetrieveOptions = { readonly corpus: 'vault'; readonly limit?: number };
+
 export type ContextEngine = {
-  readonly retrieve: (query: string, options?: { readonly limits?: RankLimits; readonly scope?: ContextScope }) => Promise<ContextBundle>;
+  /** One engine, two corpora: `knowledge` (default, unchanged since Phase 3) or `vault`. */
+  readonly retrieve: {
+    (query: string, options?: KnowledgeRetrieveOptions): Promise<ContextBundle>;
+    (query: string, options: VaultRetrieveOptions): Promise<VaultBundle>;
+  };
   /** Exact lookup of current claims by topic prefix (Phase 8); no vectors involved. */
   readonly claims: (topicPrefix: string) => Promise<ClaimBundle>;
 };
@@ -91,15 +103,16 @@ const asRuntime = <T>(sql: Sql, fn: (tx: postgres.TransactionSql) => Promise<T>)
   }) as Promise<T>;
 
 /**
- * Changes whenever canonical knowledge, sources or relations change (row count or newest
- * write), so a cached bundle can never outlive the knowledge it was built from.
+ * Changes whenever canonical knowledge, knowledge sources or relations change (row count or newest
+ * write), so a cached bundle can never outlive the knowledge it was built from. Vault-only files
+ * (AOS-01) are not knowledge: adding one leaves the generation, and every cached bundle, as is.
  */
 const generationOf = async (tx: postgres.TransactionSql): Promise<string> => {
   const [g] = await tx<{ g: string }[]>`
     select concat_ws('|',
       (select count(*) || '@' || coalesce(max(updated_at)::text, '-') from canonical_prompts),
       (select count(*) || '@' || coalesce(max(updated_at)::text, '-') from modules),
-      (select count(*) || '@' || coalesce(max(updated_at)::text, '-') from sources),
+      (select count(*) || '@' || coalesce(max(updated_at)::text, '-') from knowledge_sources),
       (select count(*) || '@' || coalesce(max(created_at)::text, '-') from relations)) as g`;
   return g!.g;
 };
@@ -113,12 +126,12 @@ const describe = (r: Reason, slugOf: (ref: EntityRef) => string): string =>
  * Creates the Context Engine: query → ranked, fully traceable context bundle.
  * @param sql - pool allowed to SET ROLE xyp_runtime
  * @param embedder - the same model the stored vectors were made with
- * @returns retrieve(query, { limits, scope })
+ * @returns retrieve(query, { limits, scope }) over knowledge; retrieve(query, { corpus: 'vault', limit }) over both
  */
 export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine => {
   const cache = createLruCache<Omit<ContextBundle, 'cache'>>({ maxEntries: CACHE_MAX_ENTRIES, ttlMs: CACHE_TTL_MS });
 
-  const retrieve: ContextEngine['retrieve'] = async (query, options = {}) => {
+  const retrieveKnowledge = async (query: string, options: KnowledgeRetrieveOptions = {}): Promise<ContextBundle> => {
     const limits = options.limits ?? DEFAULT_LIMITS;
     const scope = options.scope ? { modules: [...new Set(options.scope.modules)].sort() } : null;
     if (scope && (scope.modules.length === 0 || scope.modules.some((m) => !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(m)))) {
@@ -237,6 +250,11 @@ export const createContextEngine = (sql: Sql, embedder: Embedder): ContextEngine
     cache.set(key, bundle);
     return { ...bundle, cache: 'miss' };
   };
+
+  const retrieve = ((query: string, options?: KnowledgeRetrieveOptions | VaultRetrieveOptions) =>
+    options?.corpus === 'vault'
+      ? asRuntime(sql, (tx) => searchVault(tx, embedder, query, options.limit ?? DEFAULT_VAULT_LIMIT))
+      : retrieveKnowledge(query, options)) as ContextEngine['retrieve'];
 
   return { retrieve, claims: (topicPrefix) => readClaims(sql, topicPrefix) };
 };
