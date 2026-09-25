@@ -187,6 +187,11 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- Checked here too, before the duplicate check: BEFORE triggers run ahead of CHECK constraints, and
+  -- a wrong URL is the more useful refusal. The CHECK constraint stays as the table's own rule.
+  if not public.xyp_platform_url_ok(new.platform, new.url) then
+    raise exception 'platform_links: % is not an https URL on the % host', new.url, new.platform using errcode = 'check_violation';
+  end if;
   perform pg_advisory_xact_lock(hashtext('xyp:platform_links:' || coalesce(new.release_id, new.track_id)::text));
   if exists (
     select from public.platform_links l

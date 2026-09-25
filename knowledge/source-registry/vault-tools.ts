@@ -183,6 +183,8 @@ export type VaultFile = {
   readonly text: string | null;
   readonly extractor: string | null;
   readonly tags: readonly string[];
+  /** Songs with a live link to this file (AOS-02: a Vault recording's track takes its song's title). */
+  readonly songs: readonly { readonly id: string; readonly title: string }[];
 };
 
 /**
@@ -202,9 +204,12 @@ export const createReadVaultFileTool = (deps: { readonly sql: Sql }): Tool =>
       const [row] = await asRole(deps.sql, READ_ROLE, (tx) => tx<{
         id: string; title: string; media_class: MediaClass | null; language: string | null; checksum_sha256: string;
         mime_type: string | null; byte_size: string | null; text: string | null; extractor: string | null; tags: string[];
+        songs: { id: string; title: string }[];
       }[]>`
         select s.id, s.title, s.media_class, s.language, s.checksum_sha256, s.mime_type, s.byte_size::text, t.text, t.extractor,
-               array(select g.label from source_tags st join tags g on g.id = st.tag_id where st.source_id = s.id order by g.label) as tags
+               array(select g.label from source_tags st join tags g on g.id = st.tag_id where st.source_id = s.id order by g.label) as tags,
+               coalesce((select jsonb_agg(jsonb_build_object('id', cs.id, 'title', cs.title) order by cs.title, cs.id)
+                         from current_song_links l join current_songs cs on cs.id = l.song_id where l.source_id = s.id), '[]'::jsonb) as songs
         from sources s left join source_texts t on t.source_id = s.id
         where s.id = ${sourceId}`, 'read only');
       if (!row) throw new Error(`read_vault_file: no source ${sourceId}`);
@@ -212,6 +217,7 @@ export const createReadVaultFileTool = (deps: { readonly sql: Sql }): Tool =>
       return {
         id: row.id, title: row.title, mediaClass: row.media_class, language: row.language, sha256: row.checksum_sha256,
         mimeType: row.mime_type, byteSize: row.byte_size === null ? null : Number(row.byte_size), text: row.text, extractor: row.extractor, tags: row.tags,
+        songs: row.songs,
       } satisfies VaultFile;
     },
   });

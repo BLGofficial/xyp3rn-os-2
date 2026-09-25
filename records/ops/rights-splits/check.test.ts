@@ -4,7 +4,7 @@ import { checkRights } from './check.ts';
 
 const record = (tracks: ReadonlyArray<CatalogRecord['tracks'][number]['splits']>): CatalogRecord => ({
   release: { id: 'r1', title: 't', artist: 'a', kind: 'single', upc: null, status: 'draft', releaseDate: null, rightsCheckRunId: null },
-  tracks: tracks.map((splits, i) => ({ id: `t${i + 1}`, position: i + 1, title: `T${i + 1}`, isrc: null, takeId: `k${i + 1}`, mixReportArtifactId: null, splits })),
+  tracks: tracks.map((splits, i) => ({ id: `t${i + 1}`, position: i + 1, title: `T${i + 1}`, isrc: null, takeId: `k${i + 1}`, sourceId: null, mixReportArtifactId: null, splits })),
 });
 
 describe('checkRights', () => {

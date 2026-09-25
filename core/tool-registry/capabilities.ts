@@ -22,6 +22,7 @@ export const CAPABILITIES = [
   'trace.write',
   'vault.write',
   'vault.read',
+  'task.write',
   'external.execute',
   'governance.flag',
   'canonical.write',
@@ -57,6 +58,7 @@ export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass
   'catalog.read': ['Knowledge', 'Governance'],
   // Phase 13: register releases/tracks, write split sets, assign ISRC/UPC, move the calendar. Execution
   // only: the operation is fully specified by its input; each tool writes under its own DB role.
+  // AOS-02: also people and aliases, credits, platform links, artwork and delivery status.
   'catalog.write': ['Execution'],
   // Phase 14: record a TRACE analysis as received and link its mix report, once (tech-audio-tools).
   'trace.write': ['Execution'],
@@ -65,6 +67,9 @@ export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass
   'vault.write': ['Execution'],
   // AOS-01: a Vault file's metadata, tags and text. The lyric editor (Creative) reads a sheet to import it.
   'vault.read': ['Knowledge', 'Creative', 'Execution'],
+  // AOS-02 (B2): the owner's to-dos, through records-tasks (Execution) as xyp_tasks. Not catalog data,
+  // so not catalog.write: a task says what to do, the catalog records what is.
+  'task.write': ['Execution'],
   'external.execute': ['Execution'],
   'governance.flag': ['Governance'],
   // No agent class, ever: the Promotion Gate's service account, humans with an RBAC role, and

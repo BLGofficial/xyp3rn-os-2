@@ -19,22 +19,26 @@ type Deps = { readonly sql: Sql };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-const asRole = <T>(sql: Sql, role: string, fn: (tx: postgres.TransactionSql) => Promise<T>, mode = ''): Promise<T> =>
+/** Runs fn under a DB role in one transaction (mode e.g. 'read only'). */
+export const asRole = <T>(sql: Sql, role: string, fn: (tx: postgres.TransactionSql) => Promise<T>, mode = ''): Promise<T> =>
   sql.begin(mode, async (tx) => {
     await tx.unsafe(`set local role ${quoteIdent(role)}`);
     return fn(tx);
   }) as Promise<T>;
 const asReader = <T>(sql: Sql, fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> => asRole(sql, READ_ROLE, fn, 'read only');
 
-const obj = (tool: string, args: unknown): Record<string, unknown> => {
+/** @returns args as an object, or throws naming the tool. */
+export const obj = (tool: string, args: unknown): Record<string, unknown> => {
   if (args === null || typeof args !== 'object' || Array.isArray(args)) throw new Error(`${tool}: input must be an object`);
   return args as Record<string, unknown>;
 };
-const uuid = (tool: string, field: string, v: unknown): string => {
+/** @returns v as a uuid, or throws naming the tool and field. */
+export const uuid = (tool: string, field: string, v: unknown): string => {
   if (typeof v !== 'string' || !UUID.test(v)) throw new Error(`${tool}: ${field} must be a uuid`);
   return v;
 };
-const text = (tool: string, field: string, v: unknown): string => {
+/** @returns v as a string, or throws naming the tool and field. */
+export const text = (tool: string, field: string, v: unknown): string => {
   if (typeof v !== 'string') throw new Error(`${tool}: ${field} must be a string`);
   return v;
 };
@@ -101,7 +105,8 @@ export type CatalogRecord = {
   };
   readonly tracks: ReadonlyArray<{
     readonly id: string; readonly position: number; readonly title: string; readonly isrc: string | null;
-    readonly takeId: string; readonly mixReportArtifactId: string | null;
+    /** The recording (AOS-02, B4): exactly one of a Suno take or a Vault audio file. */
+    readonly takeId: string | null; readonly sourceId: string | null; readonly mixReportArtifactId: string | null;
     readonly splits: { readonly version: number; readonly rows: readonly SplitRow[] } | null;
   }>;
 };
@@ -123,8 +128,8 @@ export const createReadCatalogTool = (deps: Deps): Tool =>
         const [r] = await tx<{ id: string; title: string; artist: string; kind: string; upc: string | null; status: ReleaseStatus; release_date: string | null; rights_check_run_id: string | null }[]>`
           select id, title, artist, kind, upc, status::text as status, release_date::text, rights_check_run_id from releases where id = ${releaseId}`;
         if (!r) throw new Error(`read_catalog: no release ${releaseId}`);
-        const tracks = await tx<{ id: string; position: number; title: string; isrc: string | null; take_id: string; mix_report_artifact_id: string | null }[]>`
-          select id, position, title, isrc, take_id, mix_report_artifact_id from tracks where release_id = ${releaseId} order by position`;
+        const tracks = await tx<{ id: string; position: number; title: string; isrc: string | null; take_id: string | null; source_id: string | null; mix_report_artifact_id: string | null }[]>`
+          select id, position, title, isrc, take_id, source_id, mix_report_artifact_id from tracks where release_id = ${releaseId} order by position`;
         const splits = await tx<{ track_id: string; version: number; payee: string | null; percentage: string }[]>`
           select c.track_id, c.version, c.payee, c.percentage::text from current_rights_splits c
           join tracks t on t.id = c.track_id where t.release_id = ${releaseId} order by c.percentage desc, c.payee nulls last`;
@@ -133,7 +138,7 @@ export const createReadCatalogTool = (deps: Deps): Tool =>
           tracks: tracks.map((t) => {
             const own = splits.filter((s) => s.track_id === t.id);
             return {
-              id: t.id, position: t.position, title: t.title, isrc: t.isrc, takeId: t.take_id, mixReportArtifactId: t.mix_report_artifact_id,
+              id: t.id, position: t.position, title: t.title, isrc: t.isrc, takeId: t.take_id, sourceId: t.source_id, mixReportArtifactId: t.mix_report_artifact_id,
               splits: own.length === 0 ? null : { version: own[0]!.version, rows: own.map((s) => ({ payee: s.payee, percentage: Number(s.percentage) })) },
             };
           }),
@@ -147,7 +152,11 @@ export const createReadCatalogTool = (deps: Deps): Tool =>
 /** A fully specified registration: the catalog lookup's output, the catalog writer's input. */
 export type Registration = {
   readonly release: { readonly id: string } | { readonly title: string; readonly artist: string; readonly kind: string };
-  readonly track: { readonly position: number; readonly title: string; readonly takeId: string; readonly mixReportArtifactId: string | null };
+  /** The recording is exactly one of a Suno take (takeId) or a Vault audio file (sourceId; AOS-02, B4). */
+  readonly track: {
+    readonly position: number; readonly title: string; readonly takeId: string | null; readonly sourceId: string | null;
+    readonly mixReportArtifactId: string | null;
+  };
 };
 
 /**
@@ -163,12 +172,15 @@ export const parseRegistration = (v: unknown): Registration => {
     ? { id: uuid('registration', 'release.id', release.id) }
     : { title: text('registration', 'release.title', release.title), artist: text('registration', 'release.artist', release.artist), kind: text('registration', 'release.kind', release.kind) };
   if (!Number.isInteger(track.position)) throw new Error('registration: track.position must be an integer');
+  const given = (k: 'takeId' | 'sourceId') => track[k] !== undefined && track[k] !== null;
+  if (given('takeId') === given('sourceId')) throw new Error('registration: the track needs exactly one of takeId, sourceId');
   return {
     release: r,
     track: {
       position: track.position as number,
       title: text('registration', 'track.title', track.title),
-      takeId: uuid('registration', 'track.takeId', track.takeId),
+      takeId: given('takeId') ? uuid('registration', 'track.takeId', track.takeId) : null,
+      sourceId: given('sourceId') ? uuid('registration', 'track.sourceId', track.sourceId) : null,
       mixReportArtifactId: track.mixReportArtifactId === undefined || track.mixReportArtifactId === null ? null : uuid('registration', 'track.mixReportArtifactId', track.mixReportArtifactId),
     },
   };
@@ -185,7 +197,7 @@ export const createRegisterTrackTool = (deps: Deps): Tool =>
   defineTool({
     name: 'register_track',
     capability: 'catalog.write',
-    description: 'Register a finished take as a track, on an existing draft release or a new one.',
+    description: 'Register a finished recording (a Suno take or a Vault audio file) as a track, on an existing draft release or a new one.',
     handler: async (ctx, args) => {
       const reg = parseRegistration(args);
       return asRole(deps.sql, CATALOG_ROLE, async (tx) => {
@@ -200,10 +212,11 @@ export const createRegisterTrackTool = (deps: Deps): Tool =>
           releaseId = r!.id;
         }
         const [t] = await tx<{ id: string }[]>`
-          insert into tracks (release_id, position, title, take_id, mix_report_artifact_id, agent_run_id)
-          values (${releaseId}, ${reg.track.position}, ${reg.track.title}, ${reg.track.takeId}, ${reg.track.mixReportArtifactId}, ${ctx.runId})
+          insert into tracks (release_id, position, title, take_id, source_id, mix_report_artifact_id, agent_run_id)
+          values (${releaseId}, ${reg.track.position}, ${reg.track.title}, ${reg.track.takeId}, ${reg.track.sourceId}, ${reg.track.mixReportArtifactId}, ${ctx.runId})
           returning id`;
-        ctx.log('info', `register_track: track ${t!.id} at position ${reg.track.position} on ${createdRelease ? 'new' : 'existing'} release ${releaseId} (take ${reg.track.takeId})`);
+        const recording = reg.track.takeId ? `take ${reg.track.takeId}` : `Vault file ${reg.track.sourceId}`;
+        ctx.log('info', `register_track: track ${t!.id} at position ${reg.track.position} on ${createdRelease ? 'new' : 'existing'} release ${releaseId} (${recording})`);
         return { releaseId, trackId: t!.id, createdRelease };
       });
     },

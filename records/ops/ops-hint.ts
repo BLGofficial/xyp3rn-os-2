@@ -11,7 +11,7 @@ const OPS_TERMS: ReadonlyArray<readonly [string, number]> = [
 ];
 
 export const RECORDS_OPS_COMMANDS = [
-  "register a take: pnpm workflow records/workflows/register-track.workflow.yaml '{\"takeId\":\"<uuid>\",\"release\":{\"title\":\"…\",\"artist\":\"…\",\"kind\":\"single\"},\"position\":1,\"title\":null,\"mixReportArtifactId\":null}'",
+  "register a take or a Vault audio file: pnpm workflow records/workflows/register-track.workflow.yaml '{\"takeId\":\"<uuid>\",\"sourceId\":null,\"release\":{\"title\":\"…\",\"artist\":\"…\",\"kind\":\"single\"},\"position\":1,\"title\":null,\"mixReportArtifactId\":null}'",
   "splits: pnpm dispatch records-catalog '{\"splits\":{\"trackId\":\"<uuid>\",\"splits\":[{\"payee\":\"…\",\"percentage\":100}]}}'",
   "codes: pnpm dispatch records-catalog '{\"assign\":{\"trackId\":\"<uuid>\",\"isrc\":\"…\"}}'",
   "rights check + schedule: pnpm workflow records/workflows/schedule-release.workflow.yaml '{\"releaseId\":\"<uuid>\",\"releaseDate\":\"YYYY-MM-DD\"}'",

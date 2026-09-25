@@ -11,6 +11,8 @@ import { loadEmbedder } from '../../knowledge/vector-retrieval/embedder.ts';
 import { createLocalVaultStore, defaultVaultDir, type VaultStore } from '../../knowledge/source-registry/vault-store.ts';
 import { createReadVaultFileTool, createRegisterVaultFileTool } from '../../knowledge/source-registry/vault-tools.ts';
 import { createSongTools } from '../../records/vault/tools.ts';
+import { createCatalogMetadataTools } from '../../records/ops/metadata-tools.ts';
+import { createTaskTools } from '../../records/ops/tasks/tools.ts';
 import { ARTIFACT_SCHEMAS } from '../../records/x3lius/creative/schemas.ts';
 import { createReadCritiqueTool, createWriteCritiqueTool } from '../../records/x3lius/evaluation/tools.ts';
 import { createRecordsOpsTools } from '../../records/ops/tools.ts';
@@ -29,7 +31,9 @@ import { createWriteEvidenceTool } from '../../research-intelligence/tools/write
  *   Records ops tools (Phase 13): resolve_take, read_catalog, register_track, write_splits, assign_codes,
  *   schedule_release; TECH (Phase 14): record_trace_analysis, link_trace_report, read_frontier_evidence,
  *   write_rd_backlog; and the Creative Vault (AOS-01): register_vault_file, read_vault_file, write_song,
- *   link_song, unlink_song. `vault` is the byte store (default: the local store at defaultVaultDir(env)).
+ *   link_song, unlink_song; the Command Center (AOS-02): add_person, add_alias, write_credit, retract_credit,
+ *   write_platform_link, retract_platform_link, set_artwork, record_delivery, write_task, move_task.
+ *   `vault` is the byte store (default: the local store at defaultVaultDir(env)).
  */
 export const createRuntimeTools = (deps: {
   readonly sql: Sql;
@@ -60,5 +64,7 @@ export const createRuntimeTools = (deps: {
     createRegisterVaultFileTool({ sql: deps.sql, vault: deps.vault ?? createLocalVaultStore(defaultVaultDir(external.env)) }),
     createReadVaultFileTool(deps),
     ...createSongTools(deps),
+    ...createCatalogMetadataTools(deps),
+    ...createTaskTools(deps),
   ]);
 };
