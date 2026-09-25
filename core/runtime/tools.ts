@@ -8,6 +8,11 @@ import { createRetrieveClaimsTool } from '../tool-registry/tools/retrieve-claims
 import { createRetrieveContextTool } from '../tool-registry/tools/retrieve-context.ts';
 import { createWriteArtifactTool } from '../tool-registry/tools/write-artifact.ts';
 import { loadEmbedder } from '../../knowledge/vector-retrieval/embedder.ts';
+import { createLocalVaultStore, defaultVaultDir, type VaultStore } from '../../knowledge/source-registry/vault-store.ts';
+import { createReadVaultFileTool, createRegisterVaultFileTool } from '../../knowledge/source-registry/vault-tools.ts';
+import { createSongTools } from '../../records/vault/tools.ts';
+import { createCatalogMetadataTools } from '../../records/ops/metadata-tools.ts';
+import { createTaskTools } from '../../records/ops/tasks/tools.ts';
 import { ARTIFACT_SCHEMAS } from '../../records/x3lius/creative/schemas.ts';
 import { createReadCritiqueTool, createWriteCritiqueTool } from '../../records/x3lius/evaluation/tools.ts';
 import { createRecordsOpsTools } from '../../records/ops/tools.ts';
@@ -24,13 +29,17 @@ import { createWriteEvidenceTool } from '../../research-intelligence/tools/write
  * @returns registry with log_message, retrieve_context, retrieve_claims, fetch_source, write_evidence,
  *   write_artifact, read_artifact, write_critique, read_critique, submit_suno, capture_suno_takes, and the
  *   Records ops tools (Phase 13): resolve_take, read_catalog, register_track, write_splits, assign_codes,
- *   schedule_release; and TECH (Phase 14): record_trace_analysis, link_trace_report, read_frontier_evidence,
- *   write_rd_backlog
+ *   schedule_release; TECH (Phase 14): record_trace_analysis, link_trace_report, read_frontier_evidence,
+ *   write_rd_backlog; and the Creative Vault (AOS-01): register_vault_file, read_vault_file, write_song,
+ *   link_song, unlink_song; the Command Center (AOS-02): add_person, add_alias, write_credit, retract_credit,
+ *   write_platform_link, retract_platform_link, set_artwork, record_delivery, write_task, move_task.
+ *   `vault` is the byte store (default: the local store at defaultVaultDir(env)).
  */
 export const createRuntimeTools = (deps: {
   readonly sql: Sql;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly fetch?: typeof fetch;
+  readonly vault?: VaultStore;
 }): ToolRegistry => {
   const external = { sql: deps.sql, env: deps.env ?? process.env, ...(deps.fetch ? { fetch: deps.fetch } : {}) };
   let longTerm: Promise<LongTermMemory> | undefined;
@@ -52,5 +61,10 @@ export const createRuntimeTools = (deps: {
     createLinkTraceReportTool(deps),
     createReadFrontierEvidenceTool(deps),
     createWriteRdBacklogTool(deps),
+    createRegisterVaultFileTool({ sql: deps.sql, vault: deps.vault ?? createLocalVaultStore(defaultVaultDir(external.env)) }),
+    createReadVaultFileTool(deps),
+    ...createSongTools(deps),
+    ...createCatalogMetadataTools(deps),
+    ...createTaskTools(deps),
   ]);
 };

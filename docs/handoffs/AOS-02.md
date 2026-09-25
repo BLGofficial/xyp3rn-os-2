@@ -1,0 +1,47 @@
+HANDOFF — Artist OS AOS-02 (Command Center + catalog) complete; AOS-03 (Studio mode) next
+
+- **Built** (design `docs/artist-os/AOS-02-design.md`, decisions B1–B4 in ARCHITECTURE F38; proof `docs/proofs/AOS-02-command-center.txt`):
+  - **Data:** migration `20260925150000_command_center` (+ rollback) adds:
+    - `people` and `person_aliases` (one case-insensitive namespace);
+    - `credits` with retractions;
+    - `platform_links` with retractions (fixed list, host-checked by `xyp_platform_url_ok`);
+    - `release_artwork` (a Vault image; newest is current) and `release_deliveries` (events per distributor);
+    - `tasks` and `task_events`;
+    - `tracks.source_id` (a Vault audio file as the recording; exactly one of take or file);
+    - the view `catalog_checks` (4 blockers, 9 warnings);
+    - the role `xyp_tasks`.
+  - **Agents** (all `model: none`):
+    - `records-catalog` gains 8 operations: `person`, `alias`, `credit`, `uncredit`, `link`, `unlink`, `artwork`, `delivery`. Its Phase 13 `register` can now name a Vault file;
+    - `records-catalog-lookup` resolves a take or a Vault audio file, titled from the formula or the file's one song;
+    - `records-tasks` (Execution, RECORDS) is new: `create` and `move`.
+  - **Tools and capabilities:** 10 tools: `add_person`, `add_alias`, `write_credit`, `retract_credit`, `write_platform_link`, `retract_platform_link`, `set_artwork`, `record_delivery`, `write_task`, `move_task`. 1 capability: `task.write` (Execution); `catalog.write` is extended. `read_vault_file` now returns the file's songs.
+  - **Workflow:** `register-track` takes `sourceId` (a required key, null for a take).
+  - **Export:** the new tables join `xyp-vault-export/v1`; people and tasks are exported whole; the AOS-01 round trip stays byte-identical.
+  - **UI:**
+    - `/` is the Command Center: songs by status, releases with blocker counts, alerts, open tasks, recent research, connectors ("none; AOS-06"), and the time it was read;
+    - `/releases` and `/releases/[id]`: every field the checks ask for can be set there, and schedule and mark released;
+    - `/people`, `/tasks`;
+    - `/songs/[id]` gains credits, tasks, releases, the derived release stage, its checks, and "register on a new release".
+    - `pnpm web:smoke` drives the whole release journey in Chromium.
+- **Numbers:** 49 agents (+1), 36 tools (+10), 22 capabilities (+1), 54 tables (+10) and 15 views (+6), 1194 tests (up from 1127 at AOS-01).
+  - Gates on every push: typecheck, the full suite, `agents:validate`, a migration down/up/down/up on the dev DB, and `web:build`.
+- **The gate** (PLAN §5 Phase 2): one song from idea to release, every step an agent run or a workflow, its history and metadata intact. Shown three ways: `tests/aos-02/idea-to-release.test.ts`, the CLIs (proof §2), and the browser (proof §3).
+  - Honest note: the gate test was written after the features it drives, so it was never red. The DB, agent, export and web tests were red first.
+- **Found and fixed on the way:**
+  - A BEFORE trigger runs before a CHECK constraint, so a wrong-host link read as a duplicate. The guard now checks the URL first.
+  - Every `status-*` pill but one was purged from the CSS build (Tailwind can't see `status-${status}`). The rules now sit outside `@layer`.
+  - The form return-path guard let `/\t/host` through, which a browser reads as `//host`. It now refuses control characters and whitespace.
+  - A fixture UPC in a test was a real product's. Fixture UPCs are now generated in an unused range with a valid check digit.
+- **Open** (F39):
+  - Split payees are free text, not people (F32). Master vs publishing splits (F32).
+  - A released release can't be exported for a restore (F37, AOS-08).
+  - No distributor or platform connectors (AOS-06); deliveries and links are entered by hand.
+  - No edits in place (a name, a task's title); no task assignees (AOS-07/08).
+  - The UI keeps typed values after a successful write, so a second click re-submits; duplicates of people, credits and links are refused by the DB, a task is not.
+  - The song workspace registers Vault audio only; takes go through `/releases`.
+- **Next phase needs (AOS-03, Studio mode and Suno-ready workflows: G6 for styles and tags, G9):**
+  1. **Decisions from the operator:**
+     - Style recipes and meta-tag sets: versioned creative-artifact lineages with the AOS-01 approvals, or their own tables.
+     - Where tags live: F21 keeps `sectionLabels` in code; they either move to a versioned record or stay canonical in code with records on top.
+     - The Suno handoff: a manual export (a prompt package: lyrics, style, tags, the workflow version) and a manual import of the result (the audio file into the Vault, linked to the attempt), since there is no official Suno API.
+  2. **Building on AOS-02:** a generation attempt links to its song (`song_links`), and its audio arrives as a Vault file that `register-track` already accepts.

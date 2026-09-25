@@ -6,14 +6,17 @@ description: >-
   split into two single-class agents). Splits and codes are separate records-catalog operations.
   title and mixReportArtifactId are required keys whose null means "not given" (the title then
   comes from the formula artifact): the workflow engine has no optional inputs.
+  AOS-02 (B4): the recording is exactly one of takeId (a Suno take) or sourceId (a Vault audio file,
+  an FL Studio bounce); the other is null. A Vault recording's title defaults to its one linked song.
 input:
-  required: [takeId, release, position, title, mixReportArtifactId]
+  required: [takeId, sourceId, release, position, title, mixReportArtifactId]
 output: { $from: steps.catalog.output }
 steps:
   - id: lookup
     agent: records-catalog-lookup
     input:
       takeId: { $from: input.takeId }
+      sourceId: { $from: input.sourceId }
       release: { $from: input.release }
       position: { $from: input.position }
       title: { $from: input.title }

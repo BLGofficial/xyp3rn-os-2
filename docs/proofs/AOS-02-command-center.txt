@@ -1,0 +1,277 @@
+AOS-02 — Command Center + catalog: proof (2026-09-25)
+Produced with the repo's own commands against the local Postgres. Every DB test runs in its own throwaway database. Section 2
+runs the real CLIs (pnpm dispatch, pnpm workflow, pnpm vault) against a throwaway database (xyp_proof_aos02, dropped
+afterwards) with a temporary Vault store ($PROOF). Section 3 drives the real UI (next start) in Chromium against another.
+================================================================================
+
+## 0. Status of the gate (PLAN.md §5 Phase 2: "a song can move from idea to release with its creative history and metadata intact")
+# - One song, idea → writing → producing → releasing → released, every step an agent run or a Records workflow; no row
+#   inserted by hand (tests/aos-02/idea-to-release.test.ts, section 2 through the CLIs, section 3 through the browser).
+# - Metadata (B1–B4): people with aliases (one case-insensitive namespace) and credits by role on songs and tracks; tasks
+#   with events; platform links from a fixed list, host-checked; artwork from a Vault image (newest is current); delivery
+#   events per distributor; a track from a Suno take or a Vault audio file (ISRC compared per recording).
+# - The Command Center reads catalog_checks: blockers (no tracks, no artwork, no splits, an unassigned share) and warnings
+#   (no UPC/ISRC/credits, scheduled with no delivery, released with no link, lyrics not approved, song status behind/ahead).
+#   The checks clear as the data arrives; at the end none is left.
+# - History intact: every revision, link, lyric version and decision; both split versions; the retracted credit and link;
+#   the artwork and delivery events; the task's events; the recording traced to its Vault file, sha256 and run.
+# - UI: / (dashboard), /releases, /releases/[id], /people, /tasks, and the /songs/[id] additions. Reads as xyp_web
+#   (read only); writes through dispatch and the Records workflows.
+# - Written after the features, not first: the gate test (an integration gate over agents already built), so it was
+#   never red. The DB, agent, export and web loader/ops tests were red first.
+# - Known limit (F37): a released release can't be exported for a restore yet (AOS-08); the gate asserts the refusal.
+
+## 1. Tests (AOS-02 files, the web loaders/ops, the Phase 13 records pins, the capability matrix drift test)
+ ✓ tests/aos-02/command-db.test.ts > people: one namespace of names and aliases > a name or alias belongs to one person, case- and space-insensitively (23505)
+ ✓ tests/aos-02/command-db.test.ts > people: one namespace of names and aliases > refuses a blank name; people and aliases never change (55000)
+ ✓ tests/aos-02/command-db.test.ts > credits: a person, a role, exactly one song or track > credits a song and a track; one live credit per target, person and role; a retraction frees it
+ ✓ tests/aos-02/command-db.test.ts > credits: a person, a role, exactly one song or track > refuses no target, two targets, an unknown role (23514); credits never change (55000)
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > spotify https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > spotify http://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC → false
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > spotify https://www.youtube.com/watch?v=abc → false
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > spotify https://open.spotify.com.evil.io/track/x → false
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > apple_music https://music.apple.com/us/album/new-era/123 → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > youtube https://youtu.be/dQw4w9WgXcQ → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > youtube https://www.youtube.com/watch?v=dQw4w9WgXcQ → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > youtube_music https://music.youtube.com/watch?v=dQw4w9WgXcQ → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > youtube_music https://www.youtube.com/watch?v=dQw4w9WgXcQ → false
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > soundcloud https://soundcloud.com/x3lius/night-city → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > bandcamp https://x3lius.bandcamp.com/track/night-city → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > bandcamp https://bandcamp.com.evil.io/track/night-city → false
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > tidal https://tidal.com/browse/track/123 → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > deezer https://www.deezer.com/track/123 → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > amazon_music https://music.amazon.de/albums/B0XYZ → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > amazon_music https://music.amazon.co.uk/albums/B0XYZ → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > amazon_music https://www.amazon.com/music → false
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > tiktok https://www.tiktok.com/music/night-city-123 → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > instagram https://www.instagram.com/x3lius/ → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > other https://x3lius.example.org/night-city → true
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > other ftp://x3lius.example.org/night-city → false
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > myspace https://myspace.com/x3lius → false
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > spotify https:// → false
+ ✓ tests/aos-02/command-db.test.ts > platform links: the host must match the platform > exactly one of release or track; one live link per target and platform (23505); a retraction frees it; history kept
+ ✓ tests/aos-02/command-db.test.ts > artwork and delivery status > artwork is a Vault image; the newest one is current; history kept
+ ✓ tests/aos-02/command-db.test.ts > artwork and delivery status > delivery events per distributor (case-insensitive); only the listed statuses (23514)
+ ✓ tests/aos-02/command-db.test.ts > tracks: the recording is a Suno take or a Vault audio file (B4) > registers a Vault audio file; refuses none, both, or a file that is not audio (23514); one per release (23505)
+ ✓ tests/aos-02/command-db.test.ts > tracks: the recording is a Suno take or a Vault audio file (B4) > one ISRC names one recording, a take or a Vault file (23514 for a different recording)
+ ✓ tests/aos-02/command-db.test.ts > tasks: immutable, with a status history > open until an event says otherwise; done, reopened, cancelled; the latest event is the status
+ ✓ tests/aos-02/command-db.test.ts > tasks: immutable, with a status history > refuses both a song and a release, a blank title, an unknown status (23514); tasks never change (55000)
+ ✓ tests/aos-02/command-db.test.ts > catalog_checks: computed from the data, cleared by fixing it > a release: blockers and warnings appear, and each clears when the data is there
+ ✓ tests/aos-02/command-db.test.ts > catalog_checks: computed from the data, cleared by fixing it > scheduled without a delivery, released without a platform link
+ ✓ tests/aos-02/command-db.test.ts > catalog_checks: computed from the data, cleared by fixing it > a song: unapproved lyrics, no credits, status behind or ahead of its release
+ ✓ tests/aos-02/command-db.test.ts > grants: least privilege > xyp_web reads everything new and writes nothing (42501)
+ ✓ tests/aos-02/command-db.test.ts > grants: least privilege > xyp_catalog writes catalog metadata, not tasks; xyp_tasks writes tasks, not credits (42501)
+ ✓ tests/aos-02/command-db.test.ts > grants: least privilege > service_role reads only; anon and authenticated get nothing
+ ✓ tests/aos-02/catalog-agents.test.ts > agents and capabilities > records-catalog gains the metadata tools; records-tasks is new; the lookup reads Vault files
+ ✓ tests/aos-02/catalog-agents.test.ts > register-track: a Vault audio file is a recording (B4) > registers a bounce on a new draft release; the title comes from the one song the file is linked to
+ ✓ tests/aos-02/catalog-agents.test.ts > register-track: a Vault audio file is a recording (B4) > the lookup refuses: both or neither recording, a file that is not audio, no title to derive, a file already on the release
+ ✓ tests/phase-13/records-agents.test.ts > the four agents are registered, single-class, deterministic (F10 resolved: split + workflow) > validateAll() is clean and each agent has its class, domain and narrowed tools
+ ✓ tests/phase-13/records-agents.test.ts > the four agents are registered, single-class, deterministic (F10 resolved: split + workflow) > capabilities: catalog.read is Knowledge + Governance, catalog.write is Execution only
+ ✓ tests/phase-13/records-agents.test.ts > register-track: Knowledge lookup → Execution write > registers a Phase 9 take on a new draft release; the title comes from the formula artifact
+ ✓ tests/phase-13/records-agents.test.ts > register-track: Knowledge lookup → Execution write > adds a second take to the same draft by id, with an explicit title
+ ✓ tests/aos-02/catalog-agents.test.ts > register-track: a Vault audio file is a recording (B4) > a Suno take still registers as before (Phase 13), and read_catalog names each track's recording
+ ✓ tests/aos-02/catalog-agents.test.ts > records-catalog: people, credits, links, artwork, delivery > people and aliases; a credit names a person by id or by any of their names; uncredit keeps history
+ ✓ tests/phase-13/records-agents.test.ts > register-track: Knowledge lookup → Execution write > the lookup refuses: an unknown take, a non-mix-report link, a taken position, a take already on the release
+ ✓ tests/phase-13/records-agents.test.ts > records-catalog: splits and codes, exactly the operation given > writes a split set as the next version and reports the unassigned share
+ ✓ tests/aos-02/catalog-agents.test.ts > records-catalog: people, credits, links, artwork, delivery > platform links on a release and a track, host-checked; unlink; artwork from the Vault; delivery events
+ ✓ tests/aos-02/catalog-agents.test.ts > records-catalog: people, credits, links, artwork, delivery > exactly one operation per call
+ ✓ tests/phase-13/records-agents.test.ts > records-catalog: splits and codes, exactly the operation given > the DB decides the sum: a set of 90 fails the run with the DB reason, and nothing is written
+ ✓ tests/phase-13/records-agents.test.ts > records-catalog: splits and codes, exactly the operation given > assigns an ISRC and a UPC once; refuses an input naming more than one operation
+ ✓ tests/phase-13/records-agents.test.ts > records-rights-splits: rule-based verdicts, flags as data > flags an unassigned share with its percentage; the run itself succeeds
+ ✓ tests/aos-02/catalog-agents.test.ts > records-tasks > creates a task for a song, a release, or nothing; moves it; history kept
+ ✓ tests/aos-02/catalog-agents.test.ts > a Vault track through the calendar > splits, a passing Rights check, scheduled: a bounce can reach a release
+ ✓ tests/phase-13/records-agents.test.ts > records-rights-splits: rule-based verdicts, flags as data > flags a track with no split set; refuses an unknown release
+ ✓ tests/phase-13/records-agents.test.ts > records-rights-splits: rule-based verdicts, flags as data > passes a release whose every track has a complete set
+ ✓ tests/phase-13/records-agents.test.ts > schedule-release: Rights first, then the calendar; the DB is the hard stop > a flagged release stops at the calendar step with every flag named, and stays a draft
+ ✓ tests/phase-13/records-agents.test.ts > schedule-release: Rights first, then the calendar; the DB is the hard stop > once the share is assigned it schedules, and the release points at the Rights run that cleared it
+ ✓ tests/phase-13/records-agents.test.ts > schedule-release: Rights first, then the calendar; the DB is the hard stop > the calendar unschedules; a forged pass (a flagged run's id) is refused by the DB
+ ✓ tests/phase-13/records-agents.test.ts > schedule-release: Rights first, then the calendar; the DB is the hard stop > refuses a rights check for another release before any DB call
+ ✓ tests/phase-13/records-agents.test.ts > pnpm ask: Records ops requests are named, never guessed (F5) > a catalog / rights / calendar request that matches no X3LIUS sub-domain gets the ops commands
+ ✓ tests/aos-02/idea-to-release.test.ts > the gate: one song from idea to release, its history and metadata intact > idea → writing → producing → releasing → released, every step an agent run, no check left at the end
+ ✓ apps/web/server/catalog.test.ts > the dashboard (/) > songs by status, releases with their blockers, open tasks, alerts, recent research, connectors
+ ✓ apps/web/server/catalog.test.ts > releases > lists releases; a release shows its tracks (recording, splits, credits, links), artwork, deliveries, checks and tasks
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > lists the eight classes as columns, in taxonomy order
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > has exactly the same capabilities
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants context.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants log.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants web.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants research.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants research.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants candidate.propose to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants plan.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants artifact.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants artifact.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants critique.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants critique.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants catalog.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants catalog.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants trace.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants vault.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants vault.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants task.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants external.execute to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants governance.flag to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants canonical.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants approval.decide to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants audit.write to exactly the same classes
+ ✓ apps/web/server/catalog.test.ts > releases > unlink and uncredit keep history; schedule runs the Rights check and the calendar; mark released
+ ✓ apps/web/server/catalog.test.ts > people, tasks and the song workspace > people with their aliases and credits
+ ✓ apps/web/server/catalog.test.ts > people, tasks and the song workspace > tasks by status; moving one changes it and keeps its history
+ ✓ apps/web/server/catalog.test.ts > people, tasks and the song workspace > the song workspace: credits, tasks, the derived release stage, the song's checks
+ ✓ apps/web/lib/paths.test.ts > local > keeps same-origin paths and refuses anything a browser would send elsewhere
+ ✓ tests/aos-02/export.test.ts > the Command Center records travel with xyp-vault-export/v1 > exports people, credits, links, artwork, deliveries, tasks and the Vault-audio track; imports into B; re-exports byte-identical
+ Test Files  8 passed (8)
+      Tests  98 passed (98)
+
+## 2. The CLIs, end to end (the gate journey, with the refusals on the way)
+## 2a. Migrate
+applied: 20260924080000, 20260924080100, 20260924090000, 202
+…
+
+## 2b. An idea, then writing: the lyric sheet (draft until approved), a person, the writer credit
+$ pnpm dispatch records-songs '{"create":{"title":"Night City","artist":"X3LIUS","language":"en","genre":"darkwave"}}'
+4. execution: success in 30ms
+{"songId":"d2bb2ea9-1f5e-47c9-84d4-138cb252bb27","revision":1}
+catalog_checks: (none)
+$ pnpm vault add night-city.txt --as lyric_sheet --language en --song $SONG
+{"file":"added","lyrics":{"version":1}}
+catalog_checks: song:lyrics_not_approved, song:no_credits
+$ pnpm vault approve $V1 --reason 'the words are final'
+{"approvalId":"da90e28c-4066-42ae-8113-793813cca913","artifactId":"9d70a7a0-368c-480c-b764-f1f6535d5bd2","lineageId":"9d70a7a0-368c-480c-b764-f1f6535d5bd2","version":1,"status":"approved","approvedVersion":1}
+$ pnpm dispatch records-catalog '{"person":{"name":"X3LIUS"}}'
+4. execution: success in 30ms
+{"name":"X3LIUS","personId":"5a691b63-1289-4792-9918-747e4638617f"}
+$ pnpm dispatch records-catalog '{"person":{"name":"x3lius"}}'
+4. execution: error in 28ms — people: "x3lius" already names a person (a name or an alias)
+"people: \"x3lius\" already names a person (a name or an alias)"
+(exit 1)
+$ pnpm dispatch records-catalog '{"credit":{"person":"X3LIUS","role":"writer","songId":"d2bb2ea9-1f5e-47c9-84d4-138cb252bb27"}}'
+4. execution: success in 26ms
+{"role":"writer","songId":"d2bb2ea9-1f5e-47c9-84d4-138cb252bb27","creditId":"cf69d99a-d0a4-402c-9155-2e5026a0e796","personId":"5a691b63-1289-4792-9918-747e4638617f"}
+catalog_checks: (none)
+
+## 2c. Producing: the FL Studio bounce into the Vault; releasing: registered from the Vault on a new single
+$ pnpm vault add night-city-master-v3.wav --song $SONG
+{"status":"added","mediaClass":"audio","textChars":null}
+$ pnpm workflow records/workflows/register-track.workflow.yaml '{"takeId":null,"sourceId":"98bf54fd-229b-4b8b-b63f-e6c8c5802d44","release":{"title":"Night City","artist":"X3LIUS","kind":"single"},"position":1,"title":null,"mixReportArtifactId":null}'
+spec: records-register-track (sha256 57e199279f93…) steps: lookup=records-catalog-lookup → catalog=records-catalog
+status: success
+{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820","createdRelease":true}
+$ pnpm dispatch records-songs '{"link":{"songId":"d2bb2ea9-1f5e-47c9-84d4-138cb252bb27","trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820","role":"release"}}'
+4. execution: success in 25ms
+{"kind":"track","role":"release","linkId":"aa3bcf01-1b62-4803-afbd-24a6597a4c09","songId":"d2bb2ea9-1f5e-47c9-84d4-138cb252bb27","targetId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820"}
+$ pnpm workflow register-track … (the same master on the same release again)
+status: error (failed at lookup: records-catalog-lookup: Vault file 98bf54fd-229b-4b8b-b63f-e6c8c5802d44 is already on release 9faf7598-a0d3-4669-8399-8d2b6c9b9272)
+$ pnpm dispatch records-tasks '{"create":{"title":"Get the cover finished","releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","dueDate":"2026-09-25"}}'
+4. execution: success in 27ms
+{"title":"Get the cover finished","songId":null,"taskId":"3c03f2ef-3b83-4c66-b500-afe06e0770f3","dueDate":"2026-09-25","releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272"}
+catalog_checks: release:no_artwork, release:no_upc, track:track_no_credits, track:track_no_isrc, track:track_no_splits
+
+## 2d. Metadata: the blockers clear as the data arrives
+$ pnpm dispatch records-catalog '{"splits":{"trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820","splits":[{"payee":"X3LIUS","percentage":80},{"payee":null,"percentage":20}]}}'
+4. execution: success in 27ms
+{"rows":2,"trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820","version":1,"unassigned":20}
+catalog_checks: release:no_artwork, release:no_upc, track:track_no_credits, track:track_no_isrc, track:track_unassigned_share
+$ pnpm dispatch records-catalog '{"splits":{"trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820","splits":[{"payee":"X3LIUS","percentage":100}]}}'
+4. execution: success in 30ms
+{"rows":1,"trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820","version":2,"unassigned":0}
+$ pnpm dispatch records-catalog '{"credit":{"person":"x3lius","role":"producer","trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820"}}'
+4. execution: success in 29ms
+{"role":"producer","trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820","creditId":"6b50fcaa-0f9f-4363-a5f6-2eb8b28d43bd","personId":"5a691b63-1289-4792-9918-747e4638617f"}
+$ pnpm dispatch records-catalog '{"credit":{"person":"Nobody Known","role":"mixing_engineer","trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820"}}'
+4. execution: error in 23ms — write_credit: no person named "Nobody Known"; add them (or the alias) first
+"write_credit: no person named \"Nobody Known\"; add them (or the alias) first"
+(exit 1)
+$ pnpm dispatch records-catalog '{"assign":{"trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820","isrc":"XZA262600001"}}'
+4. execution: success in 27ms
+{"isrc":"XZA262600001","trackId":"1ec33c2b-6dbe-464d-945c-e9b0185bc820"}
+$ pnpm dispatch records-catalog '{"assign":{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","upc":"070000260018"}}'
+4. execution: success in 25ms
+{"upc":"070000260018","releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272"}
+$ pnpm dispatch records-catalog '{"artwork":{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","sourceId":"98bf54fd-229b-4b8b-b63f-e6c8c5802d44"}}'
+4. execution: error in 24ms — release_artwork: source 98bf54fd-229b-4b8b-b63f-e6c8c5802d44 is not a Vault image
+"release_artwork: source 98bf54fd-229b-4b8b-b63f-e6c8c5802d44 is not a Vault image"
+(exit 1)
+$ pnpm dispatch records-catalog '{"artwork":{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","sourceId":"ed5c54ec-e606-4526-b70f-91b96d05991e"}}'
+4. execution: success in 26ms
+{"sourceId":"ed5c54ec-e606-4526-b70f-91b96d05991e","releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272"}
+$ pnpm dispatch records-tasks '{"move":{"taskId":"3c03f2ef-3b83-4c66-b500-afe06e0770f3","status":"done","note":"cover approved"}}'
+4. execution: success in 22ms
+{"status":"done","taskId":"3c03f2ef-3b83-4c66-b500-afe06e0770f3"}
+catalog_checks: (none)
+
+## 2e. The calendar: the Rights check clears it, scheduled, delivered, released, linked
+$ pnpm workflow records/workflows/schedule-release.workflow.yaml '{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","releaseDate":"2026-09-25"}'
+spec: records-schedule-release (sha256 efcf302ac6cf…) steps: rights=records-rights-splits → calendar=records-release-calendar
+status: success
+{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","status":"scheduled","releaseDate":"2026-09-25"}
+catalog_checks: release:scheduled_no_delivery
+$ pnpm dispatch records-catalog '{"delivery":{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","distributor":"DistroKid","status":"submitted"}}'
+4. execution: success in 26ms
+{"status":"submitted","releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","distributor":"DistroKid"}
+$ pnpm dispatch records-release-calendar '{"release":{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272"}}'
+4. execution: success in 30ms
+{"status":"released","releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","releaseDate":"2026-09-25"}
+$ pnpm dispatch records-catalog '{"delivery":{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","distributor":"distrokid","status":"live"}}'
+4. execution: success in 23ms
+{"status":"live","releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","distributor":"distrokid"}
+catalog_checks: release:released_no_platform_link, song:status_behind
+$ pnpm dispatch records-catalog '{"link":{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","platform":"spotify","url":"https://evil.example/album/1"}}'
+4. execution: error in 26ms — platform_links: https://evil.example/album/1 is not an https URL on the spotify host
+"platform_links: https://evil.example/album/1 is not an https URL on the spotify host"
+(exit 1)
+$ pnpm dispatch records-catalog '{"link":{"releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272","platform":"spotify","url":"https://open.spotify.com/album/FIXTURE0NightCity000000"}}'
+4. execution: success in 29ms
+{"url":"https://open.spotify.com/album/FIXTURE0NightCity000000","linkId":"b699c2b4-595b-4081-b90a-26090f9565b1","platform":"spotify","releaseId":"9faf7598-a0d3-4669-8399-8d2b6c9b9272"}
+catalog_checks: (none)
+
+## 2f. The history, intact
+song_revisions: idea → writing → producing → releasing → released
+current_song_links: source as lyric-sheet, artifact_lineage as lyrics, source as audio, track as release
+lyrics: v1 approved, approved_version 1
+track: Night City, ISRC XZA262600001, recording night-city-master-v3.wav (sha256 56d4af65701c…, added by vault-curator)
+rights_splits versions: 1, 2; current: X3LIUS 100.000
+current_credits: X3LIUS producer (track), X3LIUS writer (song)
+release_artwork (newest first): night-city-cover.png
+release: released, 2026-09-25, UPC 070000260018
+release_deliveries: DistroKid submitted → distrokid live; current: distrokid live
+task_events: done (cover approved)
+agent_runs: records-catalog success 12, records-catalog error 4, records-catalog-lookup success 1, records-catalog-lookup error 1, records-release-calendar success 2, records-rights-splits success 1, records-songs success 9, records-tasks success 2, vault-curator success 3, x3lius-lyric-editor success 1
+
+$ pnpm vault export $PROOF/export   (F37: a released release can't be exported for a restore yet)
+vault export: release 9faf7598-a0d3-4669-8399-8d2b6c9b9272 is released; a restore can recreate draft releases only (release history is AOS-08)
+(exit 1)
+
+(throwaway database dropped)
+
+## 3. The UI in a real browser (pnpm web:build && pnpm web:smoke): next start, Chromium, throwaway DB
+ok  without a session, /vault answers 401 and sends the browser to /login on the same host
+ok  the raw file route is guarded too (401)
+ok  a wrong token is refused (wrong token)
+ok  the token opens a session and lands on /vault
+ok  a song is created (records-songs) and opens
+ok  the uploaded lyric sheet became a lineage (vault-curator → x3lius-lyric-editor) and opens
+ok  v1 is a draft until the owner decides
+ok  approve records the owner's decision; v1 is marked approved (v1 ◆approvedx3lius-lyric-editor2026-09-25 20:44:06Zowner (smoke) at 2026-09-25 20:44:06Z: the first take is the one)
+ok  the song shows its lyric sheet file and its lyrics
+ok  pnpm embed indexed the version and the file ({"model":"Supabase/gte-small","artifact":{"embedded":1,"skipped":0,"truncated":0},"source":{"embedded":1,"skipped":0,"truncated":0},"research_finding":{"embedded":0,"skipped":0,"truncated":0}})
+ok  vault search finds the lyrics by a line
+ok  the master is in the Vault, linked to the song
+ok  a person is added (records-catalog)
+ok  the song's master is registered on a new draft single (register-track) and its blockers show
+ok  splits, a credit by case-insensitive name, ISRC, UPC and artwork clear every check
+ok  schedule runs the Rights check and the calendar; the missing delivery shows
+ok  marked released; the missing platform link shows
+ok  the platform link clears the last check
+ok  a task on the release is added and moved to done (records-tasks)
+ok  the dashboard shows the release released on its date ([FIXTURE] Night City X3LIUSsinglereleased2026-09-2500)
+ok  the dashboard shows the time it was read
+smoke: all checks passed
+
+## 4. Gates at the final commit
+$ pnpm typecheck                        → exit 0 (apps/web/server, lib and e2e included)
+$ pnpm test                             → Test Files 84 passed (84) · Tests 1194 passed (1194)
+$ pnpm agents:validate                  → validateAll(): 0 failure(s)
+$ pnpm web:build                        → ✓ Compiled successfully; 14 routes (+/people, /releases, /releases/[id], /tasks)
+$ pnpm web:smoke                        → smoke: all checks passed (21 checks, 10 of them AOS-02)
+$ pnpm db:down && pnpm db:up (×2)       → 20260925150000 rolled back / applied, twice, on the dev database

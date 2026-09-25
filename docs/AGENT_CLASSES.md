@@ -30,8 +30,11 @@ The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04
 | `critique.write` | Write a structured critique object | — | — | — | — | Y | — | — | — |
 | `critique.read` | Read a critique by id (Phase 12) | — | — | — | — | Y | Y | — | Y |
 | `catalog.read` | Read releases, tracks, current split sets, and a take's provenance chain (Phase 13) | — | Y | — | — | — | — | — | Y |
-| `catalog.write` | Register releases/tracks, write split sets, assign ISRC/UPC, move a release through the calendar (Phase 13) | — | — | — | — | — | — | Y | — |
+| `catalog.write` | Register releases/tracks, write split sets, assign ISRC/UPC, move a release through the calendar (Phase 13); people and aliases, credits, platform links, artwork and delivery status (AOS-02) | — | — | — | — | — | — | Y | — |
 | `trace.write` | Record a TRACE analysis as received and link its mix report, once (Phase 14) | — | — | — | — | — | — | Y | — |
+| `vault.write` | Register Creative Vault files and tag them; create and revise songs; link and unlink a song's targets (AOS-01) | — | — | — | — | — | — | Y | — |
+| `vault.read` | Read a Vault file's metadata, tags and extracted text (AOS-01) | — | Y | — | Y | — | — | Y | — |
+| `task.write` | Create the owner's tasks and move them (done, cancelled, reopened) (AOS-02) | — | — | — | — | — | — | Y | — |
 | `external.execute` | Perform an external side effect (API submit, file export) | — | — | — | — | — | — | Y | — |
 | `governance.flag` | Write compliance/legal/rights flags; enqueue approval items | — | — | — | — | — | — | — | Y |
 | `canonical.write` | INSERT/UPDATE `canonical_prompts` / `modules` | — | — | — | — | — | — | — | — |
@@ -39,6 +42,8 @@ The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04
 | `audit.write` | Append to `audit_log` | — | — | — | — | — | — | — | — |
 
 Records ops (Phase 13, F10 resolved as a split): `catalog.read` serves the catalog lookup (Knowledge) and the Rights check (Governance); `catalog.write` serves the two Execution agents, each narrowed by its `tools` list and its own DB role (`xyp_catalog`, `xyp_release_calendar`).
+
+Creative Vault (AOS-01, A2): the owner's writes go through deterministic agents so every change leaves an `agent_runs` row. `vault.write` serves `vault-curator` (files) and `records-songs` (songs and links), both Execution, writing as `xyp_vault`. `vault.read` serves `x3lius-lyric-editor` (Creative: it reads a lyric sheet's text to import it) and is open to Knowledge and Execution for the same read. Approving a version is not a capability: it stays a human decision (`xyp_decide_artifact`, `service_role`).
 
 ## Research
 

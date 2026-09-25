@@ -29,8 +29,8 @@ afterAll(async () => {
 
 const run = (agent: string, input: unknown) => dispatch(deps, agent, input);
 const workflow = (path: string, input: Record<string, unknown>) => runWorkflow(deps, loadWorkflow(path, registry), input);
-/** register-track's input: title and mixReportArtifactId are required keys, null = not given. */
-const registration = (input: Record<string, unknown>) => ({ title: null, mixReportArtifactId: null, ...input });
+/** register-track's input: title, mixReportArtifactId and (AOS-02) sourceId are required keys, null = not given. */
+const registration = (input: Record<string, unknown>) => ({ title: null, mixReportArtifactId: null, sourceId: null, ...input });
 const RELEASE = { title: '[FIXTURE] New Era', artist: 'X3LIUS', kind: 'single' } as const;
 
 type Registered = { releaseId: string; trackId: string; createdRelease: boolean };
@@ -50,8 +50,12 @@ describe('the four agents are registered, single-class, deterministic (F10 resol
       const a = registry.get(name)!;
       return { class: a.class, domain: a.domain, model: a.model, tools: [...a.tools].sort() };
     };
-    expect(shape('records-catalog-lookup')).toEqual({ class: 'Knowledge', domain: 'RECORDS', model: 'none', tools: ['log_message', 'read_catalog', 'resolve_take'] });
-    expect(shape('records-catalog')).toEqual({ class: 'Execution', domain: 'RECORDS', model: 'none', tools: ['assign_codes', 'log_message', 'register_track', 'write_splits'] });
+    // AOS-02 widened both: the lookup reads a Vault recording (read_vault_file, B4), the writer records
+    // catalog metadata (people, credits, links, artwork, delivery). tests/aos-02 pins the full lists.
+    expect(shape('records-catalog-lookup')).toMatchObject({ class: 'Knowledge', domain: 'RECORDS', model: 'none' });
+    expect(shape('records-catalog-lookup').tools).toEqual(expect.arrayContaining(['log_message', 'read_catalog', 'resolve_take']));
+    expect(shape('records-catalog')).toMatchObject({ class: 'Execution', domain: 'RECORDS', model: 'none' });
+    expect(shape('records-catalog').tools).toEqual(expect.arrayContaining(['assign_codes', 'log_message', 'register_track', 'write_splits']));
     expect(shape('records-rights-splits')).toEqual({ class: 'Governance', domain: 'RECORDS', model: 'none', tools: ['log_message', 'read_catalog'] });
     expect(shape('records-release-calendar')).toEqual({ class: 'Execution', domain: 'RECORDS', model: 'none', tools: ['log_message', 'schedule_release'] });
   });

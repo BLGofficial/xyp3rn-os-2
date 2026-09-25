@@ -24,6 +24,9 @@
     "tech",
     "governance",
     "tests",
+    "apps/web/server",
+    "apps/web/lib",
+    "apps/web/e2e",
     "*.ts"
   ]
 }

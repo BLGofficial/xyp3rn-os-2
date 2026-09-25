@@ -386,6 +386,58 @@ Migration `20260925130000_service_role_read_only.sql` (G20, `docs/artist-os/AOS-
   - Direct maintenance runs as the migration role (`postgres`), never as the app key.
 - **Proof:** `tests/aos-00/prerequisites.test.ts` covers every relation, a new table, and a refused write. The Phase 1 write probe is inverted.
 
+## AOS-01 additions: songs, the Creative Vault, version approvals, the vault index
+
+Migration `20260925140000_vault_songs.sql` (+ rollback). Design: `docs/artist-os/AOS-01-design.md`.
+
+- **Songs (RECORDS, A1):**
+  - `songs` holds the identity: `id`, `agent_run_id`, `created_at`.
+  - `song_revisions` holds `title`, `artist`, `language`, `genre`, `status` (`song_status`: idea → archived) and `notes`. The revision number is derived by trigger (max + 1, under an advisory lock), and a song must commit with a revision (a deferred trigger).
+  - `current_songs` is the latest revision per song.
+- **`song_links` (A1):** one typed target per row, with exactly one of `artifact_lineage_id` (a lineage root, checked by trigger), `source_id`, `take_id`, `track_id` and `research_question_id`, plus an optional `role`.
+  - There is one live link per song and target (23505).
+  - Unlinking inserts a `song_link_retractions` row (with a reason), and `current_song_links` shows live links with `kind` and `target_id`.
+- **Vault files (KNOWLEDGE):**
+  - `sources` gains `storage` (`local-vault`), `media_class` (`document`, `lyric_sheet`, `audio`, `image`, `other`), `language` and `agent_run_id`. A Vault file has all four; a knowledge source has none.
+  - `source_texts` holds extracted text (`utf8` or `unpdf`), and `source_tags` holds tags (reusing `tags`).
+  - `xyp_sources_vault_guard` freezes a Vault file, except for the knowledge index's embedding columns. It also allows the one promotion: a knowledge source with the same bytes becomes a Vault file, once, through a column-level UPDATE held by `xyp_vault`.
+- **`knowledge_sources` (view):** a row is a knowledge source when `storage is null` or it has a successful `ingestion_runs` row. `embedPending` and the Context Engine's generation read it, so Vault-only files stay out of every agent's grounding.
+- **Approvals:**
+  - `approval_item_type` gains `artifact_version`.
+  - `xyp_decide_artifact(artifact, decision, approver, reason)` is SECURITY DEFINER, with EXECUTE held by `service_role` only. It records an already-decided row, one per version.
+  - `artifact_approvals` gives each version's status (`draft` when there is no row) and the lineage's highest approved version.
+- **Vault index:** `vault_embeddings (entity_kind, entity_id, model)` covers artifact versions, Vault files and research findings, with the input hash and truncation. An entity-exists trigger raises 23503. `xyp_match_vault(query, limit, model)` has EXECUTE held by `xyp_runtime` and `xyp_web`.
+- **Roles:**
+  - `xyp_vault` writes songs, links, Vault files, texts and tags (INSERT/SELECT), and runs the promotion (UPDATE on the four Vault columns only).
+  - `xyp_web` reads what the UI renders and writes nothing.
+  - `xyp_runtime` also reads `ingestion_runs` and `knowledge_sources` for the generation, and `source_tags` for `read_vault_file`.
+  - `xyp_embedder` also reads `source_tags`, `tags`, `ingestion_runs` and `knowledge_sources`.
+- **Export (not a table):** `xyp-vault-export/v1` (`knowledge/vault-io`) holds only the tables listed in `spec.ts`. It leaves out `updated_at` and the knowledge-embedding columns, because both are derived.
+
+## AOS-02 additions: people and credits, platform links, artwork, deliveries, tasks, Vault-audio tracks, the checks
+
+Migration `20260925150000_command_center.sql` (+ rollback). Design: `docs/artist-os/AOS-02-design.md` (decisions B1–B4, ARCHITECTURE F38).
+
+- **People (B1):** `people (id, name, agent_run_id)` and `person_aliases (person_id, alias)` share one namespace: a name or alias belongs to one person, compared case- and space-insensitively (`lower(btrim())` unique indexes, and `xyp_person_name_free` across the two tables, 23505). Neither table changes after insert (55000); a wrong name is a new alias.
+- **Credits (B1):** `credits (person_id, role, song_id | track_id, note)`, exactly one target (23514), `role` from a fixed list (`writer` … `artwork`, `other`). One live credit per target, person and role (`xyp_credits_guard`, 23505). Retracting inserts a `credit_retractions` row with a reason; `current_credits` shows live credits with the person's name.
+- **Platform links (B3):** `platform_links (platform, url, release_id | track_id)`, exactly one target. `platform` is a fixed list (`spotify`, `apple_music`, `youtube`, … `other`); `xyp_platform_url_ok(platform, url)` (immutable SQL, a CHECK) requires https on that platform's host (`other`: any https URL with a dotted host). One live link per target and platform (23505, after the URL check so a wrong host reads as a wrong host). `platform_link_retractions` and `current_platform_links` as for credits.
+- **Artwork:** `release_artwork (release_id, source_id)` events; the source must be a Vault image (`xyp_release_artwork_guard`). `current_release_artwork` is the newest per release.
+- **Deliveries:** `release_deliveries (release_id, distributor, status, note)` events, `status` from `submitted` … `taken_down`. `current_deliveries` is the latest per release and distributor (case-insensitive).
+- **Tracks from Vault audio (B4):** `tracks.take_id` is now nullable and `tracks.source_id` is added; exactly one of the two (`tracks_recording_check`), and a source must be a Vault audio file (`xyp_tracks_guard`). A recording is on a release once (`tracks_release_id_source_id_key`, like the take). The ISRC reuse rule compares the recording (`(take_id, source_id)`).
+- **Tasks (B2):** `tasks (title, song_id?, release_id?, due_date)` (at most one target) and `task_events (task_id, status, note)` with `open`, `done`, `cancelled`. `current_tasks` is each task with its latest event (`open` when there is none).
+- **`catalog_checks` (view):** `severity`, `subject_kind`, `subject_id`, `release_id`, `code`, `message`.
+  - Blockers: `no_tracks`, `no_artwork`, `track_no_splits`, `track_unassigned_share`.
+  - Warnings on releases and tracks: `no_upc`, `scheduled_no_delivery`, `released_no_platform_link`, `track_no_isrc`, `track_no_credits`.
+  - Warnings on songs: `lyrics_not_approved` and `no_credits` (not for `idea` or `archived`), `status_behind`, `status_ahead`.
+- **Append-only:** every new table refuses UPDATE and DELETE (`xyp_vault_immutable`, 55000); a change is a new row (a retraction, an event, a new artwork row).
+- **Roles:**
+  - `xyp_catalog` gains SELECT/INSERT on people, aliases, credits, links, artwork and deliveries (and their retractions), and SELECT on their `current_*` views.
+  - `xyp_tasks` (new) holds SELECT/INSERT on `tasks` and `task_events`, and SELECT on `current_tasks`.
+  - `xyp_web` reads everything new, `catalog_checks` included. `xyp_runtime` reads what `read_catalog` and the catalog lookup need. `service_role` reads only (G20).
+  - EXECUTE on `xyp_platform_url_ok` is held by `xyp_catalog`, `xyp_web` and `service_role`; the guards are revoked from `public`.
+- **Export:** the new tables join `xyp-vault-export/v1`. People (with aliases) and tasks (with events) are exported whole; credits, links, artwork and deliveries follow their songs, releases and tracks.
+- **Rollback:** refuses while a track records a Vault file (it would lose the recording), then restores `tracks` and the Phase 13 `xyp_tracks_guard`.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).
