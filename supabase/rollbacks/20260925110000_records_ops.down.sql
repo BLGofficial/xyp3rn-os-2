@@ -2,17 +2,7 @@
 -- The xyp_catalog and xyp_release_calendar roles stay (cluster-wide, like xyp_critic); their
 -- privileges go with the objects dropped here.
 
-do $$ begin
-  if to_regclass('public.suno_takes') is not null then
-    drop policy if exists runtime_select on public.suno_takes;
-    revoke select on table public.suno_takes from xyp_runtime;
-  end if;
-  if to_regclass('public.suno_submissions') is not null then
-    drop policy if exists runtime_select on public.suno_submissions;
-    revoke select on table public.suno_submissions from xyp_runtime;
-  end if;
-end $$;
-
+drop function if exists public.xyp_resolve_take(uuid);
 drop view if exists public.current_rights_splits;
 drop table if exists public.rights_splits;
 drop table if exists public.tracks;

@@ -10,6 +10,7 @@ import { createWriteArtifactTool } from '../tool-registry/tools/write-artifact.t
 import { loadEmbedder } from '../../knowledge/vector-retrieval/embedder.ts';
 import { ARTIFACT_SCHEMAS } from '../../records/x3lius/creative/schemas.ts';
 import { createReadCritiqueTool, createWriteCritiqueTool } from '../../records/x3lius/evaluation/tools.ts';
+import { createRecordsOpsTools } from '../../records/ops/tools.ts';
 import { createCaptureSunoTakesTool, createSubmitSunoTool } from '../../records/x3lius/suno/tools.ts';
 import { createFetchSourceTool } from '../../research-intelligence/tools/fetch-source.ts';
 import { createWriteEvidenceTool } from '../../research-intelligence/tools/write-evidence.ts';
@@ -19,7 +20,9 @@ import { createWriteEvidenceTool } from '../../research-intelligence/tools/write
  * @param deps - pool the tools run through (each under its own xyp_* role); `env` for external
  *   configuration such as SUNO_API_KEY (default process.env); `fetch` override for external calls (tests)
  * @returns registry with log_message, retrieve_context, retrieve_claims, fetch_source, write_evidence,
- *   write_artifact, read_artifact, write_critique, read_critique, submit_suno, capture_suno_takes
+ *   write_artifact, read_artifact, write_critique, read_critique, submit_suno, capture_suno_takes, and the
+ *   Records ops tools (Phase 13): resolve_take, read_catalog, register_track, write_splits, assign_codes,
+ *   schedule_release
  */
 export const createRuntimeTools = (deps: {
   readonly sql: Sql;
@@ -41,5 +44,6 @@ export const createRuntimeTools = (deps: {
     createReadCritiqueTool(deps),
     createSubmitSunoTool(external),
     createCaptureSunoTakesTool(external),
+    ...createRecordsOpsTools(deps),
   ]);
 };

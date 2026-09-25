@@ -28,13 +28,15 @@ The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04
 | `artifact.read` | Read a creative artifact version by id (Phase 9) | — | — | — | Y | Y | Y | Y | Y |
 | `critique.write` | Write a structured critique object | — | — | — | — | Y | — | — | — |
 | `critique.read` | Read a critique by id (Phase 12) | — | — | — | — | Y | Y | — | Y |
+| `catalog.read` | Read releases, tracks, current split sets, and a take's provenance chain (Phase 13) | — | Y | — | — | — | — | — | Y |
+| `catalog.write` | Register releases/tracks, write split sets, assign ISRC/UPC, move a release through the calendar (Phase 13) | — | — | — | — | — | — | Y | — |
 | `external.execute` | Perform an external side effect (API submit, file export) | — | — | — | — | — | — | Y | — |
 | `governance.flag` | Write compliance/legal/rights flags; enqueue approval items | — | — | — | — | — | — | — | Y |
 | `canonical.write` | INSERT/UPDATE `canonical_prompts` / `modules` | — | — | — | — | — | — | — | — |
 | `approval.decide` | Approve/reject an `approval_queue` item | — | — | — | — | — | — | — | — |
 | `audit.write` | Append to `audit_log` | — | — | — | — | — | — | — | — |
 
-Records ops capabilities (catalog, rights splits) are deliberately undefined until Phase 13, where F10 is decided.
+Records ops (Phase 13, F10 resolved as a split): `catalog.read` serves the catalog lookup (Knowledge) and the Rights check (Governance); `catalog.write` serves the two Execution agents, each narrowed by its `tools` list and its own DB role (`xyp_catalog`, `xyp_release_calendar`).
 
 ## Research
 

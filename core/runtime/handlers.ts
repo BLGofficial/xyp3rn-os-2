@@ -10,6 +10,10 @@ import { subdomainStub } from '../../records/x3lius/subdomain-stub.ts';
 import { sunoSubmitter } from '../../records/x3lius/suno/submitter.ts';
 import { vocalDnaAgent } from '../../records/x3lius/vocal-dna/agent.ts';
 import { rvcPost } from '../../records/x3lius/vocal-dna/rvc-post.ts';
+import { catalog, CATALOG_AGENT } from '../../records/ops/catalog/catalog.ts';
+import { catalogLookup, CATALOG_LOOKUP_AGENT } from '../../records/ops/catalog/lookup.ts';
+import { releaseCalendar, CALENDAR_AGENT } from '../../records/ops/release-calendar/calendar.ts';
+import { rightsCheck, RIGHTS_AGENT } from '../../records/ops/rights-splits/check.ts';
 
 /** X3LIUS sub-domains a phase has built: no longer served by the Phase 7 stub. */
 export const BUILT_SUBDOMAINS: readonly string[] = [...CREATIVE_SUBDOMAINS, 'x3lius-vocal-dna', 'x3lius-mix-master', 'x3lius-evaluation'];
@@ -30,6 +34,13 @@ export const HANDLERS: HandlerMap = {
   'x3lius-rvc-post': rvcPost,
   // Phase 11: Mix/Master (Creative, deterministic): a TRACE analysis checked against the canonical rubric.
   'x3lius-mix-master': mixMaster,
+  // Phase 13: Records ops (all deterministic). F10 split: the catalog lookup (Knowledge) and the
+  // catalog writer (Execution), chained by records/workflows/register-track.workflow.yaml; the Rights
+  // check (Governance) before the calendar (Execution) in schedule-release.workflow.yaml.
+  [CATALOG_LOOKUP_AGENT]: catalogLookup,
+  [CATALOG_AGENT]: catalog,
+  [RIGHTS_AGENT]: rightsCheck,
+  [CALENDAR_AGENT]: releaseCalendar,
   // Phase 7: one stub per X3LIUS sub-domain no phase has built yet (none since Phase 12): the
   // fallback for a sub-domain a future manifest adds. Built ones run as LLM agents (core/runtime/programs.ts).
   ...Object.fromEntries(

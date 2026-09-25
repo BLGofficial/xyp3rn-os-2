@@ -42,7 +42,8 @@ const rightsRun = async (
   over: { verdict?: string; agent?: string; status?: 'success' | 'error'; forRelease?: string } = {},
 ): Promise<string> => {
   const status = over.status ?? 'success';
-  const output = { releaseId: over.forRelease ?? releaseId, verdict: over.verdict ?? 'pass', rules: [], flags: [] };
+  // dispatch's shape: { result: <handler output>, logs }.
+  const output = { result: { releaseId: over.forRelease ?? releaseId, verdict: over.verdict ?? 'pass', rules: [], flags: [] }, logs: [] };
   return (await db.sql<{ id: string }[]>`
     insert into agent_runs (agent_name, class, domain, input, output, status, error_detail, completed_at)
     values (${over.agent ?? 'records-rights-splits'}, 'Governance', 'RECORDS', ${db.sql.json({ releaseId })}, ${db.sql.json(output)},
@@ -360,8 +361,15 @@ describe('grants: least privilege per role', () => {
       }
       await expect(as(role, (tx) => tx`update releases set title = 'x'`)).rejects.toMatchObject(code('42501'));
     }
-    // resolve_take (catalog.read) runs as xyp_runtime: the Suno trail is readable.
-    await expect(as('xyp_runtime', (tx) => tx`select 1 from suno_takes join suno_submissions s on s.id = submission_id limit 1`)).resolves.toBeDefined();
+    // resolve_take (catalog.read) runs as xyp_runtime, which still can't read the Suno trail (Phase 9):
+    // it calls xyp_resolve_take, which returns one take's chain and nothing else.
+    const takeId = await take();
+    await expect(as('xyp_runtime', (tx) => tx`select 1 from suno_takes`)).rejects.toMatchObject(code('42501'));
+    const [chain] = await as('xyp_runtime', (tx) => tx<{ take_id: string; formula_title: string }[]>`select take_id, formula_title from xyp_resolve_take(${takeId})`);
+    expect(chain).toEqual({ take_id: takeId, formula_title: '[FIXTURE] Night City' });
+    for (const role of ['service_role', 'xyp_catalog', 'anon', 'authenticated']) {
+      await expect(as(role, (tx) => tx`select * from xyp_resolve_take(${takeId})`)).rejects.toMatchObject(code('42501'));
+    }
     for (const role of ['anon', 'authenticated']) {
       for (const rel of ['releases', 'tracks', 'rights_splits', 'current_rights_splits']) {
         await expect(as(role, (tx) => tx.unsafe(`select 1 from ${rel}`))).rejects.toMatchObject(code('42501'));

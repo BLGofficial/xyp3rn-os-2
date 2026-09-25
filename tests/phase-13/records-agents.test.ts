@@ -29,12 +29,14 @@ afterAll(async () => {
 
 const run = (agent: string, input: unknown) => dispatch(deps, agent, input);
 const workflow = (path: string, input: Record<string, unknown>) => runWorkflow(deps, loadWorkflow(path, registry), input);
+/** register-track's input: title and mixReportArtifactId are required keys, null = not given. */
+const registration = (input: Record<string, unknown>) => ({ title: null, mixReportArtifactId: null, ...input });
 const RELEASE = { title: '[FIXTURE] New Era', artist: 'X3LIUS', kind: 'single' } as const;
 
 type Registered = { releaseId: string; trackId: string; createdRelease: boolean };
 /** register-track end to end; returns the Execution step's output. */
 const register = async (input: Record<string, unknown>): Promise<Registered> => {
-  const r = await workflow(REGISTER_TRACK, input);
+  const r = await workflow(REGISTER_TRACK, registration(input));
   expect(r, JSON.stringify(r)).toMatchObject({ status: 'success' });
   return r.output as Registered;
 };
@@ -74,17 +76,17 @@ describe('register-track: Knowledge lookup → Execution write', () => {
   it('registers a Phase 9 take on a new draft release; the title comes from the formula artifact', async () => {
     const { takeId, submissionId, formulaArtifactId } = await insertTake(db.sql);
     const report = await insertArtifact(db.sql, 'x3lius.mix-report/v1', { fixture: true });
-    const r = await workflow(REGISTER_TRACK, { takeId, release: RELEASE, position: 1, mixReportArtifactId: report });
+    const r = await workflow(REGISTER_TRACK, registration({ takeId, release: RELEASE, position: 1, mixReportArtifactId: report }));
     expect(r.status).toBe('success');
     const out = r.output as Registered;
     expect(out.createdRelease).toBe(true);
     const [row] = await db.sql<{ title: string; take_id: string; mix_report_artifact_id: string; isrc: string | null; status: string }[]>`
       select t.title, t.take_id, t.mix_report_artifact_id, t.isrc, r.status::text from tracks t join releases r on r.id = t.release_id where t.id = ${out.trackId}`;
     expect(row).toEqual({ title: FIXTURE_FORMULA_TITLE, take_id: takeId, mix_report_artifact_id: report, isrc: null, status: 'draft' });
-    const steps = await db.sql<{ agent_name: string; class: string; output: { provenance?: { submission: { id: string }; formula: { artifactId: string } } } }[]>`
+    const steps = await db.sql<{ agent_name: string; class: string; output: { result: { provenance?: { submission: { id: string }; formula: { artifactId: string } } } } }[]>`
       select agent_name, class::text, output from agent_runs where workflow_run_id = ${r.workflowRunId} order by created_at`;
     expect(steps.map((s) => [s.agent_name, s.class])).toEqual([['records-catalog-lookup', 'Knowledge'], ['records-catalog', 'Execution']]);
-    expect(steps[0]!.output.provenance).toMatchObject({ submission: { id: submissionId }, formula: { artifactId: formulaArtifactId } });
+    expect(steps[0]!.output.result.provenance).toMatchObject({ submission: { id: submissionId }, formula: { artifactId: formulaArtifactId } });
   });
 
   it('adds a second take to the same draft by id, with an explicit title', async () => {
@@ -107,7 +109,7 @@ describe('register-track: Knowledge lookup → Execution write', () => {
       [{ takeId, release: { id: reg.releaseId }, position: 2 }, /already on release/],
     ];
     for (const [input, reason] of cases) {
-      const r = await workflow(REGISTER_TRACK, input);
+      const r = await workflow(REGISTER_TRACK, registration(input));
       expect(r).toMatchObject({ status: 'error', failedStep: 'lookup' });
       expect(r.error).toMatch(reason);
     }

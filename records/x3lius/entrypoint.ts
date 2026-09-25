@@ -3,6 +3,7 @@ import { LLM_TIMEOUT_MS } from '../../core/llm/runner.ts';
 import { compileWorkflow, runWorkflow, type EngineDeps } from '../../core/workflow-engine/engine.ts';
 import type { Selection } from '../../core/orchestrator/scope-select.ts';
 import { MUSIC_SYSTEM_SERVICE, selectSubdomains } from './music-system.ts';
+import { opsClarification } from '../ops/ops-hint.ts';
 
 /**
  * RECORDS entrypoint (Phase 7): route a request inside the X3LIUS Music System. Selects the
@@ -34,7 +35,9 @@ export const runMusicSystem = async (
   const selection = selectSubdomains(input.request, deps.registry);
   const selected = selection.selected.map((s) => s.name);
   if (selected.length === 0) {
-    return { status: 'clarify', selected, selection, workflowRunId: null, outputs: {}, reason: 'no X3LIUS sub-domain matched; name the sub-domain (e.g. Suno, Lyrics, Mix/Master)' };
+    // Phase 13 (F5): RECORDS also holds Records ops, which run on structured input only.
+    const reason = opsClarification(input.request) ?? 'no X3LIUS sub-domain matched; name the sub-domain (e.g. Suno, Lyrics, Mix/Master)';
+    return { status: 'clarify', selected, selection, workflowRunId: null, outputs: {}, reason };
   }
   const spec = {
     name: MUSIC_SYSTEM_SERVICE,

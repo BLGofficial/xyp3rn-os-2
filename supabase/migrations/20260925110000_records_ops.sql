@@ -166,12 +166,13 @@ begin
       raise exception 'releases: % cannot be released before its date %', new.id, new.release_date
         using errcode = 'object_not_in_prerequisite_state';
     end if;
+    -- dispatch stores a run's output as { result: <handler output>, logs } (core/orchestrator/dispatch.ts).
     select r.agent_name, r.status::text as status, r.output into v_run from public.agent_runs r where r.id = new.rights_check_run_id;
     if not found
        or v_run.agent_name <> 'records-rights-splits'
        or v_run.status <> 'success'
-       or coalesce(v_run.output ->> 'verdict', '') <> 'pass'
-       or coalesce(v_run.output ->> 'releaseId', '') <> new.id::text then
+       or coalesce(v_run.output #>> '{result,verdict}', '') <> 'pass'
+       or coalesce(v_run.output #>> '{result,releaseId}', '') <> new.id::text then
       raise exception 'releases: run % is not a passing records-rights-splits check of %', new.rights_check_run_id, new.id
         using errcode = 'object_not_in_prerequisite_state';
     end if;
@@ -307,6 +308,29 @@ $$;
 create or replace trigger trg_rights_splits_immutable before update or delete on public.rights_splits
   for each row execute function public.xyp_rights_splits_immutable();
 
+-- ─── resolve_take's one read of the Suno trail ────────────────────────────────────────────────────
+-- xyp_runtime may not read the Suno trail (Phase 9 boundary, tests/phase-09). The catalog lookup needs
+-- one take's chain, so this returns exactly that — ids, titles, schema id — and nothing else.
+create or replace function public.xyp_resolve_take(p_take_id uuid)
+returns table (
+  take_id uuid, audio_url text, take_title text, duration_seconds numeric,
+  submission_id uuid, adapter text, suno_model text,
+  formula_artifact_id uuid, formula_schema_id text, formula_title text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select t.id, t.audio_url, t.title, t.duration_seconds,
+         s.id, s.adapter, s.suno_model,
+         a.id, a.schema_id, a.body ->> 'title'
+  from public.suno_takes t
+  join public.suno_submissions s on s.id = t.submission_id
+  join public.creative_artifacts a on a.id = s.formula_artifact_id
+  where t.id = p_take_id
+$$;
+
 -- ─── roles and grants ────────────────────────────────────────────────────────────────────────────
 -- Roles are cluster-wide: parallel test databases can race on "not exists" (Phase 12 pattern).
 do $$ begin
@@ -337,8 +361,6 @@ grant update (upc) on table public.releases to xyp_catalog;
 grant update (isrc) on table public.tracks to xyp_catalog;
 grant update (status, release_date, rights_check_run_id) on table public.releases to xyp_release_calendar;
 
--- resolve_take (catalog.read) reads the Suno trail as xyp_runtime.
-grant select on table public.suno_takes, public.suno_submissions to xyp_runtime;
 
 do $$
 declare
@@ -362,9 +384,7 @@ begin
     ('rights_splits', 'catalog_insert', 'insert', 'xyp_catalog'),
     ('rights_splits', 'release_calendar_select', 'select', 'xyp_release_calendar'),
     ('rights_splits', 'runtime_select', 'select', 'xyp_runtime'),
-    ('rights_splits', 'service_select', 'select', 'service_role'),
-    ('suno_takes', 'runtime_select', 'select', 'xyp_runtime'),
-    ('suno_submissions', 'runtime_select', 'select', 'xyp_runtime')
+    ('rights_splits', 'service_select', 'select', 'service_role')
   ) as p(tbl, policy, cmd, role) loop
     if not exists (select from pg_policies where schemaname = 'public' and tablename = v.tbl and policyname = v.policy) then
       execute format('create policy %I on public.%I for %s to %I %s', v.policy, v.tbl, v.cmd, v.role,
@@ -382,3 +402,5 @@ revoke execute on function
   from public, anon, authenticated;
 revoke execute on function public.xyp_is_valid_gs1(text) from public, anon, authenticated;
 grant execute on function public.xyp_is_valid_gs1(text) to service_role, xyp_runtime, xyp_catalog, xyp_release_calendar;
+revoke execute on function public.xyp_resolve_take(uuid) from public, anon, authenticated, service_role;
+grant execute on function public.xyp_resolve_take(uuid) to xyp_runtime;

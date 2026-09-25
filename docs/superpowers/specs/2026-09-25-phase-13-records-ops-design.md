@@ -134,7 +134,7 @@ On any change into `scheduled` or `released` (a reschedule included), the releas
 
 - `xyp_catalog` (new): INSERT/SELECT `releases`, `tracks`, `rights_splits`; UPDATE (`upc`) on `releases`, UPDATE (`isrc`) on `tracks`; SELECT `suno_takes`, `creative_artifacts` (the FK and schema checks). Nothing canonical, nothing creative-writable.
 - `xyp_release_calendar` (new): SELECT `releases`, `tracks`, `rights_splits`; UPDATE (`status`, `release_date`, `rights_check_run_id`) on `releases`.
-- `xyp_runtime`: SELECT on the three tables and the view (`read_catalog`); it already reads `suno_*` and `creative_artifacts`.
+- `xyp_runtime`: SELECT on the three tables and the view (`read_catalog`), and EXECUTE on `xyp_resolve_take(take_id)` (`resolve_take`). It still has no SELECT on the Suno trail, the Phase 9 boundary: the function returns one take's chain (ids, titles, schema id) and nothing else.
 - `service_role`: SELECT only. Every write goes through an agent, so every write has an `agent_runs` row (the Phase 15 audit join).
 - `anon`/`authenticated`: nothing. RLS is on, with one policy per role per command.
 - The trigger functions that read across tables are `SECURITY DEFINER` with `search_path = ''`, as in Phase 12.

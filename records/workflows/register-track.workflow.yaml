@@ -1,0 +1,25 @@
+name: records-register-track
+description: >-
+  Phase 13, Records ops catalog: register a finished take (Phase 9 suno_takes) as a track. The
+  Knowledge lookup resolves the take's chain and the target release into a fully specified
+  registration; the Execution catalog agent writes it (F10: the guide's Knowledge/Execution hybrid,
+  split into two single-class agents). Splits and codes are separate records-catalog operations.
+  title and mixReportArtifactId are required keys whose null means "not given" (the title then
+  comes from the formula artifact): the workflow engine has no optional inputs.
+input:
+  required: [takeId, release, position, title, mixReportArtifactId]
+output: { $from: steps.catalog.output }
+steps:
+  - id: lookup
+    agent: records-catalog-lookup
+    input:
+      takeId: { $from: input.takeId }
+      release: { $from: input.release }
+      position: { $from: input.position }
+      title: { $from: input.title }
+      mixReportArtifactId: { $from: input.mixReportArtifactId }
+  - id: catalog
+    agent: records-catalog
+    dependsOn: [lookup]
+    input:
+      register: { $from: steps.lookup.output.registration }
