@@ -424,6 +424,64 @@ export const decideApproval = async (
     return r!.status;
   });
 
+/** One pending approval as the operator's queue shows it. */
+export type PendingApproval = {
+  readonly approval_id: string; readonly item_type: string; readonly item_id: string; readonly requested_at: Date;
+  readonly gate_reasons: unknown; readonly target_slug: string | null; readonly confidence: unknown;
+  /** A critique_escalation's request (Phase 12): reason, revisions, version chain, counts per pass. */
+  readonly escalation: unknown;
+  /** A release_schedule's request (Phase 13): release, date, tracks. */
+  readonly schedule: unknown;
+};
+
+/**
+ * The operator's queue (pnpm gate queue): every pending approval, oldest first.
+ * @param sql - pool allowed to SET ROLE service_role
+ * @returns pending items with the gate's reasons, an evaluation loop's escalation request, or a release schedule request
+ */
+export const pendingApprovals = (sql: Sql): Promise<PendingApproval[]> =>
+  asRole(sql, OPERATOR_ROLE, (tx) => tx<PendingApproval[]>`
+    select id as approval_id, item_type::text, item_id, requested_at,
+           request->'gate_reasons' as gate_reasons, request->>'target_slug' as target_slug, request->'confidence' as confidence,
+           case when item_type = 'critique_escalation' then request end as escalation,
+           case when item_type = 'release_schedule' then request end as schedule
+    from approval_queue where status = 'pending' order by requested_at`);
+
+/**
+ * The operator's decision on a queued item (pnpm gate decide). A knowledge candidate then goes back
+ * through the gate; a release schedule is applied (approve → scheduled, reject → draft, Phase 13); a
+ * critique escalation's decision is only recorded (acted on from Phase 15/16).
+ * @param sql - pool allowed to SET ROLE service_role
+ * @param approvalId - approval_queue.id (must be pending)
+ * @param d - decision, who decided, and why
+ * @param rerun - re-runs the gate on a knowledge candidate (the CLI also embeds a promotion)
+ * @returns the new status, the item type, the gate's result for a knowledge candidate, or the release's new status
+ */
+export const decideQueueItem = async (
+  sql: Sql,
+  approvalId: string,
+  d: { readonly decision: 'approve' | 'reject'; readonly approver: string; readonly reason: string },
+  rerun: (candidateId: string) => Promise<unknown>,
+): Promise<{ readonly approval: 'approved' | 'rejected'; readonly itemType: string; readonly gate?: unknown; readonly release?: { readonly id: string; readonly status: string } }> => {
+  const [item] = await sql<{ item_id: string; item_type: string }[]>`select item_id, item_type::text from approval_queue where id = ${approvalId}`;
+  if (!item) throw new Error(`No approval ${approvalId}`);
+  if (item!.item_type === 'release_schedule') {
+    // Decision and application commit together: a failed scheduling gate cannot seal approval.
+    return asRole(sql, OPERATOR_ROLE, async (tx) => {
+      const [decision] = await tx<{ status: 'approved' | 'rejected' }[]>`
+        select xyp_decide_approval(${approvalId}, ${d.decision}, ${d.approver}, ${d.reason})::text as status`;
+      const [release] = await tx<{ id: string; status: string }[]>`
+        select q.release_id as id, public.xyp_apply_release_decision(${approvalId})::text as status
+        from release_schedule_requests q where q.id = ${item.item_id}`;
+      if (!release) throw new Error(`No release request for approval ${approvalId}`);
+      return { approval: decision!.status, itemType: item.item_type, release };
+    });
+  }
+  const approval = await decideApproval(sql, approvalId, d);
+  if (item.item_type === 'knowledge_candidate') return { approval, itemType: item.item_type, gate: await rerun(item.item_id) };
+  return { approval, itemType: item.item_type };
+};
+
 export type FirstPartyAdmission = {
   readonly doc: NormalizedDocument;
   readonly sourceId: string;

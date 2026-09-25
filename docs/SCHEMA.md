@@ -291,7 +291,7 @@ Migration `20260924190000_suno_generation.sql`.
   - `prompt`: the exact `{title, style, excludeStyles, lyrics}` sent, copied from the artifact;
   - `provider_response`.
 - **`suno_takes`:** takes per submission: an `https` `audio_url`, unique per submission (re-capture is a no-op), plus `provider_take_id`, `title`, `duration_seconds > 0` and `metadata`.
-- **`take_scores`:** the scoring hook. `check (is_stub = (score is null))`: a stub row marks where the Phase 12 Critic plugs in and never carries a number; a real score always does.
+- **`take_scores`:** the scoring hook. `check (is_stub = (score is null))`: a stub row marks where a scorer plugs in and never carries a number; a real score always does. Since Phase 12 new stubs say `stub:needs-trace-analysis` (a take is audio; ARCHITECTURE F30).
 - **Append-only:** all three refuse UPDATE/DELETE for every role, owner included (55000).
 - **`xyp_execution`:** a new role. It may INSERT/SELECT the three tables and SELECT `creative_artifacts` (to read the artifact it submits). It cannot write artifacts or canonical knowledge (42501).
 - **`artifact.read`:** a new capability for Creative, Critic, Revision, Execution and Governance. `xyp_runtime` gains SELECT on `creative_artifacts` for the `read_artifact` tool.
@@ -308,6 +308,37 @@ Migration `20260924200000_artifact_warnings.sql`.
 - **New `creative_artifacts.schema_id` values:** `x3lius.arrangement/v1`, `x3lius.production/v1` and `x3lius.mix-report/v1`.
   - A mix report's `model` is `none`, since Mix/Master is deterministic, and its `body.analysis` is the `trace.analysis/v1` it checked.
 - **New canonical claims:** `x3lius.<stage>.<metric>` = `{ min?, max? }` (`model_scope` `trace`), read through `canonical_claims` like every claim (ARCHITECTURE F24).
+
+## Phase 12 additions: `critiques`, `critique_id`, the evaluation loop
+
+- **`critiques`** (migration `20260925100000_critiques`): the Critic class's only output (`critique.write`).
+  - Columns: `artifact_id` (the version reviewed), `previous_id` (the critique of the parent version, which chains a loop), `agent_run_id`, `schema_id` (`x3lius.critique/v1`), `body`, `checked`, `passed` (`0 ≤ passed ≤ checked`).
+  - A trigger requires `previous_id` to be the critique of the reviewed artifact's parent. Rows are immutable for every role.
+  - Grants: `xyp_critic` INSERT/SELECT (the `write_critique` tool); `xyp_runtime` and `service_role` SELECT (`read_critique`, capability `critique.read`: Critic, Revision, Governance); `anon`/`authenticated` nothing.
+- **`creative_artifacts.critique_id`:** set by Revision on the version it writes. `check (critique_id is null or parent_id is not null)`, and a trigger requires the critique to be about the new version's parent.
+- **`xyp_escalate_critique(critique_id, request)`:** `SECURITY DEFINER`; inserts one pending `approval_queue` row with `item_type critique_escalation`. EXECUTE is `xyp_evaluation_loop`'s alone (the loop controller's role).
+- **New roles:** `xyp_critic`, `xyp_evaluation_loop`.
+
+## Phase 13 additions: Records ops (`releases`, `tracks`, `rights_splits`), `audit_log`
+
+Migration `20260925110000_records.sql`. Every rule below is a constraint or trigger, so a direct INSERT cannot bypass it.
+
+- **`releases`:** `title`, `kind` (`single` | `ep` | `album`), `upc` (12–13 digits, unique when set, null until assigned), `status`, `release_date`.
+  - Status path (trigger): `draft → pending_schedule | cancelled`; `pending_schedule → scheduled | draft | cancelled`; `scheduled → released | cancelled`. `released` and `cancelled` are terminal (`release_status_transition`).
+  - **Scheduling gate:** entering `pending_schedule` or `scheduled` needs a date, at least one track, splits on every track and no `UNASSIGNED` share (`release_not_schedulable: <reason>`).
+  - **Locked outside draft:** only `status` and `upc` may change (`release_locked`).
+- **`tracks`:** `release_id`, `position` (unique per release), `title`, `isrc` (`^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$`, unique when set), `duration_seconds`.
+  - Exactly one audio source: `suno_take_id`, or `master_uri` + `master_sha256` (`tracks_one_source`).
+  - `artifact_ids` must exist in `creative_artifacts`; `mix_report_id` must be an `x3lius.mix-report/v1` (trigger).
+  - Outside draft, only `isrc` may change and no track may be added or removed (`track_locked`).
+- **`rights_splits`:** `track_id`, `payee` (`UNASSIGNED` = an unknown share), `role` (`writer` | `producer` | `performer` | `publisher` | `other`), `percentage numeric(5,2)` in `(0, 100]`, `unique (track_id, payee, role)`.
+  - **Always exactly 100:** a deferred constraint trigger checks each touched track at COMMIT (`rights_splits_sum_not_100`). A track with no splits is allowed; the gate refuses it.
+  - Locked once the release leaves draft (`splits_locked_after_schedule`). Written only by `service_role` (`pnpm records splits`).
+- **`release_schedule_requests`:** one row per scheduling request; its id is the `approval_queue.item_id` (the queue is unique per item, so a rejected release can be requested again). `applied_at` marks a decision applied once.
+- **`approval_item_type`** gains `release_schedule`. `xyp_request_release_schedule(release_id)` (EXECUTE `xyp_calendar`) moves a draft to `pending_schedule` and queues the request; `xyp_apply_release_decision(approval_id)` (EXECUTE `service_role`) applies a sealed decision once: approve → `scheduled` (the gate re-checks), reject → `draft`.
+- **`records_flags`:** the Rights agent's append-only report per release.
+- **`audit_log`** (general, append-only for every role): one row per insert/update/delete on `releases`, `tracks`, `rights_splits`, with the acting role (`current_setting('role')`), old and new values. `service_role` SELECT only.
+- **New roles:** `xyp_catalog` (register releases and tracks; column grants, no status), `xyp_rights` (INSERT `records_flags`), `xyp_calendar` (UPDATE `releases.release_date`, request scheduling). `xyp_runtime` gains SELECT on the Records tables (`read_release`).
 
 ## Adding a table (checklist, every phase)
 

@@ -1,0 +1,161 @@
+Phase 12 — Critic + Revision System: proof (2026-09-25)
+Produced with the repo's own commands against the local Postgres; every DB test runs in its own throwaway database.
+================================================================================
+
+## 0. Status of the guide's deliverables
+# - Critic agent (Critic class): x3lius-evaluation, replacing the last Phase 7 stub under the same name. It checks a
+#   creative artifact version against the canonical rules in force for it and writes an x3lius.critique/v1: specific
+#   violations, each tied to a rule ref, as JSON Pointer + verbatim quote + expected/found (renderable as a diff).
+#   Code checks structured claims (Suno length limits, mix-report checks); the model judges prose rules; code verifies
+#   every model-reported violation (rule given, path exists, quote there word for word) or drops it as unverified.
+#   It never edits the artifact.
+# - Revision agent (Revision class): x3lius-revision. Reads the critique, asks the model for concrete edits, applies
+#   them in code all-or-nothing, and appends version N+1 naming the critique it answers (creative_artifacts.critique_id).
+# - Loop control: records/x3lius/evaluation/loop.ts, `pnpm evaluate <artifactId>`. MAX_REVISIONS = 3 (user decision):
+#   each round is two model calls and a call took minutes on the free route in the Phase 9 live runs, so 3 rounds +
+#   the final pass is at most 7 calls; three targeted edit rounds that fail to clear the violations are unlikely to be
+#   cleared by a fourth. A stall (a revision that doesn't reduce the count) escalates early. Escalation goes to the
+#   human approval_queue (item_type critique_escalation) through xyp_escalate_critique, callable only by
+#   xyp_evaluation_loop. A mix report is critiqued, then escalated as studio work, never revised.
+# - Both proof runs (section 2): one converges, one hits the iteration guard and escalates.
+# - 6C Experiment Engine unstubbed: trials are scored by the Critic, score = rules passed / rules checked; an
+#   experiment whose every trial the Critic scored can validate (section 1, "6C").
+# - Phase 9 take scoring stays a stub (a take is audio; an honest score needs Phase 14's TRACE analysis). New stub rows
+#   say so (stub:needs-trace-analysis).
+# - 5-bullet handoff for Phase 13: docs/handoffs/PHASE-12.md.
+
+## 1. Tests (tests/phase-12 and records/x3lius/evaluation; [FIXTURE] rules and claims promoted through the real gate in
+##    throwaway DBs; FAKE model for every LLM call, with Critic and Revision replies scripted per test)
+✓ records/x3lius/evaluation/pointer.test.ts > JSON Pointer (RFC 6901) over artifact bodies > reads fields, array items and escaped keys
+✓ records/x3lius/evaluation/pointer.test.ts > JSON Pointer (RFC 6901) over artifact bodies > reports a missing step, a bad index, the root and a JSONPath as not found
+✓ records/x3lius/evaluation/pointer.test.ts > JSON Pointer (RFC 6901) over artifact bodies > sets an existing field on a copy, never in place, and never creates one
+✓ records/x3lius/evaluation/pointer.test.ts > JSON Pointer (RFC 6901) over artifact bodies > knows what is inside what
+✓ records/x3lius/evaluation/pointer.test.ts > JSON Pointer (RFC 6901) over artifact bodies > collects every string under a value
+✓ records/x3lius/evaluation/checks.test.ts > code checks > checks a Suno length claim by code, measuring the text itself (never the stored limits)
+✓ records/x3lius/evaluation/checks.test.ts > code checks > has no code check outside the Suno prompt, or for a limit that is not an integer
+✓ records/x3lius/evaluation/checks.test.ts > code checks > turns a mix report’s checks into rules, and each raise/lower into a violation
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > replaces a violated field, and a field inside a violated section, on a copy
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses no edits at all, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses an edit citing no violation, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses an edit citing a key this critique lacks, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses a path that is not a field, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses a JSONPath, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses a field code derives, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses a field no violation points to, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses a whole object, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses text for a number, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses text for a true/false field, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses a no-op, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses two edits of one field, and applies nothing
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > refuses the whole revision when any edit is refused, naming each
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > never edits a Suno prompt’s lyrics, limits or target model: those are rendered or measured
+✓ records/x3lius/evaluation/edits.test.ts > applying revision edits > re-derives a Suno prompt’s measured lengths after an edit
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > keeps a violation whose rule, path and quote check out, resolving a bracketed or aliased ref
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > accepts a quote anywhere under a section-level path
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > drops an unknown rule as unverified, with the reason
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > drops a code-checked rule as unverified, with the reason
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > drops a missing path as unverified, with the reason
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > drops a JSONPath instead of a pointer as unverified, with the reason
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > drops the root as unverified, with the reason
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > drops a quote with different case as unverified, with the reason
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > drops a quote with different spacing as unverified, with the reason
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > drops an empty quote as unverified, with the reason
+✓ records/x3lius/evaluation/verify.test.ts > verifying model-reported violations > merges two reports of the same violation
+✓ records/x3lius/evaluation/scorer.test.ts > trial score = rules passed / rules checked (spec §8) > is the share of rules with no violation, to 4 decimals like experiment_runs.score
+✓ records/x3lius/evaluation/scorer.test.ts > trial score = rules passed / rules checked (spec §8) > is null, never 1, when no rule was checked
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > caps revisions at 3
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > no rules checked
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > no rules checked, even with a stale count
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > clean on the first pass
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > clean after revisions
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > a clean mix report
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > a mix report with violations
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > violations on the first pass
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > fewer violations after a revision
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > the same count after a revision
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > more violations after a revision
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > 3 revisions made, still violations
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > the cap is checked before the stall rule
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > a mix report is studio work even when no revision is allowed
+✓ records/x3lius/evaluation/loop.test.ts > loop decision after each Critic pass (spec §7, first matching row wins) > takes another cap
+✓ tests/phase-12/critiques-db.test.ts > critiques: insert-only, chained to the parent version > a revised version names the critique of its parent; any other critique is refused
+✓ tests/phase-12/critiques-db.test.ts > critiques: insert-only, chained to the parent version > previous_id must be the critique of the parent version
+✓ tests/phase-12/critiques-db.test.ts > critiques: insert-only, chained to the parent version > is immutable for every role, the owner included
+✓ tests/phase-12/critiques-db.test.ts > critiques: insert-only, chained to the parent version > refuses counts that cannot be true
+✓ tests/phase-12/critiques-db.test.ts > critiques: insert-only, chained to the parent version > grants: xyp_critic inserts, xyp_runtime reads, nobody else writes
+✓ tests/phase-12/critiques-db.test.ts > xyp_escalate_critique: the loop's one way into the human queue > queues one pending critique_escalation per critique
+✓ tests/phase-12/critiques-db.test.ts > xyp_escalate_critique: the loop's one way into the human queue > refuses an unknown critique or a request with no reason
+✓ tests/phase-12/critiques-db.test.ts > xyp_escalate_critique: the loop's one way into the human queue > only xyp_evaluation_loop may call it
+✓ tests/phase-12/critiques-db.test.ts > tools: write_critique, read_critique, read_artifact > write_critique stores a valid critique as xyp_critic and read_critique returns it
+✓ tests/phase-12/critiques-db.test.ts > tools: write_critique, read_critique, read_artifact > write_critique refuses a body whose counts, keys or artifact disagree, and writes nothing
+✓ tests/phase-12/critiques-db.test.ts > tools: write_critique, read_critique, read_artifact > read_artifact returns the brief, parent and critique a revision needs
+✓ tests/phase-12/critiques-db.test.ts > tools: write_critique, read_critique, read_artifact > authorization: Critic writes critiques; Critic, Revision and Governance read them
+✓ tests/phase-12/critic-revision.test.ts > Critic (x3lius-evaluation) > a Suno prompt: a code-found length violation and a verified model-found one, each tied to its rule
+✓ tests/phase-12/critic-revision.test.ts > Critic (x3lius-evaluation) > refuses a bare request and a previous critique of another version
+✓ tests/phase-12/critic-revision.test.ts > Revision (x3lius-revision) > writes v2 with the edit, naming the critique it answers; derived Suno lengths are recomputed
+✓ tests/phase-12/critic-revision.test.ts > Revision (x3lius-revision) > refuses an edit outside every violation, and writes nothing
+✓ tests/phase-12/critic-revision.test.ts > Revision (x3lius-revision) > refuses a bare request
+✓ tests/phase-12/critic-revision.test.ts > loop controller (the proof runs) > PROOF 1 — converges: a Suno prompt with a code-found and a model-found violation, fixed by one revision
+✓ tests/phase-12/critic-revision.test.ts > loop controller (the proof runs) > PROOF 2 — hits the iteration cap: 4 violations, one fixed per revision, escalated after 3
+✓ tests/phase-12/critic-revision.test.ts > loop controller (the proof runs) > stalls: a revision that does not reduce the violations escalates early
+✓ tests/phase-12/critic-revision.test.ts > loop controller (the proof runs) > escalates a refused revision, with the error, and writes no version
+✓ tests/phase-12/critic-revision.test.ts > loop controller (the proof runs) > a mix report is studio work: critiqued by code, escalated, never revised
+✓ tests/phase-12/critic-revision.test.ts > loop controller (the proof runs) > refuses a malformed id, an unknown id, and a version that is not its lineage’s latest, before any run
+✓ tests/phase-12/critic-revision.test.ts > 6C: experiment trials scored by the Critic (the stub is gone from the path) > scores passed / checked from a real critique; a trial naming no artifact gets null with the reason
+✓ tests/phase-12/critic-revision.test.ts > 6C: experiment trials scored by the Critic (the stub is gone from the path) > an experiment whose every trial the Critic scored can validate
+Test Files  8 passed (8)
+Tests  77 passed (77)
+
+## 2. Proof runs (tests/phase-12/critic-revision.test.ts, "loop controller (the proof runs)")
+# PROOF 1 — converges. A Suno prompt written before the 12-character style limit was promoted ([FAKE] style: 19 chars).
+#   pass 1: 2 violations — code: suno.limit.style-chars at /style ("19 characters", expected "at most 12");
+#           model (verified): the [FIXTURE] "vocal descriptor first" rule at /style.
+#   revision 1: one edit, /style → "male vox", citing both keys; limits re-derived from the text.
+#   pass 2: 0 violations; resolved = both keys of pass 1. outcome: converged, revisions 1, counts [2, 0]. No queue item.
+# PROOF 2 — hits the iteration guard. A lyrics artifact; the scripted Critic reports one violation per verse bar 0–3
+#   still holding [FAKE] text; the scripted Revision fixes exactly one per round (so the stall rule never fires).
+#   counts per pass [4, 3, 2, 1]; after revision 3 the cap is reached.
+#   outcome: iteration_cap, revisions 3; one approval_queue row: item_type critique_escalation, status pending,
+#   request { reason: iteration_cap, revisions: 3, maxRevisions: 3, counts: [4, 3, 2, 1], critiqueIds, artifactIds }.
+# Also proven: stall (counts [1, 1] → escalated after 1 revision); revision_failed (an edit outside every violation is
+#   refused, nothing written, escalated with the error); studio_work (a [FIXTURE] mix report: 3 raise/lower checks,
+#   no model call, escalated; Revision refuses it); a malformed id, an unknown id and a non-latest version are refused
+#   before any run.
+
+## 3. Mutations (each applied, run against its tests, reverted) — 9/9 caught
+| # | File | Mutation | Result |
+|---|---|---|---|
+| 1 | loop.ts | delete the stall rule | caught (2 failed) |
+| 2 | loop.ts | cap `>=` → `>` | caught (3 failed) |
+| 3 | loop.ts | mix-report row below the cap row | caught (1 failed) after adding "a mix report is studio work even when no revision is allowed"; it first survived (equivalent unless the cap is 0) |
+| 4 | verify.ts | drop the quote check | caught (3 failed) |
+| 5 | edits.ts | drop the targeting check | caught (2 failed) |
+| 6 | edits.ts | isDerived always false | caught (2 failed) |
+| 7 | critic.ts | delete the Critic's previous-critique parent check | caught (1 failed) after asserting no model call on refusal; it first survived because the DB chain trigger refuses the same write (after the call) |
+| 8 | scorer.ts | score 1 when nothing was checked | caught (1 failed) |
+| 9 | migration | chain trigger returns instead of raising | caught (1 failed) |
+
+## 4. Full suite
+# npx vitest run → 886 passed, 1 failed (887); npx tsc --noEmit clean.
+# The one failure is tests/phase-03/context-engine.test.ts > adds 1-hop graph neighbours…, which fails identically on
+# main and is fixed by PR #7 (test-only).
+
+## 5. Not run live
+# No OPENROUTER_API_KEY in this environment: the Critic's and Revision's model calls ran only against the FAKE model,
+# with scripted replies. The wiring, verification, edit rules, loop decisions and escalation are proven; the quality
+# of a live model's critiques and edits is not.
+
+================================================================================
+## LIVE RUN (2026-09-25, after rebase onto main; Nemotron via OpenRouter; local dev DB, migration 20260925100000 applied)
+$ pnpm dispatch x3lius-lyrics '{"request":"A short dark-trap verse and hook about driving through the city at 3am, alone, neon on wet asphalt"}'
+# status success, 2866 tokens, 330 s; artifact 1e0ee8fb-ca13-47f8-bd91-987443908650 (x3lius.lyrics/v2, v1)
+# knowledge: sparse, 0 rules scoped to x3lius-lyrics / x3lius-vocal-dna, 1 voice claim
+$ pnpm evaluate 1e0ee8fb-ca13-47f8-bd91-987443908650
+pass 1: artifact 1e0ee8fb-ca13-47f8-bd91-987443908650 → critique bf9bb98d-c7ae-4b35-83b3-ad0fbaffe0e4: 0 violation(s)
+outcome: converged
+{ "outcome": "converged", "revisions": 0, "critiqueIds": ["bf9bb98d-..."], "artifactIds": ["1e0ee8fb-..."], "counts": [0] }
+# critique body: rules [{ ref: canonical_prompts:956a75c5-...#x3lius.voice-reference, kind: claim, method: model }],
+#   counts { checked: 1, passed: 1, violations: 0 }, unverified [], violations []
+# Reading: the Critic path is proven live end to end. Revision was not exercised live (no violation to answer);
+#   it needs lyrics rules admitted to this DB first.
+# Full suite after rebase: 58 files, 893/893 tests; tsc --noEmit clean.

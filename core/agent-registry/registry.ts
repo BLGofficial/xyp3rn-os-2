@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseAgentFile, type AgentDefinition } from './parse-agent-file.ts';
+import { registeredComponents, type Component } from './components.ts';
 
 export type ValidationFailure = { readonly path: string; readonly errors: readonly string[] };
 
@@ -35,6 +36,7 @@ export const loadAgents = (dir: string): RegistrySnapshot => {
 };
 
 export type AgentRegistry = {
+  readonly components: () => readonly Component[];
   readonly list: () => readonly AgentDefinition[];
   readonly get: (name: string) => AgentDefinition | undefined;
   /** Re-reads the directory and returns every failure. Does not replace the cache. */
@@ -66,6 +68,7 @@ export const createAgentRegistry = (options: {
   refresh();
 
   return {
+    components: () => registeredComponents(join(dir, '..')),
     list: () => snapshot.agents,
     get: (name) => snapshot.agents.find((a) => a.name === name),
     validateAll: () => loadAgents(dir).failures,

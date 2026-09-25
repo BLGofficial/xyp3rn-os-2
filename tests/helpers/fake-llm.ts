@@ -78,6 +78,9 @@ export const fakeBody = (schema: Json, cited: readonly string[], user = ''): Jso
   if ('excludeStyles' in props) {
     return { title: '[FAKE] Suno Title', style: '[FAKE] style prompt', excludeStyles: ['[FAKE] excluded'], ...common };
   }
+  // Phase 12 Critic / Revision: nothing found, nothing to edit. Tests script real replies with `override`.
+  if ('violations' in props) return { violations: [] };
+  if ('edits' in props) return { edits: [] };
   throw new Error(`fake model: unknown schema ${JSON.stringify(Object.keys(props))}`);
 };
 

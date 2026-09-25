@@ -1,5 +1,6 @@
 import type { ClaimBundle, ContextBundle } from '../../../core/context-engine/context-engine.ts';
 import type { LlmProgram } from '../../../core/llm/runner.ts';
+import type { AgentContext } from '../../../core/orchestrator/dispatch.ts';
 import { loadMusicSystem } from '../music-system.ts';
 import { SUNO_FORMULA_SPEC } from '../suno/formula.ts';
 import { LYRICS_SPEC } from './lyrics.ts';
@@ -66,6 +67,69 @@ const SPECS: Readonly<Record<string, CreativeSpec>> = {
 
 export const CREATIVE_SUBDOMAINS: readonly string[] = Object.keys(SPECS);
 
+/**
+ * The spec that writes a schema id. The Critic and Revision find a version's rules and checks this
+ * way, not by `agent_name`: a revised version is written by x3lius-revision.
+ * @param schemaId - artifact schema id
+ * @returns the sub-domain slug and its spec, or undefined when no current spec writes it
+ */
+export const specForSchema = (schemaId: string): { readonly slug: string; readonly spec: CreativeSpec } | undefined => {
+  const hit = Object.entries(SPECS).find(([, s]) => s.schemaId === schemaId);
+  return hit ? { slug: hit[0], spec: hit[1] } : undefined;
+};
+
+/**
+ * Pulls a sub-domain's canonical rules (one scoped Context Engine read per module) and its claims
+ * (exact topic lookup per namespace), before any applicability filter.
+ * @param ctx - run context whose agent holds retrieve_context and retrieve_claims
+ * @param slug - sub-domain slug (a key of SPECS)
+ * @param brief - the retrieval query
+ * @returns the modules read and every entry pulled, with the module it came from (null for claims)
+ */
+export const pullEntries = async (ctx: AgentContext, slug: string, brief: string) => {
+  const spec = SPECS[slug]!;
+  const modules = spec.modules ?? [slug, VOICE_MODULE];
+  const namespaces = spec.claimNamespaces ?? [CLAIM_NAMESPACE];
+  // One scoped read per module, so each count is exact and one module can't crowd out another.
+  const pulled: { entry: ContextEntry; module: string | null }[] = [];
+  for (const module of modules) {
+    const bundle = (await ctx.useTool('retrieve_context', { query: brief, scope: { modules: [module] } })) as ContextBundle;
+    for (const r of bundle.items.filter((i) => i.ref.table === 'canonical_prompts')) {
+      pulled.push({ module, entry: { kind: 'rule', ref: `canonical_prompts:${r.ref.id}`, module, slug: r.slug, title: r.title, text: r.text, modelTag: r.modelTag, score: r.score, why: r.why, source: r.source } });
+    }
+  }
+  const seen = new Set<string>();
+  for (const prefix of namespaces) {
+    const claims = (await ctx.useTool('retrieve_claims', { topicPrefix: prefix })) as ClaimBundle;
+    for (const c of claims.items) {
+      const ref = `canonical_prompts:${c.ref.id}#${c.topic}`;
+      if (seen.has(ref)) continue;
+      seen.add(ref);
+      pulled.push({ module: null, entry: { kind: 'claim', ref, module: c.module, slug: c.slug, title: c.title, topic: c.topic, value: c.value, modelScope: c.modelScope, source: c.source } });
+    }
+  }
+  return { modules, pulled };
+};
+
+/**
+ * F22 on a final body: a mixed-script word in text Suno receives refuses the write; anywhere else
+ * it is written as a warning.
+ * @param spec - the spec whose `sunoTextPaths` apply
+ * @param body - the final artifact body
+ * @returns refusal messages, warnings to store, and the warnings as log messages
+ */
+export const scriptFindings = (spec: CreativeSpec, body: Record<string, unknown>) => {
+  const explain = (w: MixedScriptWord) => `mixed-script word "${w.word}" at ${w.path} (Latin and Cyrillic letters in one word)`;
+  const toSuno = (w: MixedScriptWord) => (spec.sunoTextPaths ?? []).some((p) => p.test(w.path));
+  const mixed = mixedScriptWords(body);
+  const soft = mixed.filter((w) => !toSuno(w));
+  return {
+    refuse: mixed.filter(toSuno).map(explain),
+    warnings: soft.map((w) => ({ kind: 'mixed-script' as const, word: w.word, path: w.path })),
+    softMessages: soft.map(explain),
+  };
+};
+
 export type KnowledgeReport = {
   readonly sparse: boolean;
   readonly threshold: number;
@@ -88,7 +152,7 @@ const normalizeRef = (ref: string): string => ref.trim().replace(/^\[(.*)\]$/, '
  * accepted only when exactly one given entry carries it (models abbreviate refs — seen live).
  * Anything else is returned unchanged, so the exact-match check refuses it.
  */
-const resolveRef = (cited: string, entries: readonly ContextEntry[]): string => {
+export const resolveRef = (cited: string, entries: readonly ContextEntry[]): string => {
   const ref = normalizeRef(cited);
   if (entries.some((e) => e.ref === ref)) return ref;
   const byAlias = entries.filter((e) => (e.kind === 'claim' ? e.topic === ref : e.slug === ref));
@@ -97,7 +161,7 @@ const resolveRef = (cited: string, entries: readonly ContextEntry[]): string => 
 
 const render = (v: unknown): string => (Array.isArray(v) ? v.map(render).join(', ') : typeof v === 'string' ? v : JSON.stringify(v));
 
-const promptLine = (e: ContextEntry): string =>
+export const promptLine = (e: ContextEntry): string =>
   e.kind === 'rule'
     ? `[${e.ref}] ${e.slug ?? e.title} (${e.module}): ${e.text}`
     : `[${e.ref}] ${e.topic} = ${render(e.value)} (claim in ${e.slug}, ${e.module})`;
@@ -158,8 +222,6 @@ const defaultPrepare = async (_ctx: unknown, input: Record<string, unknown>): Pr
  */
 const creativeProgram = (slug: string): LlmProgram => {
   const spec = SPECS[slug]!;
-  const modules = spec.modules ?? [slug, VOICE_MODULE];
-  const namespaces = spec.claimNamespaces ?? [CLAIM_NAMESPACE];
   const llmSchema = spec.llmSchema ?? { id: spec.schemaId, schema: spec.schema };
   return async (ctx, input, llm) => {
     if (input === null || typeof input !== 'object' || Array.isArray(input)) throw new Error('input must be an object');
@@ -167,24 +229,7 @@ const creativeProgram = (slug: string): LlmProgram => {
     if (!sub) throw new Error(`${slug} is not an X3LIUS sub-domain in the manifest`);
     const prepared = await (spec.prepare ?? defaultPrepare)(ctx, input as Record<string, unknown>);
 
-    // One scoped read per module, so each count is exact and one module can't crowd out another.
-    const pulled: { entry: ContextEntry; module: string | null }[] = [];
-    for (const module of modules) {
-      const bundle = (await ctx.useTool('retrieve_context', { query: prepared.brief, scope: { modules: [module] } })) as ContextBundle;
-      for (const r of bundle.items.filter((i) => i.ref.table === 'canonical_prompts')) {
-        pulled.push({ module, entry: { kind: 'rule', ref: `canonical_prompts:${r.ref.id}`, module, slug: r.slug, title: r.title, text: r.text, modelTag: r.modelTag, score: r.score, why: r.why, source: r.source } });
-      }
-    }
-    const seen = new Set<string>();
-    for (const prefix of namespaces) {
-      const claims = (await ctx.useTool('retrieve_claims', { topicPrefix: prefix })) as ClaimBundle;
-      for (const c of claims.items) {
-        const ref = `canonical_prompts:${c.ref.id}#${c.topic}`;
-        if (seen.has(ref)) continue;
-        seen.add(ref);
-        pulled.push({ module: null, entry: { kind: 'claim', ref, module: c.module, slug: c.slug, title: c.title, topic: c.topic, value: c.value, modelScope: c.modelScope, source: c.source } });
-      }
-    }
+    const { modules, pulled } = await pullEntries(ctx, slug, prepared.brief);
 
     const kept = pulled.filter((p) => (spec.admit ? spec.admit(p.entry, prepared) : isModelAgnostic(p.entry)));
     const entries = kept.map((p) => p.entry);
@@ -214,14 +259,11 @@ const creativeProgram = (slug: string): LlmProgram => {
     if (unknown.length > 0) throw new Error(`${slug} reply cites refs it was not given: ${unknown.join(', ')}`);
     const { body, violations } = spec.finalize?.(reply, prepared, entries) ?? { body: reply, violations: [] };
     // Checked on the final body, so text code copies in from upstream (the Suno lyrics) is covered too.
-    const explain = (w: MixedScriptWord) => `mixed-script word "${w.word}" at ${w.path} (Latin and Cyrillic letters in one word)`;
-    const toSuno = (w: MixedScriptWord) => (spec.sunoTextPaths ?? []).some((p) => p.test(w.path));
-    const mixed = mixedScriptWords(body);
-    const soft = mixed.filter((w) => !toSuno(w));
-    const all = [...violations, ...(spec.check?.(body) ?? []), ...mixed.filter(toSuno).map(explain)];
+    const script = scriptFindings(spec, body);
+    const all = [...violations, ...(spec.check?.(body) ?? []), ...script.refuse];
     if (all.length > 0) throw new Error(`${slug} reply failed checks: ${all.join('; ')}`);
-    const warnings = soft.map((w) => ({ kind: 'mixed-script', word: w.word, path: w.path }));
-    if (soft.length > 0) await ctx.useTool('log_message', { level: 'warn', message: `${slug}: written with warnings — ${soft.map(explain).join('; ')}` });
+    const warnings = script.warnings;
+    if (warnings.length > 0) await ctx.useTool('log_message', { level: 'warn', message: `${slug}: written with warnings — ${script.softMessages.join('; ')}` });
 
     const context = entries.map(contextRef);
     const written = (await ctx.useTool('write_artifact', {

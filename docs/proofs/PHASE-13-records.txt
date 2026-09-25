@@ -1,0 +1,40 @@
+Phase 13 — XYP3RN Records: proof (2026-09-25)
+Produced with the repo's own commands against the local Postgres; every DB test runs in its own throwaway database.
+================================================================================
+
+## 0. Status of the guide's deliverables
+# - Migration: releases, tracks (FK releases), rights_splits (FK tracks, payee, percentage). Per-track sum = 100
+#   enforced by a deferred constraint trigger at COMMIT (not application code): 20260925110000_records.sql.
+# - Catalog agent: records-catalog (Execution) registers a Suno take or a studio master; ISRC/UPC nullable.
+# - Rights agent: records-rights-splits (Governance) validates splits and flags UNASSIGNED shares before scheduling.
+# - Release-calendar agent: records-release-calendar (Execution), scheduling only; the operator approves.
+# - Split-sum constraint test and proof: tests/phase-13/records-db.test.ts (below), end to end in records-e2e.test.ts.
+
+## 1. Phase 13 tests
+$ npx vitest run tests/phase-13 records/ops
+#  Test Files  7 passed (7)
+#       Tests  47 passed (47)
+
+## 2. Mutation pass (each DB rule weakened in turn; tests/phase-13 must go red)
+# M1  split-sum raise disabled                      → 4 failed
+# M2  sum check "<> 100" → "> 100"                    → 4 failed
+# M3  split lock disabled                           → 1 failed
+# M4  UNASSIGNED gate branch never matches          → 1 failed
+# M5  status transition check disabled              → 1 failed
+# M6  release_locked disabled                       → 1 failed
+# M7  track_locked disabled                         → 1 failed
+# M8  tracks_one_source → check (true)               → 1 failed
+# M9  applied-once guard removed                    → 1 failed (after adding "replaying an old, already-applied rejection")
+# M10 xyp_calendar granted UPDATE on status          → 1 failed
+# 10/10 caught.
+
+## 3. Full suite and typecheck
+$ npx vitest run
+#  Test Files  65 passed (65)
+#       Tests  967 passed (967)
+$ tsc --noEmit -p .   # clean
+
+## 4. Dev DB
+$ pnpm db:up && pnpm db:status
+# applied  20260925100000_critiques
+# applied  20260925110000_records

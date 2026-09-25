@@ -8,3 +8,7 @@ coverage/
 .local-db/
 # Embedding model weights (Phase 3) — downloaded on first use
 .local-models/
+.next/
+*.tsbuildinfo
+.codex/
+.claude/

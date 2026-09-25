@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { AgentRegistry } from '../../core/agent-registry/registry.ts';
 import { parseScope, selectByScope, type Selection } from '../../core/orchestrator/scope-select.ts';
 import { parseModuleManifest, type ManifestModule, type ManifestSubdomain } from '../../knowledge/ingestion/normalizers/module-manifest.ts';
+import { REPO_ROOT } from '../../core/repo.ts';
 
 /**
  * X3LIUS Music System (Phase 7) — the RECORDS module that owns the ten X3LIUS sub-domains.
@@ -12,7 +13,7 @@ import { parseModuleManifest, type ManifestModule, type ManifestSubdomain } from
  */
 
 /** Operator-authored first-party manifest: `pnpm ingest --file <this> --origin first_party`. */
-export const MUSIC_SYSTEM_MANIFEST = join(import.meta.dirname, 'music-system.manifest.yaml');
+export const MUSIC_SYSTEM_MANIFEST = join(REPO_ROOT, 'records/x3lius/music-system.manifest.yaml');
 /** The RECORDS entrypoint service name (core/orchestrator/orchestrate.ts ENTRYPOINTS). */
 export const MUSIC_SYSTEM_SERVICE = 'x3lius-music-system';
 

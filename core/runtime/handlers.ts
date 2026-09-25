@@ -3,6 +3,7 @@ import { extractiveSummarizer } from '../agents/extractive-summarizer.ts';
 import { healthCheck } from '../agents/health-check.ts';
 import type { HandlerMap } from '../orchestrator/dispatch.ts';
 import { researchOrchestrator } from '../../research-intelligence/agents/research-orchestrator.ts';
+import { recordsCatalog, recordsReleaseCalendar, recordsRightsSplits } from '../../records/ops/agents.ts';
 import { CREATIVE_SUBDOMAINS } from '../../records/x3lius/creative/program.ts';
 import { mixMaster } from '../../records/x3lius/mix-master/agent.ts';
 import { loadMusicSystem } from '../../records/x3lius/music-system.ts';
@@ -10,9 +11,11 @@ import { subdomainStub } from '../../records/x3lius/subdomain-stub.ts';
 import { sunoSubmitter } from '../../records/x3lius/suno/submitter.ts';
 import { vocalDnaAgent } from '../../records/x3lius/vocal-dna/agent.ts';
 import { rvcPost } from '../../records/x3lius/vocal-dna/rvc-post.ts';
+import { backlogAgent } from '../../tech/backlog.ts';
+import { legalAgent, rightsConflictAgent } from '../../governance/tools.ts';
 
 /** X3LIUS sub-domains a phase has built: no longer served by the Phase 7 stub. */
-export const BUILT_SUBDOMAINS: readonly string[] = [...CREATIVE_SUBDOMAINS, 'x3lius-vocal-dna', 'x3lius-mix-master'];
+export const BUILT_SUBDOMAINS: readonly string[] = [...CREATIVE_SUBDOMAINS, 'x3lius-vocal-dna', 'x3lius-mix-master', 'x3lius-evaluation'];
 
 /**
  * Deterministic (`model: none`) agent handlers, keyed by agent name. Checked in and
@@ -23,6 +26,9 @@ export const HANDLERS: HandlerMap = {
   'context-retriever': contextRetriever,
   'extractive-summarizer': extractiveSummarizer,
   'health-check': healthCheck,
+  'tech-r-and-d': backlogAgent,
+  'governance-legal': legalAgent,
+  'governance-rights-conflict': rightsConflictAgent,
   'research-orchestrator': researchOrchestrator,
   // Phase 9: Suno Execution (deterministic; its side effects go through submit_suno / capture_suno_takes).
   'suno-submitter': sunoSubmitter,
@@ -30,8 +36,12 @@ export const HANDLERS: HandlerMap = {
   'x3lius-rvc-post': rvcPost,
   // Phase 11: Mix/Master (Creative, deterministic): a TRACE analysis checked against the canonical rubric.
   'x3lius-mix-master': mixMaster,
-  // Phase 7: one stub per X3LIUS sub-domain, from the checked-in manifest (not from agents/),
-  // except those a later phase built (Phases 8–9 and 11 as LLM agents: core/runtime/programs.ts).
+  // Phase 13: Records ops (deterministic): catalog (Execution), rights splits (Governance), release calendar (Execution).
+  'records-catalog': recordsCatalog,
+  'records-rights-splits': recordsRightsSplits,
+  'records-release-calendar': recordsReleaseCalendar,
+  // Phase 7: one stub per X3LIUS sub-domain no phase has built yet (none since Phase 12): the
+  // fallback for a sub-domain a future manifest adds. Built ones run as LLM agents (core/runtime/programs.ts).
   ...Object.fromEntries(
     loadMusicSystem().subdomains.filter((s) => !BUILT_SUBDOMAINS.includes(s.slug)).map((s) => [s.slug, subdomainStub]),
   ),

@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { connect } from '../core/db/client.ts';
+import { createRuntimeDeps } from '../core/runtime/deps.ts';
+import { CRITIC_SCORER_ID, criticScorer } from '../records/x3lius/evaluation/scorer.ts';
 import { candidateEligibility, resolveContradiction } from './contradictions/engine.ts';
 import { asRole, RESEARCH_ROLE } from './db.ts';
 import { writeEvidence } from './evidence/engine.ts';
@@ -16,7 +18,9 @@ import { proposeCandidate, recordFinding } from './synthesis/findings.ts';
 //   pnpm research eligibility <candidateId>
 //   pnpm research resolve     <contradictionId> manual|experiment "<reason>" [experimentId]
 //   pnpm research experiment:design '{"candidateId":"…","hypothesis":"…","variantA":{…},"variantB":{…},"nPerVariant":3}'
-//   pnpm research experiment:trial  '{"experimentId":"…","variant":"a","trial":1,"output":{…}}'
+//   pnpm research experiment:trial  '{"experimentId":"…","variant":"a","trial":1,"output":{"artifactId":"…"}}'
+//     Scored by the Phase 12 Critic: output must name the creative artifact the trial produced
+//     ({ "artifactId": "<uuid>" }); anything else is recorded with score null and the reason.
 //   pnpm research experiment:result <experimentId>
 
 const [cmd, arg1, arg2, arg3, arg4] = process.argv.slice(2);
@@ -70,10 +74,10 @@ try {
       out = { resolved: arg1 };
       break;
     case 'experiment:design':
-      out = { experimentId: await designExperiment(sql, json(arg1) as never) };
+      out = { experimentId: await designExperiment(sql, json(arg1) as never, CRITIC_SCORER_ID) };
       break;
     case 'experiment:trial':
-      await recordTrial(sql, json(arg1) as never);
+      await recordTrial(sql, json(arg1) as never, criticScorer(createRuntimeDeps(sql)));
       out = { recorded: true };
       break;
     case 'experiment:result':

@@ -27,13 +27,17 @@ The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04
 | `artifact.write` | Write a new version of a creative artifact (never overwrite) | — | — | — | Y | — | Y | — | — |
 | `artifact.read` | Read a creative artifact version by id (Phase 9) | — | — | — | Y | Y | Y | Y | Y |
 | `critique.write` | Write a structured critique object | — | — | — | — | Y | — | — | — |
+| `critique.read` | Read a critique by id (Phase 12) | — | — | — | — | Y | Y | — | Y |
 | `external.execute` | Perform an external side effect (API submit, file export) | — | — | — | — | — | — | Y | — |
 | `governance.flag` | Write compliance/legal/rights flags; enqueue approval items | — | — | — | — | — | — | — | Y |
+| `records.read` | Read releases, tracks, rights splits and Records flags (Phase 13) | — | — | Y | — | — | — | Y | Y |
+| `catalog.write` | Register releases and tracks in the catalog (Phase 13) | — | — | — | — | — | — | Y | — |
+| `schedule.propose` | Set a release date and request scheduling; the operator decides (Phase 13) | — | — | — | — | — | — | Y | — |
 | `canonical.write` | INSERT/UPDATE `canonical_prompts` / `modules` | — | — | — | — | — | — | — | — |
 | `approval.decide` | Approve/reject an `approval_queue` item | — | — | — | — | — | — | — | — |
 | `audit.write` | Append to `audit_log` | — | — | — | — | — | — | — | — |
 
-Records ops capabilities (catalog, rights splits) are deliberately undefined until Phase 13, where F10 is decided.
+Records ops capabilities were added in Phase 13; splits are written only by the operator.
 
 ## Research
 
@@ -66,14 +70,14 @@ Records ops capabilities (catalog, rights splits) are deliberately undefined unt
 ## Critic
 
 - **Question**: What is wrong with the result?
-- **Allowed inputs**: A creative artifact version and the canonical rubric that governs it.
+- **Allowed inputs**: A creative artifact version, the canonical rules that govern it, and the critique of its parent version when it continues a loop (Phase 12).
 - **Allowed outputs**: A structured critique object listing specific violations, each tied to a rubric rule id.
 - **Forbidden to mutate**: The artifact under review (editing it is Revision's job, so doing it would violate the class boundary); the rubric; canonical knowledge; research tables.
 
 ## Revision
 
 - **Question**: How should it be corrected?
-- **Allowed inputs**: A critique object plus the artifact version it targets.
+- **Allowed inputs**: A critique object (read with critique.read) plus the artifact version it targets.
 - **Allowed outputs**: A new artifact version containing a concrete proposed edit, which is resubmitted to the Critic.
 - **Forbidden to mutate**: The original artifact version, which is never overwritten; the critique, which it cannot mark resolved (only the Critic can); canonical knowledge; research tables.
 

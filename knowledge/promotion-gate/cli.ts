@@ -1,12 +1,16 @@
 import { connect } from '../../core/db/client.ts';
 import { loadEmbedder } from '../vector-retrieval/embedder.ts';
 import { embedPending } from '../vector-retrieval/pipeline.ts';
-import { decideApproval, OPERATOR_ROLE, runGate } from './gate.ts';
+import { decideQueueItem, pendingApprovals, runGate } from './gate.ts';
 
 // Operator access to the Promotion Gate (the approval UI is Phase 16, the API Phase 15):
 //   pnpm gate run    <candidateId>                                  — run a candidate through the gate
-//   pnpm gate queue                                                 — pending approvals with the gate's reasons
-//   pnpm gate decide <approvalId> approve|reject "<approver>" "<reason>" — decide, then re-run the gate
+//   pnpm gate queue                                                 — pending approvals with the gate's reasons (or the
+//                                                                     evaluation loop's escalation request)
+//   pnpm gate decide <approvalId> approve|reject "<approver>" "<reason>" — decide; a knowledge candidate is re-run
+//                                                                     through the gate, a release schedule (Phase 13) is applied
+//                                                                     (approve → scheduled, reject → draft), a critique escalation
+//                                                                     (Phase 12) is recorded
 // A promotion is embedded straight away so retrieval sees it (propagation; `pnpm embed` does the same).
 
 const [cmd, arg1, arg2, arg3, arg4] = process.argv.slice(2);
@@ -25,19 +29,11 @@ try {
       out = await runAndPropagate(arg1!);
       break;
     case 'queue':
-      out = await sql.begin(async (tx) => {
-        await tx.unsafe(`set local role ${OPERATOR_ROLE}`);
-        return tx`
-          select id as approval_id, item_type::text, item_id, requested_at,
-                 request->'gate_reasons' as gate_reasons, request->>'target_slug' as target_slug, request->'confidence' as confidence
-          from approval_queue where status = 'pending' order by requested_at`;
-      });
+      out = await pendingApprovals(sql);
       break;
     case 'decide': {
       if (arg2 !== 'approve' && arg2 !== 'reject') throw new Error('decision must be approve or reject');
-      const status = await decideApproval(sql, arg1!, { decision: arg2, approver: arg3 ?? '', reason: arg4 ?? '' });
-      const [item] = await sql<{ item_id: string }[]>`select item_id from approval_queue where id = ${arg1!}`;
-      out = { approval: status, gate: await runAndPropagate(item!.item_id) };
+      out = await decideQueueItem(sql, arg1!, { decision: arg2, approver: arg3 ?? '', reason: arg4 ?? '' }, runAndPropagate);
       break;
     }
     default:

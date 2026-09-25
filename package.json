@@ -25,17 +25,29 @@
     "ask": "node core/orchestrator/ask-cli.ts",
     "specialists:table": "node research-intelligence/specialists/table-cli.ts",
     "research": "node research-intelligence/cli.ts",
-    "gate": "node knowledge/promotion-gate/cli.ts"
+    "gate": "node knowledge/promotion-gate/cli.ts",
+    "records": "node records/ops/cli.ts",
+    "evaluate": "node records/x3lius/evaluation/cli.ts",
+    "dev": "next dev apps/web --webpack --hostname 127.0.0.1",
+    "build": "next build apps/web --webpack",
+    "start": "next start apps/web --hostname 127.0.0.1",
+    "typecheck:web": "tsc --noEmit -p apps/web/tsconfig.json",
+    "governance:user": "node governance/cli.ts user"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
     "@huggingface/transformers": "^4.3.0",
+    "next": "^16.3.6",
     "postgres": "^3.4.9",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "unpdf": "^1.8.1",
     "yaml": "^2.9.1"
   },

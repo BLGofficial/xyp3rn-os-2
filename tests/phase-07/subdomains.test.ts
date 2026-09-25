@@ -2,8 +2,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createAgentRegistry } from '../../core/agent-registry/registry.ts';
 import { ENTRYPOINTS, planRequest } from '../../core/orchestrator/orchestrate.ts';
-import { BUILT_SUBDOMAINS, HANDLERS } from '../../core/runtime/handlers.ts';
-import { parseScope } from '../../research-intelligence/orchestrator/select.ts';
+import { BUILT_SUBDOMAINS } from '../../core/runtime/handlers.ts';
 import { loadMusicSystem, MUSIC_SYSTEM_SERVICE, selectSubdomains } from '../../records/x3lius/music-system.ts';
 import { REPO_ROOT } from '../helpers/db.ts';
 
@@ -15,15 +14,13 @@ const system = loadMusicSystem();
 // Later phases replace stubs with real agents under the same names (Phase 8: Songwriting, Lyrics,
 // Composition; Phase 9: Suno, Genre/Style; Phase 10: Vocal DNA — tests/phase-08..10). The rest stay stubs.
 const BUILT: readonly string[] = BUILT_SUBDOMAINS;
-// Agents that work inside a sub-domain without being one (Phase 10: the Vocal DNA's RVC consumer).
-const SUBDOMAIN_MEMBERS = ['x3lius-rvc-post'];
+// Agents that work inside a sub-domain without being one (Phase 10: the Vocal DNA's RVC consumer;
+// Phase 12: Evaluation's Revision agent).
+const SUBDOMAIN_MEMBERS = ['x3lius-revision', 'x3lius-rvc-post'];
 
 describe('Agent Registry: one agent per sub-domain', () => {
-  it.each(system.subdomains.filter((s) => !BUILT.includes(s.slug)).map((s) => [s.slug]))('%s: read-only Knowledge stub under RECORDS with a handler and a scope', (slug) => {
-    const a = registry.get(slug);
-    expect(a).toMatchObject({ name: slug, class: 'Knowledge', domain: 'RECORDS', tools: ['retrieve_context', 'log_message'], model: 'none' });
-    expect(HANDLERS[slug]).toBeTypeOf('function');
-    expect(() => parseScope(slug, a!.sections.Scope ?? '')).not.toThrow();
+  it('every manifest sub-domain has a built agent (Phase 12 built Evaluation, the last stub)', () => {
+    expect(system.subdomains.filter((s) => !BUILT.includes(s.slug)).map((s) => s.slug)).toEqual([]);
   });
 
   it('has no x3lius-* agent outside the manifest, and the whole registry still validates', () => {
