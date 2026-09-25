@@ -15,6 +15,7 @@ export const CAPABILITIES = [
   'artifact.write',
   'artifact.read',
   'critique.write',
+  'critique.read',
   'external.execute',
   'governance.flag',
   'canonical.write',
@@ -39,6 +40,9 @@ export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass
   // Critic, Revision and the submitter read the version they act on; Governance audits).
   'artifact.read': ['Creative', 'Critic', 'Revision', 'Execution', 'Governance'],
   'critique.write': ['Critic'],
+  // Phase 12: read a critique by id (Revision reads the one it answers; the Critic reads the previous
+  // one to mark what is resolved; Governance audits).
+  'critique.read': ['Critic', 'Revision', 'Governance'],
   'external.execute': ['Execution'],
   'governance.flag': ['Governance'],
   // No agent class, ever: the Promotion Gate's service account, humans with an RBAC role, and

@@ -1,6 +1,8 @@
 import { createLlmRunner, type LlmProgram } from '../llm/runner.ts';
 import type { LlmRunner } from '../orchestrator/dispatch.ts';
 import { CREATIVE_PROGRAMS } from '../../records/x3lius/creative/program.ts';
+import { CRITIC_AGENT, criticProgram } from '../../records/x3lius/evaluation/critic.ts';
+import { REVISION_AGENT, revisionProgram } from '../../records/x3lius/evaluation/revision.ts';
 
 /**
  * LLM-backed agent programs, keyed by agent name. Checked in and typechecked, like HANDLERS:
@@ -11,6 +13,10 @@ export const LLM_PROGRAMS: Readonly<Record<string, LlmProgram>> = {
   // Phase 8: X3LIUS Songwriting, Lyrics, Composition. Phase 9: Genre/Style, Suno Prompt-Formula.
   // Phase 11: Arrangement, Production.
   ...CREATIVE_PROGRAMS,
+  // Phase 12: the Critic (x3lius-evaluation, replacing its Phase 7 stub).
+  [CRITIC_AGENT]: criticProgram,
+  // Phase 12: Revision (x3lius-revision), run by the loop controller after each critique.
+  [REVISION_AGENT]: revisionProgram,
 };
 
 /**

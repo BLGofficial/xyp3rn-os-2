@@ -217,7 +217,8 @@ describe('registry: Phase 11 Creative agents replace their stubs under the same 
   it('Phase 11 built exactly Arrangement, Production and Mix/Master; only Evaluation (Phase 12) is still a stub', () => {
     const system = loadMusicSystem();
     expect(system.subdomains.filter((s) => s.builtIn === '11').map((s) => s.slug).sort()).toEqual(['x3lius-arrangement', 'x3lius-mix-master', 'x3lius-production']);
-    expect(registry.get('x3lius-evaluation')).toMatchObject({ class: 'Knowledge', model: 'none' });
+    // Phase 12 replaced the Evaluation stub with the Critic.
+    expect(registry.get('x3lius-evaluation')).toMatchObject({ class: 'Critic', domain: 'RECORDS' });
     expect(registry.validateAll()).toEqual([]);
   });
 });

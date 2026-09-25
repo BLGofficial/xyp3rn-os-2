@@ -24,7 +24,7 @@ type Source = ArtifactSource<'lyrics' | 'structure' | 'genre-style'>;
 type SunoState = { readonly sunoModel: string; readonly lyrics: string; readonly sources: readonly Source[] };
 
 const SUNO_MODEL = /^v\d+(\.\d+)?[a-z]*$/;
-const LIMIT_TOPIC = /^suno\.limit\.([a-z]+(?:-[a-z]+)*)-chars$/;
+export const LIMIT_TOPIC = /^suno\.limit\.([a-z]+(?:-[a-z]+)*)-chars$/;
 
 /** A lyrics artifact's sections in song order: v2 holds the whole song, v1 (Phase 8) one section. */
 const sectionsOf = (a: { readonly schemaId: string; readonly body: unknown }): readonly LyricSection[] => {
@@ -47,7 +47,20 @@ export const renderLyrics = (artifacts: readonly { readonly schemaId: string; re
  * Model-agnostic entries apply to every Suno version, `suno-<version>` only to that version, and
  * anything scoped to another tool (e.g. the Vocal DNA's `rvc` settings, Phase 10) never.
  */
-const appliesTo = (tag: string | null, sunoModel: string): boolean => tag === null || tag === 'model-agnostic' || tag === `suno-${sunoModel}`;
+export const appliesTo = (tag: string | null, sunoModel: string): boolean => tag === null || tag === 'model-agnostic' || tag === `suno-${sunoModel}`;
+
+/**
+ * The lengths Suno limits apply to, measured from a Suno-prompt body's own text. The Critic and
+ * Revision measure the same way, never from the stored `limits`.
+ * @param b - a body with title, style, excludeStyles and lyrics
+ * @returns character counts by limit field
+ */
+export const measureSunoText = (b: Record<string, unknown>): Record<string, number> => ({
+  title: String(b.title).length,
+  style: String(b.style).length,
+  'exclude-styles': (b.excludeStyles as string[]).join(', ').length,
+  lyrics: String(b.lyrics).length,
+});
 
 const prepare: CreativeSpec['prepare'] = async (ctx, input) => {
   const sunoModel = typeof input.sunoModel === 'string' ? input.sunoModel.toLowerCase() : '';
@@ -83,12 +96,7 @@ const admit = (e: ContextEntry, p: Prepared): boolean => appliesTo(scopeOf(e), (
 
 const finalize: CreativeSpec['finalize'] = (reply, p, entries) => {
   const s = p.state as SunoState;
-  const measured: Record<string, number> = {
-    title: String(reply.title).length,
-    style: String(reply.style).length,
-    'exclude-styles': (reply.excludeStyles as string[]).join(', ').length,
-    lyrics: s.lyrics.length,
-  };
+  const measured = measureSunoText({ title: reply.title, style: reply.style, excludeStyles: reply.excludeStyles, lyrics: s.lyrics });
   const limits = entries.flatMap((e) => {
     const m = e.kind === 'claim' ? LIMIT_TOPIC.exec(e.topic) : null;
     if (!m || e.kind !== 'claim' || !Number.isInteger(e.value) || !(m[1]! in measured)) return [];

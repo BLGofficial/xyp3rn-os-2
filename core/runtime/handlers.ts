@@ -12,7 +12,7 @@ import { vocalDnaAgent } from '../../records/x3lius/vocal-dna/agent.ts';
 import { rvcPost } from '../../records/x3lius/vocal-dna/rvc-post.ts';
 
 /** X3LIUS sub-domains a phase has built: no longer served by the Phase 7 stub. */
-export const BUILT_SUBDOMAINS: readonly string[] = [...CREATIVE_SUBDOMAINS, 'x3lius-vocal-dna', 'x3lius-mix-master'];
+export const BUILT_SUBDOMAINS: readonly string[] = [...CREATIVE_SUBDOMAINS, 'x3lius-vocal-dna', 'x3lius-mix-master', 'x3lius-evaluation'];
 
 /**
  * Deterministic (`model: none`) agent handlers, keyed by agent name. Checked in and
@@ -30,8 +30,8 @@ export const HANDLERS: HandlerMap = {
   'x3lius-rvc-post': rvcPost,
   // Phase 11: Mix/Master (Creative, deterministic): a TRACE analysis checked against the canonical rubric.
   'x3lius-mix-master': mixMaster,
-  // Phase 7: one stub per X3LIUS sub-domain, from the checked-in manifest (not from agents/),
-  // except those a later phase built (Phases 8–9 and 11 as LLM agents: core/runtime/programs.ts).
+  // Phase 7: one stub per X3LIUS sub-domain no phase has built yet (none since Phase 12): the
+  // fallback for a sub-domain a future manifest adds. Built ones run as LLM agents (core/runtime/programs.ts).
   ...Object.fromEntries(
     loadMusicSystem().subdomains.filter((s) => !BUILT_SUBDOMAINS.includes(s.slug)).map((s) => [s.slug, subdomainStub]),
   ),

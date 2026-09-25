@@ -25,7 +25,8 @@
     "ask": "node core/orchestrator/ask-cli.ts",
     "specialists:table": "node research-intelligence/specialists/table-cli.ts",
     "research": "node research-intelligence/cli.ts",
-    "gate": "node knowledge/promotion-gate/cli.ts"
+    "gate": "node knowledge/promotion-gate/cli.ts",
+    "evaluate": "node records/x3lius/evaluation/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

@@ -143,7 +143,7 @@ Phase 2 wrote `canonical_prompts`/`modules` through a dedicated `xyp_ingest_boot
 - Each component connects as its own least-privilege `xyp_*` role, created in the phase that introduces the component: `xyp_ingest_bootstrap` (2), `xyp_embedder` (3), `xyp_runtime` (3 read path; 4A adds `agent_runs`), `xyp_research` (6A), `xyp_promotion` (6D), `xyp_governance` (15), `xyp_readonly` (16).
 - `service_role` lost INSERT/UPDATE/DELETE/TRUNCATE on `canonical_prompts`, `modules` and `knowledge_versions` in 6D; it remains the operator key and is the only role that can decide approvals (`xyp_decide_approval`). `anon`/`authenticated` are revoked on every table from Phase 1 onward (`docs/SCHEMA.md`).
 
-**F8. The human approval queue appears in three phases (6D table, 12 escalation, 15 API).** PROPOSED, table built in 6D. There is one Governance-owned `approval_queue` table with an `item_type` column (`knowledge_candidate`, `critique_escalation`, …). The table is created in 6D, where it is first needed, and its API is built in 15. Until then the operator decides with `pnpm gate decide` (user decision), which calls `xyp_decide_approval` as `service_role`. The approver name is free text until Phase 15/16 add authentication.
+**F8. The human approval queue appears in three phases (6D table, 12 escalation, 15 API).** PROPOSED, table built in 6D. There is one Governance-owned `approval_queue` table with an `item_type` column (`knowledge_candidate`, `critique_escalation`, …). The table is created in 6D, where it is first needed, and its API is built in 15. Until then the operator decides with `pnpm gate decide` (user decision), which calls `xyp_decide_approval` as `service_role`. The approver name is free text until Phase 15/16 add authentication. Since Phase 12 the evaluation loop writes `critique_escalation` rows through `xyp_escalate_critique` (F29).
 
 **F9. `sources` (Knowledge) vs `research_sources` (Research Intelligence).** PROPOSED.
 
@@ -172,6 +172,7 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
   - Community (0.4) and unknown-host (0.3) evidence can never reach it.
 - Why 180 days: AI music models ship major versions every few months, so older evidence gets a human look.
 - Consequence today: nothing auto-approves before Phase 12, because trials are stub-scored until the Critic exists.
+- Phase 12: trials are scored by the Critic (passed / checked, F28); the auto-approve path can now fire.
 - Changing either number is a new flagged decision, never a silent edit (`knowledge/promotion-gate/decide.ts`).
 
 **F15. Two X3LIUS sub-domains had no building phase.** RESOLVED (user approved the first option).
@@ -271,3 +272,27 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
   - Operator values come from `records/x3lius/mix-rubric.yaml` (`xyp-mix-rubric/v1`, user decision), admitted through the gate's first-party path as one versioned row in `x3lius-mix-master`. Admission refuses `REQUIRED` placeholders.
   - Research candidates can bound a metric too, one claim each on their own slug. A metric stated by two current rows is refused as two sources of truth.
 - **The report.** Each check names its claim ref and version, so the Phase 12 Critic can trace a mix note to the rule in force. A metric no claim bounds is `unset`, never defaulted (the F23 pattern).
+
+**F25. How the Critic finds a violation.** DECIDED (user, Phase 12).
+- **Hybrid.** Code checks every structured claim it has a check for; the model judges only the prose rules. Today's code checks are the Suno `suno.limit.<field>-chars` claims (measured from the text, never from the stored `limits`) and a mix report's own checks.
+- **Code verifies every model-found violation.** The rule must be one the model was given (and not a code-checked one), the path must be a field of the artifact (JSON Pointer), and the quote must appear there word for word. Anything else is kept as `unverified` with its reason and never counts.
+- Rejected: code only (prose rules such as "the hook lands in the chorus" would go unchecked); model only (unreliable on counts and bounds, not repeatable).
+- The rules are the producing sub-domain's, found by the artifact's **schema id** (a revised version is written by `x3lius-revision`), pulled with the artifact's brief, current versions only. A rule the gate changes reaches older output too.
+
+**F26. A mix report is studio work.** DECIDED (user, Phase 12). The Critic critiques it (each raise/lower check is a violation tied to its claim ref and version), and the loop escalates it to the human queue at once. Revision never rewrites a report of measurements: the fix is a change in the session and a new render. Rejected: revising the production artifact's effect chains (they don't map onto measured metrics); critique only (a stored critique nobody is asked to act on).
+
+**F27. Loop guard: at most 3 revisions, plus a stall rule.** DECIDED (user, Phase 12).
+- `MAX_REVISIONS = 3` (`records/x3lius/evaluation/loop.ts`). Each round is two model calls, and a call took minutes on the free route in the Phase 9 live runs, so 3 rounds plus the final Critic pass is at most 7 calls. Three targeted edit rounds that fail to clear the violations are unlikely to be cleared by a fourth.
+- **Stall:** a revision that doesn't reduce the violation count escalates at once.
+- After each Critic pass the first matching rule wins: Critic run failed → `error` (no queue item: a system fault); nothing checked → `no_rules`; no violations → `converged`; mix report → `studio_work`; 3 revisions made → `iteration_cap`; no progress → `stall`; otherwise revise. A refused or failed revision escalates as `revision_failed`.
+- Changing the number is a new flagged decision, never a silent edit (as F14).
+
+**F28. A critique becomes a trial score as rules passed / rules checked.** DECIDED (user, Phase 12). One Critic pass per trial (no revision); the score is the share of applicable rules with no violation, to 4 decimals. No `artifactId` in the trial output, a failed Critic run, or zero rules checked gives score null with the reason, never a number. Rejected: pass/fail (1 and 9 violations score the same); code-weighted (a weight nobody could justify).
+
+**F29. The loop is a code controller over the Orchestrator.** DECIDED (user, Phase 12). `evaluate()` dispatches the Critic and Revision like any agent (authorized, logged in `agent_runs`). It owns no capability; its role `xyp_evaluation_loop` may only call `xyp_escalate_critique`, which writes the `critique_escalation` row (the Promotion Gate's pattern: a service, not an agent, queues for a human). Rejected: a `repeat` construct in the workflow engine (it breaks Phase 5's tested no-cycles rule); the Critic calling Revision directly (it bypasses the dispatch point).
+
+**F30. Open after Phase 12.**
+- **Escalation decisions are only recorded.** `pnpm gate decide` approves (accept the latest version as it is) or rejects (don't use it); nothing acts on the decision until the Phase 15 API and Phase 16 UI.
+- **Revision makes no structural edits** (adding or removing a section). A violation that needs one persists, the stall rule fires, and a human takes it.
+- **Take scoring waits on TRACE.** A Suno take is audio; the Critic reads structured artifacts. New `take_scores` stubs carry `stub:needs-trace-analysis` until Phase 14's `trace.analysis/v1` of a render exists.
+- **No live-model run yet** of the Critic or Revision (no model key); both are proven on the FAKE model with scripted replies.

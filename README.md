@@ -53,8 +53,8 @@ Schema and access model: [docs/SCHEMA.md](docs/SCHEMA.md).
 - [x] Phase 8: Songwriting + Lyrics agents, plus Composition (F15). Live verse produced with Nemotron via OpenRouter ([handoff](docs/handoffs/PHASE-08.md))
 - [x] Phase 9: Suno Generation System, plus Genre/Style (F15). Live brief-to-Suno-prompt produced with Nemotron via OpenRouter: whole-song lyrics against the structure, hook in every chorus; no Suno take yet ([handoff](docs/handoffs/PHASE-09.md))
 - [~] Phase 10: Vocal / Artist DNA. Built and proven on a fixture; waiting on the operator's real Vocal DNA values ([handoff](docs/handoffs/PHASE-10.md))
-- [ ] Phase 11: Production / Mix / Master
-- [ ] Phase 12: Critic + Revision System
+- [~] Phase 11: Production / Mix / Master. Built and proven; the operator's mix rubric is admitted and embedded (PR #9). Waiting on a real render's `trace.analysis/v1` for the first live mix check ([handoff](docs/handoffs/PHASE-11.md))
+- [~] Phase 12: Critic + Revision System. Built and proven on the FAKE model (both loop proofs, 6C scoring through the Critic); Critic run live once (converged, 1 rule, 0 violations); Revision not yet live, since no lyrics rules are admitted to trigger it ([handoff](docs/handoffs/PHASE-12.md))
 - [ ] Phase 13: XYP3RN Records
 - [ ] Phase 14: XYP3RN Tech
 - [ ] Phase 15: Legal / Governance
