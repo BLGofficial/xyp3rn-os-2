@@ -319,10 +319,46 @@ Migration `20260924200000_artifact_warnings.sql`.
 - **`xyp_escalate_critique(critique_id, request)`:** `SECURITY DEFINER`; inserts one pending `approval_queue` row with `item_type critique_escalation`. EXECUTE is `xyp_evaluation_loop`'s alone (the loop controller's role).
 - **New roles:** `xyp_critic`, `xyp_evaluation_loop`.
 
+## Phase 13 additions: Records ops (`releases`, `tracks`, `rights_splits`)
+
+Migration `20260925110000_records_ops.sql`.
+
+- **`releases`:** `title`, `artist`, `kind` (`single` | `ep` | `album`), `upc`, `status` (`release_status`: `draft`, `scheduled`, `released`), `release_date`, `rights_check_run_id`, `agent_run_id`.
+  - Registered as a draft only.
+  - Transitions (else 55000): `draft → scheduled`, `scheduled → draft`, `scheduled → released`. A reschedule is a date change while the status stays `scheduled`.
+  - `release_date` and `rights_check_run_id` are required outside `draft` (checks).
+- **`tracks`:** `release_id`, `position` (> 0), `title`, `isrc`, `take_id` (FK `suno_takes`, the audio), `mix_report_artifact_id` (a `x3lius.mix-report/v1`, else 23514), `agent_run_id`.
+  - Unique per release: `position`, `take_id`, `isrc`.
+  - A track is added to a draft only (55000).
+  - **An ISRC names one recording:** every track with an ISRC shares its `take_id` (23514). One take can sit on a single and an album under one ISRC.
+- **`rights_splits`:** `track_id`, `version`, `payee` (null = the **unassigned share**), `percentage` (`numeric(6,3)`, 0 < p ≤ 100), `agent_run_id`.
+  - Append-only for every role (55000). A change of splits is the track's next version, and `current_rights_splits` (a view, `security_invoker`) shows the highest version.
+  - **Every committed set sums to exactly 100:** a deferred constraint trigger (23514) applies to every role, the owner included, so a set is written whole in one transaction.
+  - A version is 1 when the track has none, and otherwise the current max or max + 1 (23514).
+  - `unique nulls not distinct (track_id, version, payee)` allows at most one unassigned row per set.
+  - An unassigned row is refused once the track's release is `scheduled` or `released` (55000).
+- **The scheduling guard** (trigger on `releases`, 55000). Entering or staying in `scheduled`/`released` with a new date or rights run needs all of:
+  - at least one track;
+  - a current split set on every track;
+  - no unassigned share;
+  - a date: ≥ today to schedule, ≤ today to release;
+  - `rights_check_run_id` naming a successful `records-rights-splits` run whose `output.result` is a `pass` for this release.
+- **Codes:** the ISRC is ISO 3901 without hyphens (`^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$`). The UPC is UPC-A or EAN-13 with a valid GS1 check digit (`xyp_is_valid_gs1`). Both are assigned once: null → value, never changed or cleared (55000).
+- **Concurrency:**
+  - split writes serialize per track (a transaction-scoped advisory lock);
+  - split, track and calendar writes lock the release row (`FOR SHARE` / the UPDATE's row lock).
+  - So a split set and a schedule can't both commit past each other's check. `tests/phase-13` pins both orders.
+- **Roles:**
+  - `xyp_catalog`: INSERT/SELECT on the three tables; UPDATE (`upc`) on `releases`, (`isrc`) on `tracks`.
+  - `xyp_release_calendar`: SELECT; UPDATE (`status`, `release_date`, `rights_check_run_id`) on `releases`.
+  - `xyp_runtime`: SELECT (`read_catalog`), and EXECUTE on `xyp_resolve_take(take_id)` (`resolve_take`: one take's chain, ids, titles and schema id). `xyp_runtime` still has no SELECT on the Suno trail (the Phase 9 boundary).
+  - `service_role`: SELECT only. The Supabase default ALL is revoked, so every write has an `agent_runs` row.
+  - `anon`/`authenticated`: nothing. RLS is on.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).
-2. `enable row level security`, `revoke all … from anon, authenticated`, then explicit grants for the roles that need them.
+2. `enable row level security`, `revoke all … from anon, authenticated, service_role` (the Supabase default privileges grant all three ALL on every new table), then explicit grants for the roles that need them.
 3. A matching `supabase/rollbacks/<stem>.down.sql` with no CASCADE.
 4. Tests in `tests/phase-NN/`, with the negative case asserting an exact SQLSTATE.
 

@@ -1,0 +1,22 @@
+name: records-schedule-release
+description: >-
+  Phase 13, Records ops release calendar: the Rights check (Governance) validates every track's split
+  set and flags any unassigned share; the calendar (Execution) schedules only on a pass for this
+  release, on the operator's date. The DB scheduling guard re-checks the splits and verifies the
+  Rights run the release records, so no path skips it.
+input:
+  required: [releaseId, releaseDate]
+output: { $from: steps.calendar.output }
+steps:
+  - id: rights
+    agent: records-rights-splits
+    input:
+      releaseId: { $from: input.releaseId }
+  - id: calendar
+    agent: records-release-calendar
+    dependsOn: [rights]
+    input:
+      schedule:
+        releaseId: { $from: input.releaseId }
+        releaseDate: { $from: input.releaseDate }
+        rightsCheck: { $from: steps.rights.output }

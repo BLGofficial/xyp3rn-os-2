@@ -16,6 +16,8 @@ export const CAPABILITIES = [
   'artifact.read',
   'critique.write',
   'critique.read',
+  'catalog.read',
+  'catalog.write',
   'external.execute',
   'governance.flag',
   'canonical.write',
@@ -43,6 +45,12 @@ export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass
   // Phase 12: read a critique by id (Revision reads the one it answers; the Critic reads the previous
   // one to mark what is resolved; Governance audits).
   'critique.read': ['Critic', 'Revision', 'Governance'],
+  // Phase 13 (Records ops): the catalog lookup (Knowledge) resolves a take's chain and a release; the
+  // Rights check (Governance) reads splits. Governance's Phase 15 rights-conflict reads the same.
+  'catalog.read': ['Knowledge', 'Governance'],
+  // Phase 13: register releases/tracks, write split sets, assign ISRC/UPC, move the calendar. Execution
+  // only: the operation is fully specified by its input; each tool writes under its own DB role.
+  'catalog.write': ['Execution'],
   'external.execute': ['Execution'],
   'governance.flag': ['Governance'],
   // No agent class, ever: the Promotion Gate's service account, humans with an RBAC role, and
