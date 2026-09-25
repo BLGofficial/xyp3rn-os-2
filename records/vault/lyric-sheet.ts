@@ -109,3 +109,13 @@ export const parseLyricSheet = (text: string, language: string): ParsedSheet => 
       .map(({ d, id }) => `${id} (${sectionLabels([d.kind])[0]}) has no sung lines, so it is instrumental; its directions ${d.directions.map((x) => `"${x}"`).join(', ')} stay only in the sheet`),
   };
 };
+
+/**
+ * A v2 lyrics body back as a lyric sheet (the text the owner edits): each sung section's tag, its
+ * directions as bracketed lines, then its lines; sections separated by a blank line. Instrumental
+ * sections are ids only in v2, so they have no tag to render.
+ * @param body - the sections of an x3lius.lyrics/v2 body (or a parsed sheet)
+ * @returns sheet text that parseLyricSheet reads back to the same sections
+ */
+export const sheetText = (body: { readonly sections: readonly { readonly label: string; readonly directions: readonly string[]; readonly bars: readonly { readonly text: string }[] }[] }): string =>
+  body.sections.map((s) => [`[${s.label}]`, ...s.directions.map((d) => `[${d}]`), ...s.bars.map((b) => b.text)].join('\n')).join('\n\n');
