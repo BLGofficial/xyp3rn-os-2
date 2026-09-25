@@ -23,7 +23,8 @@ const fetchRows = async (tx: postgres.TransactionSql, table: ExportTable, where:
  * was imported into, with all its versions and their approvals; then, repeatedly, every row an
  * exported row points at (a take's submission and formula, a track's release, every agent run…) and
  * the rows that belong to an exported one (a track's splits, a file's text and tags, a version's
- * approval) until nothing new is found.
+ * approval) until nothing new is found. Since AOS-03 also the versions an artifact was built from
+ * (body.sources), the submissions of an exported package, their takes and the takes' ratings.
  */
 const collect = async (tx: postgres.TransactionSql, schema: Schema): Promise<Map<string, Row>> => {
   const rows = new Map<string, Row>();
@@ -75,6 +76,18 @@ const collect = async (tx: postgres.TransactionSql, schema: Schema): Promise<Map
     added += add('platform_link_retractions', await fetchRows(tx, 'platform_link_retractions', 'platform_link_id = any($2::uuid[])', [idsOf('platform_links')]));
     added += add('release_artwork', await fetchRows(tx, 'release_artwork', 'release_id = any($2::uuid[])', [idsOf('releases')]));
     added += add('release_deliveries', await fetchRows(tx, 'release_deliveries', 'release_id = any($2::uuid[])', [idsOf('releases')]));
+    // AOS-03: the versions an exported artifact was built from (a package's lyric, recipe and tag set, a
+    // Phase 9 formula's lyrics), as whole lineages; the attempts of an exported package, their takes, and
+    // the owner's ratings of those takes.
+    const built = await tx<{ lineage_id: string }[]>`
+      select distinct c.lineage_id from creative_artifacts a
+      cross join jsonb_array_elements(case when jsonb_typeof(a.body->'sources') = 'array' then a.body->'sources' else '[]'::jsonb end) x
+      join creative_artifacts c on c.id::text = x->>'artifactId'
+      where a.id = any(${idsOf('creative_artifacts')}::uuid[])`;
+    added += add('creative_artifacts', await fetchRows(tx, 'creative_artifacts', 'lineage_id = any($2::uuid[])', [built.map((b) => b.lineage_id)]));
+    added += add('suno_submissions', await fetchRows(tx, 'suno_submissions', 'formula_artifact_id = any($2::uuid[])', [idsOf('creative_artifacts')]));
+    added += add('suno_takes', await fetchRows(tx, 'suno_takes', 'submission_id = any($2::uuid[])', [idsOf('suno_submissions')]));
+    added += add('take_ratings', await fetchRows(tx, 'take_ratings', 'take_id = any($2::uuid[])', [idsOf('suno_takes')]));
     if (added === 0) return rows;
   }
 };
@@ -118,6 +131,18 @@ const order = (rows: Map<string, Row>, schema: Schema): Row[] => {
   relinks('song_links', 'song_link_retractions', target);
   relinks('credits', 'credit_retractions', (r) => `${r.obj.person_id}|${r.obj.role}|${r.obj.song_id ?? r.obj.track_id}`);
   relinks('platform_links', 'platform_link_retractions', (r) => `${r.obj.platform}|${r.obj.release_id ?? r.obj.track_id}`);
+  // AOS-03: the submission gate runs on import too, so a submission follows the versions its package
+  // names and the owner's decisions on them (neither is a foreign key of the submission).
+  const decisionOf = new Map(all.filter((r) => r.table === 'approval_queue').map((r) => [String(r.obj.item_id), r.key]));
+  for (const s of all.filter((r) => r.table === 'suno_submissions')) {
+    const sources = (rows.get(`creative_artifacts:${String(s.obj.formula_artifact_id)}`)?.obj.body as { sources?: unknown } | undefined)?.sources;
+    for (const src of Array.isArray(sources) ? sources : []) {
+      const id = String((src as { artifactId?: unknown }).artifactId);
+      dep(s.key, `creative_artifacts:${id}`);
+      const decision = decisionOf.get(id);
+      if (decision) dep(s.key, decision);
+    }
+  }
 
   // Kahn's algorithm; the ready set is kept sorted, so the order is a function of the data alone.
   const cmp = (x: Row, y: Row) => byCreated(x, y) || x.table.localeCompare(y.table);

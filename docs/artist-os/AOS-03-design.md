@@ -59,7 +59,7 @@ Defaults the operator did not override:
 | `suno-submitter` | existing agent: package-only submit, Vault takes, `rate` | RECORDS | Execution, `external.execute` + `feedback.write` (new) |
 | `suno_takes.source_id`, `take_ratings` | column, table | RECORDS | written as `xyp_execution` |
 | `xyp_suno_package_ready`, the submission gate, the package writer guard | SQL function, triggers | RECORDS | — |
-| `generation_attempts`, `generation_takes` | views (the trace) | RECORDS | read as `xyp_web`, `xyp_execution` |
+| `generation_attempts`, `generation_takes` | views (the trace) | RECORDS | read as `xyp_web` |
 | optional inputs | `core/workflow-engine` | CORE | — |
 | Studio screens | `apps/web` | UI | reads as `xyp_web`, writes via dispatch |
 
@@ -143,7 +143,7 @@ Sections are separated by a blank line. A section kind the set doesn't cover ref
     - its take count, and `is_traced` (false for a pre-AOS-03 submission).
   - `generation_takes`, one row per take: the Vault file and its sha256 (or the URL), and the current rating.
 - **Roles:**
-  - `xyp_execution` gains INSERT/SELECT on `take_ratings`, SELECT on the views, and EXECUTE on `xyp_suno_package_ready`;
+  - `xyp_execution` gains INSERT/SELECT on `take_ratings` (and `current_take_ratings`) and EXECUTE on `xyp_suno_package_ready`;
   - `xyp_web` gains SELECT on `take_ratings` and the views, and EXECUTE on the function;
   - `service_role` stays read-only (G20).
 

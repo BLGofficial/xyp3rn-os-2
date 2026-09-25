@@ -20,6 +20,8 @@ export const EXPORT_TABLES = [
   // AOS-02 (design §7): the Command Center's records.
   'people', 'person_aliases', 'credits', 'credit_retractions', 'platform_links', 'platform_link_retractions',
   'release_artwork', 'release_deliveries', 'tasks', 'task_events',
+  // AOS-03 (design §7): the owner's ratings of a generation's takes.
+  'take_ratings',
 ] as const;
 export type ExportTable = (typeof EXPORT_TABLES)[number];
 export const isExportTable = (t: string): t is ExportTable => (EXPORT_TABLES as readonly string[]).includes(t);

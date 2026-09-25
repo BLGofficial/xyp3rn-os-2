@@ -1,11 +1,14 @@
 import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { asRole, createTestDb, expectPgError, withRollback, type TestDb } from '../helpers/db.ts';
+import { insertPackage, insertSubmission } from '../helpers/package-fixture.ts';
 
 // Phase 9: the Suno audit trail. suno_submissions (the exact prompt sent, per formula artifact),
 // suno_takes (what came back) and take_scores (the scoring hook — stub rows until the Phase 12
 // Critic). All three are insert-only for every role; the Execution role (xyp_execution) appends
 // them and reads the artifact it submits; nothing here can touch canonical knowledge.
+// Since AOS-03 a submission names an approved Suno prompt package (the submission gate, S4, proven in
+// tests/aos-03/studio-db.test.ts), so the fixtures here build one (tests/helpers/package-fixture.ts).
 
 let db: TestDb;
 beforeAll(async () => {
@@ -16,25 +19,12 @@ afterAll(async () => {
 });
 
 const EXEC = 'xyp_execution';
-const PROMPT = { title: 't', style: 's', excludeStyles: [], lyrics: '[Verse 1]\nx' };
+
+const submission = async (tx: postgres.TransactionSql, adapter = 'manual', taskId: string | null = null) =>
+  insertSubmission(tx, await insertPackage(tx), adapter, taskId);
 
 const run = (tx: postgres.TransactionSql, agent = 'suno-submitter') =>
   tx<{ id: string }[]>`insert into agent_runs (agent_name, class, domain, input) values (${agent}, 'Execution', 'RECORDS', '{}') returning id`.then((r) => r[0]!.id);
-
-const artifact = async (tx: postgres.TransactionSql, schemaId = 'x3lius.suno-prompt/v1') => {
-  const r = await run(tx, 'x3lius-suno');
-  const [a] = await tx<{ id: string }[]>`
-    insert into creative_artifacts (schema_id, agent_name, agent_run_id, brief, body, context_refs, knowledge, model)
-    values (${schemaId}, 'x3lius-suno', ${r}, 'b', '{}', '[]', '{}', 'm') returning id`;
-  return a!.id;
-};
-
-const submission = async (tx: postgres.TransactionSql, adapter = 'manual', taskId: string | null = null) => {
-  const [s] = await tx<{ id: string }[]>`
-    insert into suno_submissions (formula_artifact_id, agent_run_id, adapter, suno_model, prompt, provider_task_id)
-    values (${await artifact(tx)}, ${await run(tx)}, ${adapter}, 'v5', ${tx.json(PROMPT)}, ${taskId}) returning id`;
-  return s!.id;
-};
 
 const take = async (tx: postgres.TransactionSql, submissionId: string, url = 'https://cdn.example.org/take-1.mp3') => {
   const [t] = await tx<{ id: string }[]>`
@@ -53,11 +43,12 @@ describe('suno_submissions', () => {
     });
   });
 
-  it('the prompt must carry every Suno field', async () => {
+  it('the prompt must carry every Suno field (since AOS-03: exactly the package’s own)', async () => {
     await withRollback(db.sql, async (tx) => {
+      const p = await insertPackage(tx);
       await expectPgError(() => tx.savepoint(async (sp) => sp`
         insert into suno_submissions (formula_artifact_id, agent_run_id, adapter, suno_model, prompt)
-        values (${await artifact(sp)}, ${await run(sp)}, 'manual', 'v5', ${sp.json({ style: 's' })})`), '23514');
+        values (${p.packageId}, ${await run(sp)}, 'manual', 'v5', ${sp.json({ style: 's' })})`), '23514');
     });
   });
 });
@@ -110,13 +101,10 @@ describe('insert-only for every role', () => {
 
   it('as xyp_execution: reads the artifact it submits, appends the trail, cannot write artifacts or canonical knowledge', async () => {
     const [r] = await db.sql<{ id: string }[]>`insert into agent_runs (agent_name, class, domain, input) values ('suno-submitter', 'Execution', 'RECORDS', '{}') returning id`;
-    const [ar] = await db.sql<{ id: string }[]>`insert into agent_runs (agent_name, class, domain, input) values ('x3lius-suno', 'Creative', 'RECORDS', '{}') returning id`;
-    const [a] = await db.sql<{ id: string }[]>`
-      insert into creative_artifacts (schema_id, agent_name, agent_run_id, brief, body, context_refs, knowledge, model)
-      values ('x3lius.suno-prompt/v1', 'x3lius-suno', ${ar!.id}, 'b', '{}', '[]', '{}', 'm') returning id`;
+    const p = await insertPackage(db.sql);
     await asRole(db.sql, EXEC, async (tx) => {
-      expect(await tx`select 1 from creative_artifacts where id = ${a!.id}`).toHaveLength(1);
-      await tx`insert into suno_submissions (formula_artifact_id, agent_run_id, adapter, suno_model, prompt) values (${a!.id}, ${r!.id}, 'manual', 'v5', ${tx.json(PROMPT)})`;
+      expect(await tx`select 1 from creative_artifacts where id = ${p.packageId}`).toHaveLength(1);
+      await tx`insert into suno_submissions (formula_artifact_id, agent_run_id, adapter, suno_model, prompt) values (${p.packageId}, ${r!.id}, 'manual', 'v5', ${tx.json(p.prompt as postgres.JSONValue)})`;
     });
     for (const stmt of [
       `insert into creative_artifacts (schema_id, agent_name, agent_run_id, brief, body, context_refs, knowledge, model) values ('x3lius.lyrics/v1', 'a', gen_random_uuid(), 'b', '{}', '[]', '{}', 'm')`,
