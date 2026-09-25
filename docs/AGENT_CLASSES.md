@@ -22,6 +22,7 @@ The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04
 | `log.write` | Emit a log message attached to the current run | Y | Y | Y | Y | Y | Y | Y | Y |
 | `web.read` | Fetch an external URL and register it as a research source (Phase 6C) | Y | — | — | — | — | — | — | — |
 | `research.write` | INSERT `research_evidence` / `research_sources` / `research_findings` | Y | — | — | — | — | — | — | — |
+| `research.read` | Read research evidence and its sources (Phase 14: the Frontier Scanner's output, for the R&D backlog) | — | — | Y | — | — | — | — | — |
 | `candidate.propose` | INSERT `knowledge_candidates` with status `proposed` | Y | — | — | — | — | — | — | — |
 | `plan.write` | Write plans, workflow drafts, `rd_backlog` proposals | — | — | Y | — | — | — | — | — |
 | `artifact.write` | Write a new version of a creative artifact (never overwrite) | — | — | — | Y | — | Y | — | — |
@@ -30,6 +31,7 @@ The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04
 | `critique.read` | Read a critique by id (Phase 12) | — | — | — | — | Y | Y | — | Y |
 | `catalog.read` | Read releases, tracks, current split sets, and a take's provenance chain (Phase 13) | — | Y | — | — | — | — | — | Y |
 | `catalog.write` | Register releases/tracks, write split sets, assign ISRC/UPC, move a release through the calendar (Phase 13) | — | — | — | — | — | — | Y | — |
+| `trace.write` | Record a TRACE analysis as received and link its mix report, once (Phase 14) | — | — | — | — | — | — | Y | — |
 | `external.execute` | Perform an external side effect (API submit, file export) | — | — | — | — | — | — | Y | — |
 | `governance.flag` | Write compliance/legal/rights flags; enqueue approval items | — | — | — | — | — | — | — | Y |
 | `canonical.write` | INSERT/UPDATE `canonical_prompts` / `modules` | — | — | — | — | — | — | — | — |

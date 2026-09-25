@@ -1,5 +1,6 @@
 import { arr, int, num, obj, str, type JsonSchema } from '../../../core/llm/json-schema.ts';
 import { TRACE_ANALYSIS_SCHEMA } from '../../../tech/trace/analysis.ts';
+import { TRACE_CHECK_SCHEMA } from '../../../tech/trace/report.ts';
 
 /**
  * Output contracts of the Phase 8 Creative agents. Structured on purpose: the Phase 12 Critic
@@ -162,20 +163,11 @@ export const PRODUCTION_LLM_SCHEMA = obj({ ...PRODUCTION_WRITTEN, ...TRACEABILIT
 export const PRODUCTION_SCHEMA = obj({ ...PRODUCTION_WRITTEN, sources: upstream('arrangement', 'The arrangement produced; empty when none was given'), ...TRACEABILITY });
 
 export const MIX_REPORT_SCHEMA_ID = 'x3lius.mix-report/v1';
-const RUBRIC_BOUND: JsonSchema = { type: 'object', properties: { min: num('Lowest value in range'), max: num('Highest value in range') }, required: [], additionalProperties: false };
+// The analysis and each check are the TRACE contract's own schemas (tech/trace), never copies (Phase 14).
 export const MIX_REPORT_SCHEMA = obj({
   stage: { type: 'string', enum: ['mix', 'master'] },
   analysis: TRACE_ANALYSIS_SCHEMA,
-  checks: arr(obj({
-    metric: str('trace.analysis/v1 metric id'),
-    unit: str(),
-    measured: num('The analysis value'),
-    rubric: RUBRIC_BOUND,
-    action: { type: 'string', enum: ['keep', 'raise', 'lower'] },
-    by: num('How far to move it to reach the nearest bound, in unit (0 when kept)'),
-    ref: str('The rubric claim: canonical_prompts:<id>#<topic>'),
-    version: int('Version of that canonical row'),
-  }), 'One per metric the rubric bounds, in contract order'),
+  checks: arr(TRACE_CHECK_SCHEMA, 'One per metric the rubric bounds, in contract order'),
   unset: arr(str('A metric no rubric claim bounds: reported, never defaulted')),
 });
 

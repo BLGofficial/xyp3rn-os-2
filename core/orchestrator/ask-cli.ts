@@ -7,6 +7,7 @@ import { createRuntimeTools } from '../runtime/tools.ts';
 import { loadWorkflow, runWorkflow } from '../workflow-engine/engine.ts';
 import { runResearch } from '../../research-intelligence/entrypoint.ts';
 import { runMusicSystem } from '../../records/x3lius/entrypoint.ts';
+import { runTechSystem } from '../../tech/entrypoint.ts';
 import { ENTRYPOINTS, planRequest } from './orchestrate.ts';
 
 // Usage: node core/orchestrator/ask-cli.ts "<request>" [--project <slug>]
@@ -37,6 +38,10 @@ try {
     if (r.status === 'error') process.exitCode = 1;
   } else if (plan.action === 'run-service' && plan.service === 'x3lius-music-system') {
     const r = await runMusicSystem(deps, { request });
+    console.log(JSON.stringify(r, null, 2));
+    if (r.status !== 'success') process.exitCode = 1;
+  } else if (plan.action === 'run-service' && plan.service === 'tech-system') {
+    const r = await runTechSystem(deps, { request });
     console.log(JSON.stringify(r, null, 2));
     if (r.status !== 'success') process.exitCode = 1;
   } else if (plan.action === 'run-workflow') {

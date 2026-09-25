@@ -430,6 +430,8 @@ export type PendingApproval = {
   readonly gate_reasons: unknown; readonly target_slug: string | null; readonly confidence: unknown;
   /** A critique_escalation's request (Phase 12): reason, revisions, version chain, counts per pass. */
   readonly escalation: unknown;
+  /** An rd_backlog_item's request (Phase 14): title, component, proposal, rationale, model, agent run. */
+  readonly backlog: unknown;
 };
 
 /**
@@ -441,7 +443,8 @@ export const pendingApprovals = (sql: Sql): Promise<PendingApproval[]> =>
   asRole(sql, OPERATOR_ROLE, (tx) => tx<PendingApproval[]>`
     select id as approval_id, item_type::text, item_id, requested_at,
            request->'gate_reasons' as gate_reasons, request->>'target_slug' as target_slug, request->'confidence' as confidence,
-           case when item_type = 'critique_escalation' then request end as escalation
+           case when item_type = 'critique_escalation' then request end as escalation,
+           case when item_type::text = 'rd_backlog_item' then request end as backlog
     from approval_queue where status = 'pending' order by requested_at`);
 
 /**

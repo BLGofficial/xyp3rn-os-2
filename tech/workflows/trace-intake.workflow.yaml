@@ -1,0 +1,32 @@
+name: tech-trace-intake
+description: >-
+  Phase 14, the TRACE boundary: record a trace.analysis/v1 as received (Audio Tools, Execution),
+  check it against the canonical mix/master rubric (X3LIUS Mix/Master, Creative, deterministic),
+  then link the report to the analysis. The TRACE service (tech/trace/server.ts) runs this for each
+  POST and answers with trace.report/v1. takeId is a required key whose null means "no take": the
+  workflow engine has no optional inputs.
+input:
+  required: [analysis, takeId]
+output:
+  record: { $from: steps.record.output }
+  check: { $from: steps.check.output }
+  link: { $from: steps.link.output }
+steps:
+  - id: record
+    agent: tech-audio-tools
+    input:
+      record:
+        analysis: { $from: input.analysis }
+        takeId: { $from: input.takeId }
+  - id: check
+    agent: x3lius-mix-master
+    dependsOn: [record]
+    input:
+      analysis: { $from: input.analysis }
+  - id: link
+    agent: tech-audio-tools
+    dependsOn: [record, check]
+    input:
+      link:
+        analysisId: { $from: steps.record.output.analysisId }
+        mixReportArtifactId: { $from: steps.check.output.artifact.id }

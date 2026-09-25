@@ -14,6 +14,8 @@ import { catalog, CATALOG_AGENT } from '../../records/ops/catalog/catalog.ts';
 import { catalogLookup, CATALOG_LOOKUP_AGENT } from '../../records/ops/catalog/lookup.ts';
 import { releaseCalendar, CALENDAR_AGENT } from '../../records/ops/release-calendar/calendar.ts';
 import { rightsCheck, RIGHTS_AGENT } from '../../records/ops/rights-splits/check.ts';
+import { loadTechSystem, techStub } from '../../tech/tech-system.ts';
+import { AUDIO_TOOLS_AGENT, audioTools } from '../../tech/trace/intake.ts';
 
 /** X3LIUS sub-domains a phase has built: no longer served by the Phase 7 stub. */
 export const BUILT_SUBDOMAINS: readonly string[] = [...CREATIVE_SUBDOMAINS, 'x3lius-vocal-dna', 'x3lius-mix-master', 'x3lius-evaluation'];
@@ -41,6 +43,10 @@ export const HANDLERS: HandlerMap = {
   [CATALOG_AGENT]: catalog,
   [RIGHTS_AGENT]: rightsCheck,
   [CALENDAR_AGENT]: releaseCalendar,
+  // Phase 14: TECH. Audio Tools is the TRACE intake (Execution); R&D is an LLM program
+  // (core/runtime/programs.ts); the other components are manifest stubs until a phase builds them.
+  [AUDIO_TOOLS_AGENT]: audioTools,
+  ...Object.fromEntries(loadTechSystem().components.filter((c) => c.builtIn === null).map((c) => [c.slug, techStub])),
   // Phase 7: one stub per X3LIUS sub-domain no phase has built yet (none since Phase 12): the
   // fallback for a sub-domain a future manifest adds. Built ones run as LLM agents (core/runtime/programs.ts).
   ...Object.fromEntries(

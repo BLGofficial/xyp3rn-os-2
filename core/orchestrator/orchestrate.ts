@@ -49,4 +49,5 @@ export const planRequest = (request: string, entrypoints: Entrypoints): RequestP
 export const ENTRYPOINTS: Entrypoints = {
   RESEARCH_INTELLIGENCE: { service: 'run-research' }, // Phase 6A: research-intelligence/entrypoint.ts
   RECORDS: { service: 'x3lius-music-system' }, // Phase 7: records/x3lius/entrypoint.ts
+  TECH: { service: 'tech-system' }, // Phase 14: tech/entrypoint.ts
 };

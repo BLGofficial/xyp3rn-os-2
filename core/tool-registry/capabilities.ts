@@ -10,6 +10,7 @@ export const CAPABILITIES = [
   'log.write',
   'web.read',
   'research.write',
+  'research.read',
   'candidate.propose',
   'plan.write',
   'artifact.write',
@@ -18,6 +19,7 @@ export const CAPABILITIES = [
   'critique.read',
   'catalog.read',
   'catalog.write',
+  'trace.write',
   'external.execute',
   'governance.flag',
   'canonical.write',
@@ -35,6 +37,9 @@ export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass
   // Phase 6C: fetch external material and register it as a research source.
   'web.read': ['Research'],
   'research.write': ['Research'],
+  // Phase 14: read research evidence and its sources. The R&D backlog (Planning) reads the Frontier
+  // Scanner's output; it can't write research (research.write stays Research's alone).
+  'research.read': ['Planning'],
   'candidate.propose': ['Research'],
   'plan.write': ['Planning'],
   'artifact.write': ['Creative', 'Revision'],
@@ -51,6 +56,8 @@ export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass
   // Phase 13: register releases/tracks, write split sets, assign ISRC/UPC, move the calendar. Execution
   // only: the operation is fully specified by its input; each tool writes under its own DB role.
   'catalog.write': ['Execution'],
+  // Phase 14: record a TRACE analysis as received and link its mix report, once (tech-audio-tools).
+  'trace.write': ['Execution'],
   'external.execute': ['Execution'],
   'governance.flag': ['Governance'],
   // No agent class, ever: the Promotion Gate's service account, humans with an RBAC role, and

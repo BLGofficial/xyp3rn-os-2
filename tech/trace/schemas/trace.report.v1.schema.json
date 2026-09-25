@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/BLGofficial/xyp3rn-os-2/blob/main/tech/trace/schemas/trace.report.v1.schema.json",
+  "title": "trace.report/v1",
+  "description": "What the OS answers a trace.analysis/v1 with: each metric the canonical mix/master rubric bounds, as keep/raise/lower by how much and the rubric claim that says so; every unbounded metric as unset.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "enum": [
+        "trace.report/v1"
+      ]
+    },
+    "analysisId": {
+      "type": "string",
+      "description": "The stored analysis (uuid)"
+    },
+    "subject": {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "mix",
+            "master"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "description": "Which render"
+        }
+      },
+      "required": [
+        "stage",
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "description": "A trace.analysis/v1 metric id, e.g. loudness.integrated-lufs"
+          },
+          "unit": {
+            "type": "string",
+            "description": "The metric's unit"
+          },
+          "measured": {
+            "type": "number",
+            "description": "The analysis value"
+          },
+          "rubric": {
+            "type": "object",
+            "properties": {
+              "min": {
+                "type": "number",
+                "description": "Lowest value in range"
+              },
+              "max": {
+                "type": "number",
+                "description": "Highest value in range"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "raise",
+              "lower"
+            ]
+          },
+          "by": {
+            "type": "number",
+            "description": "How far to move it to reach the nearest bound, in unit (0 when kept)"
+          },
+          "ref": {
+            "type": "string",
+            "description": "The rubric claim: canonical_prompts:<id>#<topic>"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Version of that canonical row"
+          }
+        },
+        "required": [
+          "metric",
+          "unit",
+          "measured",
+          "rubric",
+          "action",
+          "by",
+          "ref",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "description": "One per metric the rubric bounds, in contract order"
+    },
+    "unset": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "A metric no rubric claim bounds: reported, never defaulted"
+      }
+    },
+    "rubricClaims": {
+      "type": "integer",
+      "description": "Rubric claims in force for this stage"
+    },
+    "mixReportArtifactId": {
+      "type": "string",
+      "description": "The x3lius.mix-report/v1 artifact (uuid)"
+    }
+  },
+  "required": [
+    "schema",
+    "analysisId",
+    "subject",
+    "checks",
+    "unset",
+    "rubricClaims",
+    "mixReportArtifactId"
+  ],
+  "additionalProperties": false
+}

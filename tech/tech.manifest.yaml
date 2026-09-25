@@ -1,0 +1,31 @@
+# Operator-authored module manifest (first-party). Admitted into canonical knowledge by the
+# Promotion Gate's first-party path: pnpm ingest --file tech/tech.manifest.yaml --origin first_party
+# XYP3RN Tech's four sub-components (the ids reserved in docs/ARCHITECTURE.md). They are components
+# of the TECH domain, not domains: the six-domain taxonomy is unchanged (Phase 14, ARCHITECTURE F33).
+# Each becomes a module with a `subdomain_of` edge to the parent; each has one agent named after its
+# module. built_in: the build-guide phase that implements it; null = registered, no phase builds it yet.
+manifest: xyp-module-manifest/v1
+title: XYP3RN Tech — module manifest
+date: 2026-09-25
+domain: TECH
+module:
+  slug: xyp3rn-tech
+  title: XYP3RN Tech
+  description: XYP3RN's products, audio tools, AI systems and R&D. Owns the TRACE boundary contract (tech/trace) and the R&D backlog.
+subdomains:
+  - slug: tech-products
+    title: Products
+    description: What XYP3RN ships to users, and its roadmap.
+    built_in: null
+  - slug: tech-audio-tools
+    title: Audio Tools
+    description: TRACE and other audio plugins; the TRACE intake (trace.analysis/v1 in, trace.report/v1 out).
+    built_in: '14'
+  - slug: tech-ai-systems
+    title: AI Systems
+    description: The models, providers and agents XYP3RN runs.
+    built_in: null
+  - slug: tech-r-and-d
+    title: R&D
+    description: Candidate features from the Frontier Scanner's evidence, proposed into rd_backlog for a human to decide.
+    built_in: '14'

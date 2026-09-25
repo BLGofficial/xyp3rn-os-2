@@ -2,6 +2,7 @@ import type { ClaimBundle, ClaimItem } from '../../../core/context-engine/contex
 import type { AgentHandler } from '../../../core/orchestrator/dispatch.ts';
 import { parseRubricBound, RUBRIC_SCOPE, type RubricBound } from '../../../knowledge/ingestion/normalizers/mix-rubric.ts';
 import { TRACE_ANALYSIS_SCHEMA_ID, traceMetrics, validateTraceAnalysis, type TraceAnalysis, type TraceMetric } from '../../../tech/trace/analysis.ts';
+import type { TraceCheck } from '../../../tech/trace/report.ts';
 import { CLAIM_NAMESPACE } from '../creative/types.ts';
 import { MIX_REPORT_SCHEMA_ID } from '../creative/schemas.ts';
 
@@ -21,10 +22,8 @@ export const MIX_RUBRIC_FILE = 'records/x3lius/mix-rubric.yaml';
 const CONTRACT_FILE = 'tech/trace/analysis.ts';
 
 type Bound = { readonly bound: RubricBound; readonly claim: ClaimItem; readonly ref: string };
-export type MixCheck = {
-  readonly metric: string; readonly unit: string; readonly measured: number; readonly rubric: RubricBound;
-  readonly action: 'keep' | 'raise' | 'lower'; readonly by: number; readonly ref: string; readonly version: number;
-};
+/** A check is the TRACE contract's (tech/trace/report.ts, trace.report/v1): one definition, shared. */
+export type MixCheck = TraceCheck;
 
 /** Rounded to 2 decimals so float noise (−9 − −12.3 = 3.3000000000000007) never reaches a report. */
 const round = (n: number) => Math.round(n * 100) / 100;
