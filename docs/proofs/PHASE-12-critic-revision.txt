@@ -144,3 +144,18 @@ Tests  77 passed (77)
 # No OPENROUTER_API_KEY in this environment: the Critic's and Revision's model calls ran only against the FAKE model,
 # with scripted replies. The wiring, verification, edit rules, loop decisions and escalation are proven; the quality
 # of a live model's critiques and edits is not.
+
+================================================================================
+## LIVE RUN (2026-09-25, after rebase onto main; Nemotron via OpenRouter; local dev DB, migration 20260925100000 applied)
+$ pnpm dispatch x3lius-lyrics '{"request":"A short dark-trap verse and hook about driving through the city at 3am, alone, neon on wet asphalt"}'
+# status success, 2866 tokens, 330 s; artifact 1e0ee8fb-ca13-47f8-bd91-987443908650 (x3lius.lyrics/v2, v1)
+# knowledge: sparse, 0 rules scoped to x3lius-lyrics / x3lius-vocal-dna, 1 voice claim
+$ pnpm evaluate 1e0ee8fb-ca13-47f8-bd91-987443908650
+pass 1: artifact 1e0ee8fb-ca13-47f8-bd91-987443908650 → critique bf9bb98d-c7ae-4b35-83b3-ad0fbaffe0e4: 0 violation(s)
+outcome: converged
+{ "outcome": "converged", "revisions": 0, "critiqueIds": ["bf9bb98d-..."], "artifactIds": ["1e0ee8fb-..."], "counts": [0] }
+# critique body: rules [{ ref: canonical_prompts:956a75c5-...#x3lius.voice-reference, kind: claim, method: model }],
+#   counts { checked: 1, passed: 1, violations: 0 }, unverified [], violations []
+# Reading: the Critic path is proven live end to end. Revision was not exercised live (no violation to answer);
+#   it needs lyrics rules admitted to this DB first.
+# Full suite after rebase: 58 files, 893/893 tests; tsc --noEmit clean.

@@ -46,8 +46,8 @@ HANDOFF — Phase 12 built and proven on the FAKE model; not run live yet (no mo
   - Escalation decisions are only recorded until the Phase 15 API and Phase 16 UI.
   - Revision makes no structural edits.
   - Take scoring waits on Phase 14's TRACE analysis.
-  - The Critic and Revision have not run against a live model.
-  - The Phase 3 ranking test still fails on this machine until PR #7 merges (test-only fix).
+  - **Live run (2026-09-25, Nemotron via OpenRouter, local dev DB):** Lyrics wrote `1e0ee8fb` (v1), and `pnpm evaluate` converged on pass 1: critique `bf9bb98d`, 1 rule checked (the `x3lius.voice-reference` claim, judged by the model), 0 violations, 0 unverified. The Critic path is proven live. **Revision has not run live:** it needs a violation, and this DB has 0 rules scoped to `x3lius-lyrics` (the artifact's knowledge report is sparse). Admit lyrics rules, then re-run `pnpm evaluate` on a new artifact. Each free-model call took ~1–5.5 min.
+  - ~~The Phase 3 ranking test fails on this machine~~ fixed: PR #7 merged, and after rebasing onto `main` the full suite is 893/893.
 - **Next phase needs (13):**
   1. Records ops (catalog, releases, rights splits) is the F10 decision still open. Its "Knowledge/Execution" agents need the same single-class split Phase 11 used.
   2. Records ops capabilities (catalog, rights) are undefined. Add them to the matrix in `core/tool-registry/capabilities.ts` and `docs/AGENT_CLASSES.md` in Phase 13, never implicitly.
