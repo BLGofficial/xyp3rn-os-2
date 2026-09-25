@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation';
-import { loaders, runtime } from '../../../lib/server';
+import { catalogLoaders, loaders, runtime } from '../../../lib/server';
 import { linkSong, reviseSong, unlinkSong } from '../../actions';
-import { ErrorBanner, Time } from '../../ui';
+import { registerTrackAction } from '../../catalog-actions';
+import { Checks, CreditForm, Credits, TaskForm, Tasks } from '../../catalog-ui';
+import { ErrorBanner, Status, Time } from '../../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,14 +19,58 @@ const Unlink = ({ songId, linkId }: { songId: string; linkId: string }) => (
 );
 
 export default async function Song({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
-  const d = await (await loaders()).songDetail((await runtime()).sql, params.id);
-  if (!d) notFound();
+  const rt = await runtime();
+  const [d, w] = await Promise.all([(await loaders()).songDetail(rt.sql, params.id), (await catalogLoaders()).songWorkspace(rt.sql, params.id)]);
+  if (!d || !w) notFound();
   const { song } = d;
+  // After the existence check: the id is cast to uuid there, so a malformed one must 404 first.
+  const options = await (await catalogLoaders()).recordingOptions(rt.sql, song.id);
+  const back = `/songs/${song.id}`;
   return (
     <section>
       <h1>{song.title}</h1>
-      <p className="meta mt-1">{song.artist} · {song.status} · revision {song.revision} · {song.language ?? 'no language'} · {song.genre ?? 'no genre'}</p>
+      <p className="meta mt-1">
+        {song.artist} · {song.status} · release stage <Status status={w.releaseStage} /> · revision {song.revision} · {song.language ?? 'no language'} · {song.genre ?? 'no genre'}
+      </p>
       <ErrorBanner error={searchParams.error} />
+
+      <h2>Checks</h2>
+      <Checks checks={w.checks} />
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <div>
+          <h2>Credits</h2>
+          <Credits credits={w.credits} back={back} />
+          <CreditForm target={{ songId: song.id }} back={back} />
+        </div>
+        <div>
+          <h2>Releases</h2>
+          <ul className="text-sm">
+            {w.releases.map((r) => <li key={r.id}><a href={`/releases/${r.id}`}>{r.title}</a> <Status status={r.status} /> <span className="meta">{r.releaseDate ?? 'no date'}</span></li>)}
+            {w.releases.length === 0 && <li className="meta">on no release</li>}
+          </ul>
+          {options.files.length > 0 ? (
+            <form action={registerTrackAction} className="mt-2 flex flex-wrap items-end gap-2">
+              <input type="hidden" name="songId" value={song.id} />
+              <input type="hidden" name="position" value="1" />
+              <label className="field">Recording
+                <select name="recording" required defaultValue="">
+                  <option value="" disabled>choose…</option>
+                  {options.files.map((f) => <option key={f.id} value={`vault:${f.id}`}>{f.title}</option>)}
+                </select>
+              </label>
+              <label className="field">New release<input name="releaseTitle" required defaultValue={song.title} /></label>
+              <label className="field">Kind<select name="releaseKind" defaultValue="single"><option>single</option><option>ep</option><option>album</option></select></label>
+              <input type="hidden" name="releaseArtist" value={song.artist} />
+              <button type="submit">Register on a new release</button>
+            </form>
+          ) : <p className="meta">link an audio file to this song to register it on a release</p>}
+        </div>
+      </div>
+
+      <h2>Tasks</h2>
+      <Tasks tasks={w.tasks} back={back} showTarget={false} />
+      <TaskForm target={{ songId: song.id }} back={back} />
 
       <h2>Lyrics</h2>
       <table>

@@ -20,7 +20,10 @@
   .tag { @apply mr-1 inline-block border border-rule px-1 text-xs; }
   .status-approved { @apply bg-records px-1 text-ink; }
   .status-rejected { @apply border border-zinc-500 px-1 text-zinc-400 line-through; }
-  .status-draft, .status-pending { @apply border border-paper px-1; }
+  .status-draft, .status-pending, .status-open { @apply border border-paper px-1; }
+  .status-scheduled { @apply border border-records px-1 text-records; }
+  .status-released, .status-done, .status-live, .status-success { @apply bg-paper px-1 text-ink; }
+  .status-cancelled, .status-error { @apply border border-zinc-500 px-1 text-zinc-400 line-through; }
   .error { @apply my-4 border-2 border-records p-2 text-records; }
   .field { @apply flex flex-col gap-1 text-xs uppercase tracking-widest; }
 }

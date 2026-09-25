@@ -78,9 +78,9 @@ export const dashboard = (sql: Sql) =>
       select id, question, created_at from research_questions order by created_at desc, id limit 5`;
     const findings = await tx<{ id: string; claim: string; confidence: string; created_at: Date }[]>`
       select id, claim, confidence::text, created_at from research_findings order by created_at desc, id limit 5`;
-    const [{ now }] = (await tx<{ now: Date }[]>`select now()`) as [{ now: Date }];
+    const [clock] = await tx<{ now: Date }[]>`select now()`;
     return {
-      asOf: now.toISOString(),
+      asOf: clock!.now.toISOString(),
       songsByStatus: SONG_STATUSES.map((status) => ({
         status, songs: songs.filter((s) => s.status === status).map((s) => ({ id: s.id, title: s.title, revision: s.revision, createdAt: s.created_at.toISOString() })),
       })),
@@ -230,3 +230,24 @@ export const songWorkspace = (sql: Sql, id: string) =>
   });
 
 export type { SongRef };
+
+/**
+ * What a track can be registered from: Vault audio files (optionally only one song's) and Suno takes.
+ * @param sql - the app's pool
+ * @param songId - only this song's linked audio files, when given
+ * @returns audio files and takes, newest first
+ */
+export const recordingOptions = (sql: Sql, songId?: string) =>
+  asWeb(sql, async (tx) => {
+    const files = await tx<{ id: string; title: string; created_at: Date }[]>`
+      select s.id, s.title, s.created_at from sources s
+      where s.storage is not null and s.media_class = 'audio'
+        and (${songId ?? null}::uuid is null or exists (select from current_song_links l where l.song_id = ${songId ?? null} and l.source_id = s.id))
+      order by s.created_at desc, s.id limit 100`;
+    const takes = songId ? [] : await tx<{ id: string; title: string | null; created_at: Date }[]>`
+      select id, title, created_at from suno_takes order by created_at desc, id limit 100`;
+    return {
+      files: files.map((f) => ({ id: f.id, title: f.title, createdAt: f.created_at.toISOString() })),
+      takes: takes.map((t) => ({ id: t.id, title: t.title ?? t.id, createdAt: t.created_at.toISOString() })),
+    };
+  });

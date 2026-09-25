@@ -1,37 +1,15 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { issueSession, SESSION_COOKIE, SESSION_MAX_AGE_S, tokenMatches, tokenProblem, verifySession } from '../lib/session';
+import { attempt, back, opt, text } from './action-kit';
+import { issueSession, SESSION_COOKIE, SESSION_MAX_AGE_S, tokenMatches, tokenProblem } from '../lib/session';
 import { ops, runtime } from '../lib/server';
 
 // The UI's writes (AOS-01 §9, A2). Each action re-checks the session (the middleware already did)
 // and calls apps/web/server/ops.ts: an agent run through dispatch, or the owner's decision. A
-// refusal comes back to the page as ?error=, never as a crash.
-
-const text = (f: FormData, k: string): string => String(f.get(k) ?? '').trim();
-const opt = (f: FormData, k: string): string | undefined => text(f, k) || undefined;
-const back = (path: string, error?: string): never =>
-  redirect(error ? `${path}${path.includes('?') ? '&' : '?'}error=${encodeURIComponent(error)}` : path);
-
-const guard = async (): Promise<void> => {
-  const token = process.env.XYP_WEB_TOKEN;
-  if (tokenProblem(token) || !(await verifySession(token!, cookies().get(SESSION_COOKIE)?.value, Date.now()))) redirect('/login');
-};
-
-/** Runs a write; on failure returns to `path` with the refusal, on success to `done` (default `path`). */
-const attempt = async <T>(path: string, fn: () => Promise<T>, done?: (r: T) => string): Promise<never> => {
-  await guard();
-  let r: T;
-  try {
-    r = await fn();
-  } catch (e) {
-    return back(path, e instanceof Error ? e.message : String(e));
-  }
-  revalidatePath('/', 'layout');
-  return back(done ? done(r) : path);
-};
+// refusal comes back to the page as ?error=, never as a crash. The Command Center's writes (AOS-02)
+// are in catalog-actions.ts.
 
 export async function login(form: FormData) {
   const token = process.env.XYP_WEB_TOKEN;
