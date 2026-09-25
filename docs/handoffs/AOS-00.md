@@ -20,13 +20,13 @@ HANDOFF — Artist OS AOS-00 (baseline) complete; four decisions needed before A
   - C6: Spotify and Apple Music have no public artist-analytics API, to my knowledge (unverified).
   - C7: the research specialists can't run live.
   - Found while doing this: PR #12 was merged at its Phase 13 head. Phase 14 is re-proposed in PR #13 (rebased, same tree).
-- **Decisions needed** (§6, recommendation first):
-  - D1 IDs: keep v4 / v7 for new tables / switch all.
-  - D2 F14: off / keep for findings only / keep.
-  - D3 old 15–17: absorb into AOS-07/08 / finish 15 first / keep both.
-  - D4 file bytes: local content-addressed store behind one interface / Supabase Storage now / path only.
+- **Decisions** (operator, 2026-09-25; the recommendation each time):
+  - D1: keep UUID v4.
+  - D2: F14 auto-approval off.
+  - D3: old Phases 15–17 absorbed into AOS (the Graph View dropped unless asked).
+  - D4: a local content-addressed store (`.vault/<sha256>`) behind one storage interface, with Supabase Storage as a later adapter.
 - **Next phase needs (AOS-01):**
-  1. The D1–D4 answers.
+  1. D2 implemented, plus G20 (the prerequisite step P, before any AOS-01 table).
   2. The G20 prerequisite migration: `service_role` is read-only on the earlier-phase tables.
   3. Owners: the `songs` table in RECORDS; bytes and ingestion in `knowledge/source-registry` + `knowledge/ingestion`; search in `core/context-engine`; the Vault browser in `apps/web` (Next.js 14).
   4. Export / re-import with links (the AOS-01 gate) builds on `knowledge_versions` and artifact lineages. There is no second store.

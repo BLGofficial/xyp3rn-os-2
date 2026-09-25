@@ -161,14 +161,14 @@ The plan's order holds. Only the prerequisites (P) are added, and two gaps are p
   - TikTok's API access is limited.
 - **C7: Research mode can't run live yet.** The specialists need an LLM program and a key (G12).
 
-## 6. Decisions needed before AOS-01
+## 6. Decisions before AOS-01 (DECIDED by the operator, 2026-09-25: each recommendation)
 
 | # | Question | Options (recommendation first) |
 |---|---|---|
-| D1 | IDs (C1) | **(a) Keep v4** for every table: consistent, and ordering comes from `created_at`. (b) v7 for new tables only, through a SQL function. (c) Switch every default to v7; existing rows keep v4. |
-| D2 | F14 auto-approval (C2) | **(a) Turn it off:** every canonical change goes to the owner, which matches the plan. (b) Keep it for research findings only, and never for methods (prompts, agents, workflows, templates). (c) Keep it as is. |
-| D3 | Old Phases 15–17 (C4) | **(a) Absorb them into AOS-07/08:** RBAC, approval API and audit in AOS-07/08; the UI in AOS-01+; the old Graph View dropped unless asked for. (b) Finish old Phase 15 first, then AOS. (c) Keep both sequences running. |
-| D4 | Where file bytes live (G2) | **(a) A local content-addressed store** (`.vault/<sha256>`, pointed to by `sources`) behind one storage interface, with Supabase Storage as a later adapter. (b) Supabase Storage now. (c) A path-only reference, as today. |
+| D1 | IDs (C1) | **Decided: (a) keep v4** for every table: consistent, and ordering comes from `created_at`. Rejected: (b) v7 for new tables only, through a SQL function; (c) switch every default to v7. The plan's "UUID v7" line is superseded. |
+| D2 | F14 auto-approval (C2) | **Decided: (a) turn it off.** Every canonical change goes to the owner, which matches the plan. Rejected: (b) keep it for research findings only; (c) keep it as is. Done in the prerequisite step (P). |
+| D3 | Old Phases 15–17 (C4) | **Decided: (a) absorb them.** RBAC, the approval API and the audit log go into AOS-07/08; the UI is built from AOS-01 on as the Command Center; the radial Graph View is dropped unless asked for. Rejected: (b) finish old Phase 15 first; (c) keep both sequences. |
+| D4 | Where file bytes live (G2) | **Decided: (a) a local content-addressed store** (`.vault/<sha256>`, pointed to by `sources`) behind one storage interface, with Supabase Storage as a later adapter. Rejected: (b) Supabase Storage now; (c) paths only. |
 
 Also assumed from the operator's stack, and not asked: the UI is Next.js 14 + TypeScript + Tailwind in `apps/web`, and Supabase remains the target database (local Postgres 16 until deployment).
 

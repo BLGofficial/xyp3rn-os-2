@@ -367,3 +367,14 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **The service is local-only.** Exposing it beyond localhost (TLS, rotating tokens, per-plugin identities) is a deployment decision.
 - **Approved backlog items.** Nothing reads an approval as a trigger to build anything, and a "shipped" state would be a new decision.
 
+**F35. The Artist OS sequence (AOS-00 → AOS-08).** DECIDED (operator, 2026-09-25).
+- The operator's plan (`docs/artist-os/PLAN.md`) is now the build sequence. It extends this OS; it does not replace it. The baseline and the no-parallel-kernel gate (`tests/aos-00`) are in `docs/artist-os/AOS-00-baseline.md`.
+- **D1:** ids stay UUID v4 (`gen_random_uuid()`) on every table. The plan's "UUID v7" line is superseded.
+- **D2:** F14 auto-approval is turned off, so every canonical change goes to the owner's `approval_queue`. This supersedes F14's rule; its thresholds remain only as reasons shown to the human.
+- **D3:** the old build guide's Phases 15–17 are absorbed:
+  - RBAC, the approval API and the audit log go into AOS-07/08;
+  - the UI is built from AOS-01 on as the Command Center in `apps/web`;
+  - the radial Graph View is dropped unless the operator asks for it;
+  - end-to-end validation becomes each AOS gate.
+- **D4:** Creative Vault bytes live in a local content-addressed store (`.vault/<sha256>`, referenced from `sources`) behind one storage interface. Supabase Storage is a second adapter at deployment.
+
