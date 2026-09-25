@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseLyricSheet } from './lyric-sheet.ts';
+import { parseLyricSheet, sheetText } from './lyric-sheet.ts';
 
 // AOS-01: a lyric sheet (the owner's text) becomes x3lius.lyrics/v2 sections. Section tags map to
 // the existing section kinds; any other bracketed line is a direction (never sung, F21); without
@@ -52,5 +52,14 @@ describe('parseLyricSheet', () => {
     expect(parseLyricSheet('[Whispered]\n[Verse]\nhello', 'en').sections[0]).toMatchObject({ kind: 'verse', directions: ['Whispered'] });
     expect(() => parseLyricSheet(' \n\n', 'en')).toThrow(/no lyrics/);
     expect(() => parseLyricSheet('[Intro]\n[Outro]', 'en')).toThrow(/no lyrics/);
+  });
+});
+
+describe('sheetText', () => {
+  it('renders sung sections back as a sheet the parser reads to the same sections (the UI edits this text)', () => {
+    const p = parseLyricSheet('[Verse 1]\n[Whispered]\nNight city lights\nNeon on the glass\n\n[Chorus]\nWe run tonight\n', 'en');
+    const text = sheetText(p);
+    expect(text).toBe('[Verse 1]\n[Whispered]\nNight city lights\nNeon on the glass\n\n[Chorus]\nWe run tonight');
+    expect(parseLyricSheet(text, 'en').sections).toEqual(p.sections);
   });
 });
