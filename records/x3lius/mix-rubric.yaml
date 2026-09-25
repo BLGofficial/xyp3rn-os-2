@@ -12,13 +12,13 @@ artist: X3LIUS
 date: 2026-09-24
 module: x3lius-mix-master
 master:
-  loudness.integrated-lufs: { min: REQUIRED, max: REQUIRED }   # LUFS
-  loudness.true-peak-dbtp: { max: REQUIRED }                   # dBTP ceiling
-  loudness.range-lu: { min: REQUIRED }                         # LU
-  dynamics.crest-factor-db: { min: REQUIRED }                  # dB
-  stereo.correlation: { min: REQUIRED }                        # -1..1
-  stereo.sub.width-pct: { max: REQUIRED }                      # %, 0 = mono sub
-  tonal.sub-db: { min: REQUIRED, max: REQUIRED }               # dB relative to full band
+  loudness.integrated-lufs: { min: -9.5, max: -7.5 }   # LUFS — loud dark-trap master, competitive club level
+  loudness.true-peak-dbtp: { max: -1.0 }               # dBTP ceiling — standard streaming-safe limit
+  loudness.range-lu: { min: 3.0 }                      # LU — narrow, heavily-limited trap dynamics
+  dynamics.crest-factor-db: { min: 6.0 }               # dB — floor to catch over-limiting/pumping
+  stereo.correlation: { min: 0.15 }                    # -1..1 — avoid phase cancellation on mono playback
+  stereo.sub.width-pct: { max: 10 }                    # % — sub effectively mono, near-full collapse
+  tonal.sub-db: { min: -3.0, max: 3.0 }                # dB rel. full band — sub sits near reference, no boom/thin
 mix:
-  loudness.true-peak-dbtp: { max: REQUIRED }                   # headroom left for mastering, dBTP
-  stereo.sub.width-pct: { max: REQUIRED }                      # %
+  loudness.true-peak-dbtp: { max: -6.0 }               # dBTP — headroom reserved for mastering stage
+  stereo.sub.width-pct: { max: 15 }                    # % — looser than master, tightened at master stage
