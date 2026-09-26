@@ -4,8 +4,9 @@ import type { LlmProgram } from '../../core/llm/runner.ts';
 
 /**
  * The 20 Research specialists' one program (AOS-04 R4). Deterministic steps around one model call:
- *   passages   canonical rows from retrieve_context that trace to an ingested source (citable through it)
- *              + the brief's URLs via fetch_source (the model never supplies a URL); capped at PASSAGE_BUDGET chars
+ *   passages   the brief's URLs via fetch_source first (the owner's sources; the model never supplies a URL),
+ *              then canonical rows from retrieve_context that trace to an ingested source (citable through
+ *              it) in what is left of PASSAGE_BUDGET chars
  *   no sources no model call; the specialist declines (it never asserts from model memory)
  *   one call   the agent's own Role, Scope and Refuses as the system prompt; claims must quote a passage
  *   write      each claim through write_evidence; the DB verifies the quote verbatim. A claim that fails a
@@ -91,12 +92,6 @@ export const specialistProgram: LlmProgram = async (ctx, input, llm) => {
     passages.push({ n: passages.length + 1, title, text, cite });
   };
 
-  const bundle = (await ctx.useTool('retrieve_context', { query: i.question })) as Partial<ContextBundle>;
-  for (const item of bundle.items ?? []) {
-    // A canonical row is citable only through the ingested source it traces to (write_evidence refuses the rest).
-    if (item.ref.table === 'canonical_prompts' && item.source) add(item.title, item.text, { canonical_prompt_id: item.ref.id });
-    else context.push(`- ${item.title}: ${item.snippet}`);
-  }
   for (const url of urls) {
     try {
       const page = (await ctx.useTool('fetch_source', { url })) as { research_source_id: string; title: string; uri: string; text: string };
@@ -105,6 +100,12 @@ export const specialistProgram: LlmProgram = async (ctx, input, llm) => {
       failedUrls.push({ url, reason: message(e) });
       await ctx.useTool('log_message', { level: 'warn', message: `${ctx.agent.name}: skipped ${url}: ${message(e)}` });
     }
+  }
+  const bundle = (await ctx.useTool('retrieve_context', { query: i.question })) as Partial<ContextBundle>;
+  for (const item of bundle.items ?? []) {
+    // A canonical row is citable only through the ingested source it traces to (write_evidence refuses the rest).
+    if (item.ref.table === 'canonical_prompts' && item.source) add(item.title, item.text, { canonical_prompt_id: item.ref.id });
+    else context.push(`- ${item.title}: ${item.snippet}`);
   }
   if (dropped > 0) await ctx.useTool('log_message', { level: 'warn', message: `${ctx.agent.name}: ${dropped} passage(s) over the ${PASSAGE_BUDGET}-char budget dropped` });
 
