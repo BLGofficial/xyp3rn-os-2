@@ -222,8 +222,8 @@ Sections are separated by a blank line. A section kind the set doesn't cover ref
   - the submitter (package only; no adapter call for a draft; Vault takes; `rate`);
   - optional inputs in the engine and in `register-track`.
 - **`tests/aos-03/idea-to-take.test.ts`** (the gate), through agents and workflows:
-  1. a song at `idea`, with a lyric sheet;
-  2. a recipe from a model formula, edited;
+  1. a song at `idea`, with a lyric sheet, edited to v2;
+  2. a recipe, edited to v2 (`recipeFrom` needs a model formula, so it is proven in the agent tests, not here);
   3. the default tag set, edited with cues;
   4. a package (workflow);
   5. the submission refused while a source is a draft, then accepted once each is approved;
