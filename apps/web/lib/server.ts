@@ -7,6 +7,8 @@ type CatalogLoaders = typeof import('../server/catalog-loaders.ts');
 type CatalogOps = typeof import('../server/catalog-ops.ts');
 type StudioLoaders = typeof import('../server/studio-loaders.ts');
 type StudioOps = typeof import('../server/studio-ops.ts');
+type ResearchLoaders = typeof import('../server/research-loaders.ts');
+type ResearchOps = typeof import('../server/research-ops.ts');
 type Runtime = typeof import('../server/runtime.ts');
 type Store = typeof import('../../../knowledge/source-registry/vault-store.ts');
 
@@ -16,6 +18,8 @@ export const catalogLoaders = () => osImport<CatalogLoaders>('apps/web/server/ca
 export const catalogOps = () => osImport<CatalogOps>('apps/web/server/catalog-ops.ts');
 export const studioLoaders = () => osImport<StudioLoaders>('apps/web/server/studio-loaders.ts');
 export const studioOps = () => osImport<StudioOps>('apps/web/server/studio-ops.ts');
+export const researchLoaders = () => osImport<ResearchLoaders>('apps/web/server/research-loaders.ts');
+export const researchOps = () => osImport<ResearchOps>('apps/web/server/research-ops.ts');
 export const runtime = async () => (await osImport<Runtime>('apps/web/server/runtime.ts')).runtime();
 export const vaultStore = async () => {
   const s = await osImport<Store>('knowledge/source-registry/vault-store.ts');

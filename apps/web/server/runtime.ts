@@ -4,12 +4,14 @@ import { createContextEngine, type ContextEngine } from '../../../core/context-e
 import { connect, type Sql } from '../../../core/db/client.ts';
 import type { DispatchDeps } from '../../../core/orchestrator/dispatch.ts';
 import { HANDLERS } from '../../../core/runtime/handlers.ts';
+import { createRuntimeLlmRunner } from '../../../core/runtime/programs.ts';
 import { createRuntimeTools } from '../../../core/runtime/tools.ts';
 import { loadEmbedder } from '../../../knowledge/vector-retrieval/embedder.ts';
 
 /**
  * The web server's one OS runtime per process (loaded through lib/os.ts, which Node caches): one
- * pool, one agent registry, one tool set, and the Context Engine loaded on first search.
+ * pool, one agent registry, one tool set, the LLM runner (AOS-04: the Research specialists; provider keys
+ * from the environment), and the Context Engine loaded on first search.
  */
 
 type Runtime = { readonly sql: Sql; readonly deps: DispatchDeps; readonly engine: () => Promise<ContextEngine>; readonly owner: string };
@@ -22,7 +24,7 @@ let current: Runtime | undefined;
 export const runtime = (): Runtime => {
   if (!current) {
     const sql = connect(undefined, { max: 4 });
-    const deps: DispatchDeps = { sql, registry: createAgentRegistry({ dir: join(import.meta.dirname, '..', '..', '..', 'agents') }), tools: createRuntimeTools({ sql }), handlers: HANDLERS };
+    const deps: DispatchDeps = { sql, registry: createAgentRegistry({ dir: join(import.meta.dirname, '..', '..', '..', 'agents') }), tools: createRuntimeTools({ sql }), handlers: HANDLERS, llmRunner: createRuntimeLlmRunner() };
     let engine: Promise<ContextEngine> | undefined;
     current = { sql, deps, engine: () => (engine ??= loadEmbedder().then((e) => createContextEngine(sql, e))), owner: process.env.XYP_OWNER || 'owner' };
   }
