@@ -11,6 +11,7 @@ import { createRuntimeTools } from '../../../core/runtime/tools.ts';
 import { createLocalVaultStore } from '../../../knowledge/source-registry/vault-store.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../../../tests/helpers/db.ts';
 import { FAKE_KEYS, fakeModel } from '../../../tests/helpers/fake-llm.ts';
+import { openResearch } from '../../../research-intelligence/entrypoint.ts';
 import { songCreate } from './ops.ts';
 import { library, previewSelection, researchFor, researchIndex, runDetail } from './research-loaders.ts';
 import { decideFindingOp, decidePromotionOp, promoteOp, rerun, retractLinkOp, startBrief, sweepOnBoot } from './research-ops.ts';
@@ -138,10 +139,14 @@ describe('research ops and loaders (AOS-04 §8)', () => {
     expect(d.run.status).toBe('success');
   });
 
-  it('the boot sweep seals a run a stopped server left past its deadline', async () => {
-    const { researchRunId } = await startBrief(deps, { projectSlug: 'web', question: '[FIXTURE] What should we eat tonight?', intendedUse: '[FIXTURE] u' }, quiet);
-    await settled(researchRunId);
-    expect(await sweepOnBoot(db.sql)).toEqual([]);
+  it('the boot sweep seals a run a stopped server left past its deadline, and only that one', async () => {
+    // Opened but never executed, as when the server stops between the two.
+    const left = await openResearch(deps, { projectSlug: 'web', question: '[FIXTURE] left running', intendedUse: '[FIXTURE] u', specialists: ['suno-researcher'] });
+    const live = await openResearch(deps, { projectSlug: 'web', question: '[FIXTURE] still in time', intendedUse: '[FIXTURE] u', specialists: ['suno-researcher'] });
+    await db.sql`update research_runs set expires_at = now() - interval '1 minute' where id = ${left.researchRunId}`;
+    expect(await sweepOnBoot(db.sql)).toEqual([left.researchRunId]);
+    expect((await runDetail(db.sql, left.researchRunId))!.run).toMatchObject({ status: 'error', error: expect.stringMatching(/^abandoned: no result by /) });
+    expect((await runDetail(db.sql, live.researchRunId))!.run.status).toBe('running');
   });
 
   it('runDetail of an unknown run is null', async () => {
