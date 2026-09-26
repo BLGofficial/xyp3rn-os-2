@@ -3,7 +3,7 @@ name: lyrics-rhyme-systems-researcher
 class: Research
 domain: RESEARCH_INTELLIGENCE
 tools: [retrieve_context, fetch_source, write_evidence, log_message]
-model: claude-sonnet-5
+model: openrouter:nvidia/nemotron-3-ultra-550b-a55b:free
 ---
 
 # Lyrics & Rhyme Systems Researcher

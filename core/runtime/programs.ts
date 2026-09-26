@@ -4,11 +4,12 @@ import { CREATIVE_PROGRAMS } from '../../records/x3lius/creative/program.ts';
 import { CRITIC_AGENT, criticProgram } from '../../records/x3lius/evaluation/critic.ts';
 import { REVISION_AGENT, revisionProgram } from '../../records/x3lius/evaluation/revision.ts';
 import { RD_AGENT, rdBacklogProgram } from '../../tech/r-and-d/backlog.ts';
+import { SPECIALISTS, specialistProgram } from '../../research-intelligence/specialists/program.ts';
 
 /**
  * LLM-backed agent programs, keyed by agent name. Checked in and typechecked, like HANDLERS:
- * nothing is loaded dynamically from agents/. An LLM agent missing here fails dispatch with
- * "no LLM program registered" (the Phase 6B specialists, until their runner exists).
+ * nothing is loaded dynamically from agents/. Every LLM agent in agents/ has one; one missing here
+ * fails dispatch with "no LLM program registered".
  */
 export const LLM_PROGRAMS: Readonly<Record<string, LlmProgram>> = {
   // Phase 8: X3LIUS Songwriting, Lyrics, Composition. Phase 9: Genre/Style, Suno Prompt-Formula.
@@ -20,6 +21,8 @@ export const LLM_PROGRAMS: Readonly<Record<string, LlmProgram>> = {
   [REVISION_AGENT]: revisionProgram,
   // Phase 14: the R&D backlog (tech-r-and-d, Planning): proposals from the Frontier Scanner's evidence.
   [RD_AGENT]: rdBacklogProgram,
+  // AOS-04 (R4): the 20 Research specialists share one grounded-evidence program.
+  ...Object.fromEntries(SPECIALISTS.map((name) => [name, specialistProgram])),
 };
 
 /**
