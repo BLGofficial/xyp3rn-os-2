@@ -21,23 +21,33 @@ export const insertCanonical = async (
   sql.begin(async (tx) => {
     let sourceId: string | null = null;
     let checksum: string | null = null;
+    // A bootstrap row must name its source (canonical_base); a sourceless one can only be a gate promotion,
+    // whose history row names its knowledge candidate. That chain isn't what these tests are about, so the
+    // sourceless row skips its history under replica mode (triggers off, this transaction only).
+    const via = o.withSource === false ? 'gate' : 'bootstrap';
+    if (o.withSource === false) await tx`set local session_replication_role = replica`;
     if (o.withSource !== false) {
       checksum = createHash('sha256').update(randomUUID()).digest('hex');
-      [{ id: sourceId }] = await tx<{ id: string }[]>`
+      const [s] = await tx<{ id: string }[]>`
         insert into sources (kind, uri, title, checksum_sha256) values ('file', ${`file:///fixture/${o.slug}.md`}, ${`[FIXTURE] ${o.slug}.md`}, ${checksum})
         returning id`;
+      sourceId = s!.id;
     }
     const [m] = await tx<{ id: string }[]>`
-      insert into modules (slug, title, domain, source_id, promoted_via) values (${`${o.slug}-module`}, '[FIXTURE] module', 'RECORDS', ${sourceId}, 'bootstrap')
+      insert into modules (slug, title, domain, source_id, promoted_via) values (${`${o.slug}-module`}, '[FIXTURE] module', 'RECORDS', ${sourceId}, ${via})
       returning id`;
-    await tx`insert into knowledge_versions (canonical_table, canonical_id, version, promoted_via, snapshot)
-             values ('modules', ${m!.id}, 1, 'bootstrap', ${tx.json({ fixture: true })})`;
+    if (o.withSource !== false) {
+      await tx`insert into knowledge_versions (canonical_table, canonical_id, version, promoted_via, snapshot)
+               values ('modules', ${m!.id}, 1, ${via}, ${tx.json({ fixture: true })})`;
+    }
     const [cp] = await tx<{ id: string }[]>`
       insert into canonical_prompts (module_id, slug, title, body, source_id, promoted_via)
-      values (${m!.id}, ${o.slug}, ${`[FIXTURE] ${o.slug}`}, ${o.body}, ${sourceId}, 'bootstrap')
+      values (${m!.id}, ${o.slug}, ${`[FIXTURE] ${o.slug}`}, ${o.body}, ${sourceId}, ${via})
       returning id`;
-    await tx`insert into knowledge_versions (canonical_table, canonical_id, version, promoted_via, snapshot)
-             values ('canonical_prompts', ${cp!.id}, 1, 'bootstrap', ${tx.json({ fixture: true })})`;
+    if (o.withSource !== false) {
+      await tx`insert into knowledge_versions (canonical_table, canonical_id, version, promoted_via, snapshot)
+               values ('canonical_prompts', ${cp!.id}, 1, ${via}, ${tx.json({ fixture: true })})`;
+    }
     return { sourceId, canonicalPromptId: cp!.id, checksum };
   });
 

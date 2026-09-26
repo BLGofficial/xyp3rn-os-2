@@ -10,17 +10,22 @@ import { insertResearchRun } from '../helpers/tech-fixture.ts';
 
 let db: TestDb;
 let researchRunId: string;
+let agentRunId: string;
 const PAGE = '<html><head><title>[FIXTURE] Suno tips</title></head><body><p>[FIXTURE] Put the vocal descriptor first.</p></body></html>';
 const fetchStub: typeof fetch = async (input) => {
   const url = String(input instanceof Request ? input.url : input);
   if (url.includes('missing')) return new Response('nope', { status: 404 });
   return new Response(PAGE, { status: 200, headers: { 'content-type': 'text/html' } });
 };
-const ctx = (agentName = 'suno-researcher') => ({ runId: randomUUID(), agentName, researchRunId, log: () => {} });
+const ctx = (agentName = 'suno-researcher') => ({ runId: agentRunId, agentName, researchRunId, log: () => {} });
 
 beforeAll(async () => {
   db = await createTestDb('aos04_evidence', { migrated: true });
   researchRunId = await insertResearchRun(db.sql);
+  const [run] = await db.sql<{ id: string }[]>`
+    insert into agent_runs (agent_name, class, domain, input, research_run_id)
+    values ('suno-researcher', 'Research', 'RESEARCH_INTELLIGENCE', '{}', ${researchRunId}) returning id`;
+  agentRunId = run!.id;
 }, 120_000);
 afterAll(async () => {
   await db?.drop();

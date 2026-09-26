@@ -91,6 +91,8 @@ export type RegisterSourceInput = {
   readonly title: string;
   readonly contentSha256: string;
   readonly excerpt?: string;
+  /** What a fetch read (AOS-04): kept so a quote is verified against the page, now and later. */
+  readonly text?: string;
   /** Knowledge Layer `sources` row, when the cited document is already ingested (F9). */
   readonly sourceId?: string;
 };
@@ -106,9 +108,9 @@ export const registerResearchSource = async (sql: Sql, input: RegisterSourceInpu
   const rel = classifySource(input.kind, uri);
   return asRole(sql, RESEARCH_ROLE, async (tx) => {
     const inserted = await tx<{ id: string }[]>`
-      insert into research_sources (research_run_id, source_id, kind, uri, title, content_sha256, excerpt, reliability, reliability_inputs)
+      insert into research_sources (research_run_id, source_id, kind, uri, title, content_sha256, excerpt, text, reliability, reliability_inputs)
       values (${input.researchRunId}, ${input.sourceId ?? null}, ${input.kind}, ${uri}, ${input.title}, ${input.contentSha256},
-              ${input.excerpt ?? null}, ${rel.score}, ${tx.json({ class: rel.class, ...rel.inputs })})
+              ${input.excerpt ?? null}, ${input.text ?? null}, ${rel.score}, ${tx.json({ class: rel.class, ...rel.inputs })})
       on conflict (content_sha256) do nothing
       returning id`;
     if (inserted.length > 0) return { id: inserted[0]!.id, deduplicated: false, reliability: rel.score, class: rel.class };
