@@ -34,9 +34,16 @@ const SECTION_SCHEMA = { id: LYRICS_SECTION_LLM_SCHEMA_ID, schema: LYRICS_SECTIO
  */
 export const sectionLabels = (kinds: readonly string[]): string[] => {
   let verses = 0;
-  const name = (kind: string) => kind.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('-');
-  return kinds.map((k) => (k === 'verse' ? `Verse ${++verses}` : name(k)));
+  return kinds.map((k) => (k === 'verse' ? `Verse ${++verses}` : kindName(k)));
 };
+
+/**
+ * A section kind's name as a tag, e.g. "pre-chorus" → "Pre-Chorus". The default meta-tag set (AOS-03)
+ * is built from it, so the two can't drift.
+ * @param kind - a section kind
+ * @returns its name
+ */
+export const kindName = (kind: string): string => kind.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('-');
 
 const prepare: CreativeSpec['prepare'] = async (ctx, input) => {
   const request = input.request;

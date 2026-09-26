@@ -1,6 +1,7 @@
 import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDb, type TestDb } from '../helpers/db.ts';
+import { insertPackage } from '../helpers/package-fixture.ts';
 
 // Phase 13 proof (part 1): releases, tracks and rights_splits on a throwaway migrated database.
 // The guide's constraint test: split-set integrity is a DB rule no role can bypass by a direct insert,
@@ -60,14 +61,14 @@ const artifact = async (schemaId: string, body: Record<string, unknown>): Promis
 };
 
 let takeSeq = 0;
-/** A Phase 9 manual take: formula artifact → submission → take. */
+/** A manual take: an approved Suno package (AOS-03, the submission gate) → submission → take. */
 const take = async (): Promise<string> => {
-  const formula = await artifact('x3lius.suno-prompt/v1', { title: '[FIXTURE] Night City', style: 'x', excludeStyles: [], lyrics: 'x', sunoModel: 'v5' });
+  const p = await insertPackage(db.sql);
   const runId = await runRow('suno-submitter', 'Execution');
   return as('xyp_execution', async (tx) => {
     const [sub] = await tx<{ id: string }[]>`
       insert into suno_submissions (formula_artifact_id, agent_run_id, adapter, suno_model, prompt)
-      values (${formula}, ${runId}, 'manual', 'v5', ${tx.json({ title: '[FIXTURE] Night City', style: 'x', excludeStyles: [], lyrics: 'x' })})
+      values (${p.packageId}, ${runId}, 'manual', ${p.sunoModel}, ${tx.json(p.prompt as postgres.JSONValue)})
       returning id`;
     const [t] = await tx<{ id: string }[]>`
       insert into suno_takes (submission_id, agent_run_id, audio_url, title, duration_seconds)

@@ -30,6 +30,7 @@
     "trace:serve": "node tech/trace/serve-cli.ts",
     "trace:schemas": "node tech/trace/schemas-cli.ts",
     "vault": "node records/vault/cli.ts",
+    "studio": "node records/x3lius/studio/cli.ts",
     "web": "pnpm --filter @xyp3rn/web start",
     "web:build": "pnpm --filter @xyp3rn/web build",
     "web:smoke": "node apps/web/e2e/smoke.ts"

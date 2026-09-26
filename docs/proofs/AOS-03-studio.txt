@@ -1,0 +1,343 @@
+AOS-03 — Studio mode and Suno-ready workflows: proof (2026-09-26)
+Produced with the repo's own commands against the local Postgres. Every DB test runs in its own throwaway database. Section 2
+runs the real CLIs (pnpm dispatch, pnpm workflow, pnpm vault, pnpm studio) against a throwaway database (xyp_proof_aos03,
+dropped afterwards) with a temporary Vault store ($PROOF); 2j restores its export into a second one. Section 3 drives the real
+UI (next start) in Chromium against another.
+================================================================================
+
+## 0. Status of the gate (PLAN.md §5 Phase 3: "every generation attempt can be traced to the exact lyric, style, tags, workflow version, and resulting audio")
+# - generation_attempts names, per submission, the exact lyric, style recipe and meta-tag set versions (ids and versions
+#   from the package's sources), the workflow run that built the package with its name and spec sha256, and its takes;
+#   generation_takes names each take's Vault file and the audio's sha256, and the owner's current rating.
+# - Every attempt is traced by construction: the DB refuses a submission whose package isn't a x3lius.suno-package/v1
+#   written by x3lius-suno-package, built in a successful workflow run, with every version it names approved (S4), and
+#   whose recorded prompt isn't the package's own. Section 2i: 0 untraced attempts.
+# - Decisions S1–S4 (F40): style recipes and tag sets are artifact lineages approved like lyrics; the code labels are the
+#   default tag set's v1; the handoff is a package (JSON + copy-paste text) and the result a Vault take; approval is a
+#   hard gate at submit, asked before any adapter call (a draft never reaches the sunoapi reseller: tests/aos-03).
+# - Shown three ways: tests/aos-03/idea-to-take.test.ts, the CLIs (section 2), the browser (section 3). The trace
+#   survives xyp-vault-export/v1 into a fresh database (2j and the gate test).
+# - Written after the features, not first: the gate test and the web smoke extension (integration over agents already
+#   built), so they were never red. The DB, agent, package-export and web loader/ops tests were red first.
+# - Not run live (F41): recipeFrom on a formula a model wrote (no LLM key), and a package under a canonical Suno limit
+#   (no suno.limit.* claim is admitted); both proven on fixtures (a fixture formula; a unit test over claim items).
+
+## 1. Tests (AOS-03 files, the web Studio loaders/ops, the Phase 9 Suno trail pins, the capability matrix drift test)
+ ✓ tests/aos-03/package-export.test.ts > xyp-suno-package/v1 > a ready package: the Suno fields, each version with its status, the workflow; nothing blocks it
+ ✓ tests/aos-03/package-export.test.ts > xyp-suno-package/v1 > a draft package says what blocks it; an artifact that is not a package is refused
+ ✓ tests/aos-03/package-export.test.ts > xyp-suno-package/v1 > the copy-paste text: one block per Suno field, as the Suno form names them
+ ✓ tests/aos-03/package-export.test.ts > pnpm studio export > prints the package as JSON, or as text with --text; refuses an unknown id (1) and bad usage (2)
+ ✓ tests/aos-03/idea-to-take.test.ts > AOS-03 gate: one song from idea to a rated take, every attempt traced > 1. a song at idea, with the owner’s lyric sheet, edited to a second version
+ ✓ tests/aos-03/idea-to-take.test.ts > AOS-03 gate: one song from idea to a rated take, every attempt traced > 2. a style recipe, then its next version with the owner’s tested notes
+ ✓ tests/aos-03/idea-to-take.test.ts > AOS-03 gate: one song from idea to a rated take, every attempt traced > 3. the default tag set (the code labels), then a version with the owner’s cues
+ ✓ tests/aos-03/studio-agents.test.ts > agents and capabilities > the studio editor and the package builder are deterministic Creative agents; the submitter gains rate_take (feedback.write)
+ ✓ tests/aos-03/studio-agents.test.ts > tag sets (S2): the code labels are the default set’s first version > the default set renders exactly what the Phase 9 formula renders, for both lyric writers
+ ✓ tests/aos-03/studio-agents.test.ts > tag sets (S2): the code labels are the default set’s first version > owner cues render as tags after the label; numbering follows the set, per kind, in song order
+ ✓ tests/aos-03/studio-agents.test.ts > tag sets (S2): the code labels are the default set’s first version > a section kind the set has no tag for is refused, naming it
+ ✓ tests/aos-03/studio-agents.test.ts > x3lius-studio-editor: the owner’s style recipes and tag sets > writes the default tag set as a new lineage, a draft; an edit with cues is its next version
+ ✓ tests/aos-03/studio-agents.test.ts > x3lius-studio-editor: the owner’s style recipes and tag sets > refuses a tag set Suno could not read: a repeated kind, a blank label, a bracket in a cue, a mixed-script cue
+ ✓ tests/aos-03/studio-agents.test.ts > x3lius-studio-editor: the owner’s style recipes and tag sets > writes a recipe and its next version; only style and exclusions face Suno (F22)
+ ✓ tests/aos-03/idea-to-take.test.ts > AOS-03 gate: one song from idea to a rated take, every attempt traced > 4. the package, built in build-suno-package and linked to the song
+ ✓ tests/aos-03/idea-to-take.test.ts > AOS-03 gate: one song from idea to a rated take, every attempt traced > 5. the handoff is refused while any version is a draft; each approval clears its reason; then it is recorded
+ ✓ tests/aos-03/idea-to-take.test.ts > AOS-03 gate: one song from idea to a rated take, every attempt traced > 6. the result is uploaded into the Vault and recorded as the attempt’s take; 7. the owner rates it
+ ✓ tests/aos-03/studio-agents.test.ts > x3lius-studio-editor: the owner’s style recipes and tag sets > seeds a recipe from a model’s Suno formula, citing it; the words are the model’s, and it says so
+ ✓ tests/aos-03/studio-agents.test.ts > x3lius-studio-editor: the owner’s style recipes and tag sets > takes exactly one operation
+ ✓ tests/aos-03/studio-agents.test.ts > x3lius-suno-package: a package from a lyric, a recipe and a tag set > renders the lyrics with the tag set and copies the recipe’s Suno fields; it names every version; drafts build a preview
+ ✓ tests/aos-03/idea-to-take.test.ts > AOS-03 gate: one song from idea to a rated take, every attempt traced > 8. the take is registered on a draft release, titled from the package, and the track linked to the song
+ ✓ tests/aos-03/idea-to-take.test.ts > AOS-03 gate: one song from idea to a rated take, every attempt traced > the gate: the attempt names the exact lyric, style and tag versions, the workflow version, and the audio
+ ✓ tests/aos-03/studio-agents.test.ts > x3lius-suno-package: a package from a lyric, a recipe and a tag set > refuses: a wrong kind of artifact, a kind the tag set lacks, a bad model or title, a mixed-script title
+ ✓ tests/aos-03/studio-agents.test.ts > x3lius-suno-package: a package from a lyric, a recipe and a tag set > limits come from canonical claims for that Suno model only; over a limit is refused
+ ✓ tests/aos-03/studio-agents.test.ts > build-suno-package: the package, linked to its song, built in a workflow > links the package to the song; the run is the package’s workflow version; readiness lists the drafts
+ ✓ tests/aos-03/idea-to-take.test.ts > AOS-03 gate: one song from idea to a rated take, every attempt traced > the trace survives xyp-vault-export/v1: B names the same versions, workflow and audio; B re-exports byte-identical
+ ✓ tests/aos-03/studio-agents.test.ts > suno-submitter: packages only (S4), takes from the Vault (S3), the owner’s ratings > a draft never reaches an adapter: the sunoapi reseller is not called, and nothing is recorded
+ ✓ tests/aos-03/studio-agents.test.ts > suno-submitter: packages only (S4), takes from the Vault (S3), the owner’s ratings > an approved package is handed off: the recorded prompt is the package’s own
+ ✓ tests/aos-03/studio-agents.test.ts > suno-submitter: packages only (S4), takes from the Vault (S3), the owner’s ratings > refuses a Phase 9 formula and the Phase 9 input key, pointing at packages
+ ✓ tests/aos-03/studio-agents.test.ts > suno-submitter: packages only (S4), takes from the Vault (S3), the owner’s ratings > manual capture records a Vault audio file as a take; a file that is not audio, or a take naming both, is refused
+ ✓ tests/aos-03/studio-agents.test.ts > suno-submitter: packages only (S4), takes from the Vault (S3), the owner’s ratings > rate: the owner’s rating of a take, with what to keep and what to change; the latest is current
+ ✓ tests/aos-03/studio-agents.test.ts > optional workflow inputs (G11, part) > a spec declares optional inputs; a name in both lists, or an undeclared one, is refused
+ ✓ tests/aos-03/studio-agents.test.ts > optional workflow inputs (G11, part) > register-track runs with only the recording it has: the absent inputs bind as null
+ ✓ tests/aos-03/studio-db.test.ts > the package writer guard > only x3lius-suno-package writes a x3lius.suno-package/v1 (23514); other schemas are untouched
+ ✓ tests/aos-03/studio-db.test.ts > the package writer guard > a package is never revised: a new version is refused (23514)
+ ✓ tests/aos-03/studio-db.test.ts > takes from Vault audio (S3) > a take is a Vault audio file or a URL, exactly one (23514)
+ ✓ tests/aos-03/studio-db.test.ts > takes from Vault audio (S3) > the file must be Vault audio (23514), once per submission (23505)
+ ✓ tests/aos-03/studio-db.test.ts > takes from Vault audio (S3) > a take stays append-only (55000)
+ ✓ tests/aos-03/studio-db.test.ts > the submission gate (S4) > an approved package built in a successful workflow run is submitted, as xyp_execution
+ ✓ tests/aos-03/studio-db.test.ts > the submission gate (S4) > a Phase 9 formula is no longer submitted (55000)
+ ✓ tests/aos-03/studio-db.test.ts > the submission gate (S4) > refuses while any source version is a draft or rejected, naming each (55000)
+ ✓ tests/aos-03/studio-db.test.ts > the submission gate (S4) > an approved later version does not approve the one the package names
+ ✓ tests/aos-03/studio-db.test.ts > the submission gate (S4) > refuses a package not built in a workflow run, or built in one that failed (55000)
+ ✓ tests/aos-03/studio-db.test.ts > the submission gate (S4) > refuses a package whose sources do not match their artifacts (55000)
+ ✓ tests/aos-03/studio-db.test.ts > the submission gate (S4) > the recorded prompt and model are the package’s own (23514)
+ ✓ tests/aos-03/studio-db.test.ts > the submission gate (S4) > the Phase 9 checks still hold on a ready package (23514)
+ ✓ tests/aos-03/studio-db.test.ts > the submission gate (S4) > readiness is callable by xyp_execution and xyp_web only (42501)
+ ✓ tests/aos-03/studio-db.test.ts > take ratings (the owner’s feedback) > a rating is 1–5 with optional non-blank notes (23514); the latest is current
+ ✓ tests/aos-03/studio-db.test.ts > take ratings (the owner’s feedback) > ratings are append-only (55000)
+ ✓ tests/aos-03/studio-db.test.ts > the trace views (the gate’s data) > generation_attempts names the exact lyric, recipe and tag set versions, the workflow and the song
+ ✓ tests/aos-03/studio-db.test.ts > the trace views (the gate’s data) > a submission from before AOS-03 is listed, not traced
+ ✓ tests/aos-03/studio-db.test.ts > the trace views (the gate’s data) > generation_takes names the audio (Vault file and sha256, or the URL) and the current rating
+ ✓ tests/aos-03/studio-db.test.ts > grants: least privilege > xyp_execution writes and reads ratings; xyp_web and service_role read the trace; others get nothing (42501)
+ ✓ tests/phase-09/suno-schema.test.ts > suno_submissions > records the adapter, the model and the full prompt; the provider task id matches the adapter
+ ✓ tests/phase-09/suno-schema.test.ts > suno_submissions > the prompt must carry every Suno field (since AOS-03: exactly the package’s own)
+ ✓ tests/phase-09/suno-schema.test.ts > suno_takes > needs an https audio URL, and a submission records each URL once
+ ✓ tests/phase-09/suno-schema.test.ts > take_scores: the scoring hook > a stub row carries no score; a real row must carry one
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > suno_submissions: xyp_execution holds INSERT + SELECT only
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > suno_takes: xyp_execution holds INSERT + SELECT only
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > take_scores: xyp_execution holds INSERT + SELECT only
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > even the owner cannot rewrite or delete a submission, take or score (trigger)
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > as xyp_execution: reads the artifact it submits, appends the trail, cannot write artifacts or canonical knowledge
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > xyp_runtime (context reads, read_artifact) may read artifacts but not the Suno trail, and writes nothing
+ ✓ tests/phase-09/suno-schema.test.ts > insert-only for every role > anon and authenticated have no access; RLS is on
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > offers exactly manual and sunoapi; anything else is refused
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model v5 → sunoapi V5
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model v4.5 → sunoapi V4_5
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model v4.5plus → sunoapi V4_5PLUS
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model v5.5 → sunoapi V5_5
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > suno model V6 → sunoapi V6
+ ✓ tests/phase-09/suno-adapters.test.ts > adapter registry > refuses a model it cannot map
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > submit records nothing externally and returns no provider task
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > capture takes the operator’s takes, each an https audio URL
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses undefined
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses []
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses [{"audioUrl":"http://cdn1.suno.ai/abc.mp3"}]
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses [{"url":"https://x"}]
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses [{"audioUrl":"https://x.org/a.mp3","sourceId":"00000000-0000-4000-8000-000000000000"}]
+ ✓ tests/phase-09/suno-adapters.test.ts > manual adapter > refuses [{"audioUrl":"https://x.org/a.mp3","durationSeconds":-3}]
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > submit: custom-mode generate with the prompt fields, bearer key, mapped model and the configured callback
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > fails before any call when configuration is missing
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > fails before any call when configuration is missing
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > a non-200 code is an error carrying the vendor message
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > capture: SUCCESS yields the takes (either field casing); PENDING yields none, not an error
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > capture: a failed task is an error naming the status
+ ✓ tests/phase-09/suno-adapters.test.ts > sunoapi adapter (FAKE fetch; unverified against the live service) > capture refuses operator-supplied takes: sunoapi takes come from the provider
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > lists the eight classes as columns, in taxonomy order
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > has exactly the same capabilities
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants context.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants log.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants web.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants research.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants research.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants candidate.propose to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants plan.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants artifact.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants artifact.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants critique.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants critique.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants catalog.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants catalog.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants trace.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants vault.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants vault.read to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants task.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants feedback.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants external.execute to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants governance.flag to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants canonical.write to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants approval.decide to exactly the same classes
+ ✓ tests/phase-04c/matrix-matches-docs.test.ts > docs/AGENT_CLASSES.md ⇄ core/tool-registry/capabilities.ts > grants audit.write to exactly the same classes
+ ✓ apps/web/server/studio.test.ts > form parsing > list: one entry per line or comma, trimmed, blanks dropped
+ ✓ apps/web/server/studio.test.ts > form parsing > tagSections: the kinds ticked, with their label, numbering and cues
+ ✓ apps/web/server/studio.test.ts > /studio: recipes, tag sets, attempts > lists each recipe and tag set lineage with its name, latest and approved version
+ ✓ apps/web/server/studio.test.ts > /studio/recipes/[id] and /studio/tags/[id] > a lineage shows every version with its status; an edit is the next version; approval moves the pointer
+ ✓ apps/web/server/studio.test.ts > the song’s Studio section and the package > offers the song’s lyric versions and every recipe and tag set version, each with its status; builds a package linked to the song
+ ✓ apps/web/server/studio.test.ts > the song’s Studio section and the package > a package page: the export, what blocks the handoff, its attempts; hand off, import the take, rate it
+
+## 2. The CLIs, end to end (the gate journey, with the refusals on the way)
+## 2a. Migrate
+applied: 20260924080000, 20260924080100, 20260924090000, 20260924100000, 2026092
+…
+
+## 2b. The song, and the owner's lyrics (v1 from the sheet, v2 an edit)
+$ pnpm dispatch records-songs '{"create":{"title":"Night City","artist":"X3LIUS","language":"en","genre":"dark melodic trap"}}'
+4. execution: success in 24ms
+{"songId":"f0c856e3-51f1-4f66-aaec-8acef4f0d30c","revision":1}
+$ pnpm vault add night-city.txt --as lyric_sheet --language en --song $SONG
+{"file":"added","lyrics":{"version":1}}
+$ pnpm vault edit $L1 night-city-v2.txt
+lyrics v2: e7f80b3e-563d-42a0-9a27-b687523e1d46
+
+## 2c. A style recipe (v1, then v2 with the owner's tested notes)
+$ pnpm dispatch x3lius-studio-editor '{"recipe":{"name":"Night drive","style":"dark melodic trap, 140 bpm, male baritone, sodium-lit synths","excludeStyles":["country","acoustic"]}}'
+4. execution: success in 25ms
+{"version":1,"schemaId":"x3lius.style-recipe/v1","warnings":[],"lineageId":"2ad7860b-053b-4e03-9709-7b3cce795d6e","artifactId":"2ad7860b-053b-4e03-9709-7b3cce795d6e"}
+$ pnpm dispatch x3lius-studio-editor '{"recipe":{"name":"Night drive","style":"dark melodic trap, 138 bpm, male baritone, sodium-lit synths","excludeStyles":["country","acoustic"],"notes":["140 bpm rushed the hook"],"parentId":"2ad7860b-053b-4e03-9709-7b3cce795d6e"}}'
+4. execution: success in 28ms
+{"version":2,"schemaId":"x3lius.style-recipe/v1","warnings":[],"lineageId":"2ad7860b-053b-4e03-9709-7b3cce795d6e","artifactId":"5ac2f53e-46d4-4e9c-a8ad-14bf265bc78a"}
+$ pnpm dispatch x3lius-studio-editor '{"recipe":{"name":"x","style":"dark phonк trap"}}'
+4. execution: error in 20ms — x3lius-studio-editor: mixed-script word "phonк" at $.style (Latin and Cyrillic letters in one word): Suno receives this text; retype the word in one alphabet
+(refused; exit 1)
+
+## 2d. Tag sets: the code labels as v1 (S2), then v2 with the owner's cues
+$ pnpm dispatch x3lius-studio-editor '{"defaultTagSet":{}}'
+4. execution: success in 29ms
+{"version":1,"schemaId":"x3lius.meta-tag-set/v1","warnings":[],"lineageId":"5d4e24a1-faee-46f0-868e-b35c8845ed89","artifactId":"5d4e24a1-faee-46f0-868e-b35c8845ed89"}
+$ pnpm dispatch x3lius-studio-editor '{"tagSet":{"name":"X3LIUS live","sections":[{"kind":"verse","label":"Verse","numbered":true,"cues":["Whispered"]},{"kind":"chorus","label":"Chorus","cues":["Anthemic","Full band"]}],"parentId":"5d4e24a1-faee-46f0-868e-b35c8845ed89"}}'
+4. execution: success in 28ms
+{"version":2,"schemaId":"x3lius.meta-tag-set/v1","warnings":[],"lineageId":"5d4e24a1-faee-46f0-868e-b35c8845ed89","artifactId":"3adbe2e6-2497-4f43-a82d-03d9b61f52bc"}
+$ pnpm dispatch x3lius-studio-editor '{"tagSet":{"name":"bad","sections":[{"kind":"verse","label":"Verse","cues":["[Whispered]"]}]}}'
+4. execution: error in 22ms — x3lius-studio-editor: the verse cue "[Whispered]" can't contain [ or ] or a line break
+(refused; exit 1)
+
+## 2e. The package (build-suno-package), from drafts: a preview
+$ pnpm workflow records/workflows/build-suno-package.workflow.yaml '{"songId":"f0c856e3-51f1-4f66-aaec-8acef4f0d30c","lyricsArtifactId":"e7f80b3e-563d-42a0-9a27-b687523e1d46","styleRecipeArtifactId":"5ac2f53e-46d4-4e9c-a8ad-14bf265bc78a","tagSetArtifactId":"3adbe2e6-2497-4f43-a82d-03d9b61f52bc","title":"Night City","sunoModel":"v5"}'
+spec: build-suno-package (records/workflows/build-suno-package.workflow.yaml, sha256 9a921273c7ad…) steps: package=x3lius-suno-package → link=records-songs
+status: success
+{"packageId":"c24606eb-1be6-4fb2-bd25-b48f4b0de1ff","lineageId":"c24606eb-1be6-4fb2-bd25-b48f4b0de1ff","sources":[{"role":"lyrics","artifactId":"e7f80b3e-563d-42a0-9a27-b687523e1d46","schemaId":"x3lius.lyrics/v2","version":2},{"role":"style-recipe","artifactId":"5ac2f53e-46d4-4e9c-a8ad-14bf265bc78a","schemaId":"x3lius.style-recipe/v1","version":2},{"role":"meta-tag-set","artifactId":"3adbe2e6-2497-4f43-a82d-03d9b61f52bc","schemaId":"x3lius.meta-tag-set/v1","version":2}],"limits":[],"linkId":"010d946a-809d-46da-93b7-3c951213cbb4"}
+$ pnpm studio export $PKG --text
+SONG TITLE
+Night City
+
+STYLE OF MUSIC
+dark melodic trap, 138 bpm, male baritone, sodium-lit synths
+
+EXCLUDE STYLES
+country, acoustic
+
+LYRICS
+[Verse 1]
+[Whispered]
+Neon bleeding on the glass
+Sodium lamps and a midnight train
+Nobody sleeps in this city
+
+[Chorus]
+[Anthemic]
+[Full band]
+We run the city till the morning breaks
+## 2f. The handoff: refused while any version is a draft (S4), recorded once each is approved
+$ pnpm dispatch suno-submitter '{"submit":{"packageId":"c24606eb-1be6-4fb2-bd25-b48f4b0de1ff","adapter":"manual"}}'
+4. execution: error in 25ms — submit_suno: package c24606eb-1be6-4fb2-bd25-b48f4b0de1ff is not ready to hand off: lyrics e7f80b3e-563d-42a0-9a27-b687523e1d46 v2 is draft: the owner approves it first; style-recipe 5ac2f53e-46d4-4e9c-a8ad-14bf265bc78a v2 is draft: the owner approves it first; meta-tag-set 3adbe2e6-2497-4f43-a82d-03d9b61f52bc v2 is draft: the owner approves it first
+(refused; exit 1)
+$ pnpm vault approve e7f80b3e-563d-42a0-9a27-b687523e1d46 --reason 'ready for Suno'
+{"version":2,"status":"approved"}
+$ pnpm vault approve 5ac2f53e-46d4-4e9c-a8ad-14bf265bc78a --reason 'ready for Suno'
+{"version":2,"status":"approved"}
+$ pnpm dispatch suno-submitter '{"submit":{"packageId":"c24606eb-1be6-4fb2-bd25-b48f4b0de1ff","adapter":"manual"}}'
+4. execution: error in 26ms — submit_suno: package c24606eb-1be6-4fb2-bd25-b48f4b0de1ff is not ready to hand off: meta-tag-set 3adbe2e6-2497-4f43-a82d-03d9b61f52bc v2 is draft: the owner approves it first
+(refused; exit 1)
+$ pnpm vault approve 3adbe2e6-2497-4f43-a82d-03d9b61f52bc --reason 'cues for the live chorus'
+{"version":2,"status":"approved"}
+$ pnpm dispatch suno-submitter '{"submit":{"packageId":"c24606eb-1be6-4fb2-bd25-b48f4b0de1ff","adapter":"manual"}}'
+4. execution: success in 36ms
+{"status":"awaiting-takes","adapter":"manual","packageId":"c24606eb-1be6-4fb2-bd25-b48f4b0de1ff","sunoModel":"v5","submissionId":"e577df4d-9ed2-49d6-b965-2960818f2a4e","providerTaskId":null}
+$ psql: insert a submission of this package with another prompt, as xyp_execution
+ERROR:  suno_submissions: the prompt is not package c24606eb-1be6-4fb2-bd25-b48f4b0de1ff's own title, style, exclusions and lyrics
+
+## 2g. Suno's result: uploaded into the Vault, recorded as the attempt's take, rated
+$ pnpm vault add night-city-suno-take-1.wav
+{"status":"added","mediaClass":"audio","sourceId":"ec6f8a28-f32f-4f12-b81c-388a340ba5a8"}
+$ pnpm dispatch suno-submitter '{"capture":{"submissionId":"e577df4d-9ed2-49d6-b965-2960818f2a4e","takes":[{"sourceId":"ec6f8a28-f32f-4f12-b81c-388a340ba5a8","title":"Night City (take 1)"}]}}'
+4. execution: success in 27ms
+{"takes":[{"id":"df028e92-9582-44e3-8484-6d408dec934a","audioUrl":null,"sourceId":"ec6f8a28-f32f-4f12-b81c-388a340ba5a8"}],"status":"captured","scoring":{"rows":1,"scorer":"stub:needs-trace-analysis","status":"stub"},"inserted":1,"submissionId":"e577df4d-9ed2-49d6-b965-2960818f2a4e","alreadyCaptured":0}
+$ pnpm dispatch suno-submitter '{"rate":{"takeId":"df028e92-9582-44e3-8484-6d408dec934a","rating":4,"keep":"the whispered verse","change":"a shorter intro"}}'
+4. execution: success in 23ms
+{"keep":"the whispered verse","change":"a shorter intro","rating":4,"takeId":"df028e92-9582-44e3-8484-6d408dec934a","ratingId":"17a899e6-48ef-4380-a70b-fdf1c9fb16f9"}
+$ pnpm dispatch suno-submitter '{"rate":{"takeId":"df028e92-9582-44e3-8484-6d408dec934a","rating":9}}'
+4. execution: error in 17ms — rate_take: rating must be an integer from 1 to 5
+(refused; exit 1)
+
+## 2h. The take on a draft single: register-track with only the inputs it has (optional inputs)
+$ pnpm workflow records/workflows/register-track.workflow.yaml '{"takeId":"df028e92-9582-44e3-8484-6d408dec934a","release":{"title":"Night City","artist":"X3LIUS","kind":"single"},"position":1}'
+spec: records-register-track (records/workflows/register-track.workflow.yaml, sha256 e6bd265120d5…) steps: lookup=records-catalog-lookup → catalog=records-catalog
+status: success
+{"releaseId":"ae53ffbf-b288-40d2-ad65-db4b60a6037a","trackId":"e4c1807a-47ba-48f1-b154-51978d040916","createdRelease":true}
+
+## 2i. The gate: the attempt's trace (generation_attempts, generation_takes)
+$ psql: select … from generation_attempts where submission_id = $SUB
+-[ RECORD 1 ]--------+-----------------------------------------------------------------
+package_id           | c24606eb-1be6-4fb2-bd25-b48f4b0de1ff
+package_version      | 1
+song_id              | f0c856e3-51f1-4f66-aaec-8acef4f0d30c
+title                | Night City
+suno_model           | v5
+adapter              | manual
+lyrics_id            | e7f80b3e-563d-42a0-9a27-b687523e1d46
+lyrics_version       | 2
+style_recipe_id      | 5ac2f53e-46d4-4e9c-a8ad-14bf265bc78a
+style_recipe_version | 2
+meta_tag_set_id      | 3adbe2e6-2497-4f43-a82d-03d9b61f52bc
+meta_tag_set_version | 2
+workflow_name        | build-suno-package
+workflow_sha256      | 9a921273c7adeecab7b19deacc818e966b1d88b4353b69639ccb731c0868e548
+take_count           | 1
+is_traced            | t
+$ sha256sum build-suno-package.workflow.yaml
+9a921273c7adeecab7b19deacc818e966b1d88b4353b69639ccb731c0868e548
+$ psql: select … from generation_takes where submission_id = $SUB
+-[ RECORD 1 ]+-----------------------------------------------------------------
+take_id      | df028e92-9582-44e3-8484-6d408dec934a
+title        | Night City (take 1)
+source_id    | ec6f8a28-f32f-4f12-b81c-388a340ba5a8
+audio_sha256 | cea34b828e0756430010b543a53d69e3667ba612611c2a4fcde0d5f644c3b6be
+audio_url    | 
+rating       | 4
+keep         | the whispered verse
+change       | a shorter intro
+$ sha256sum night-city-suno-take-1.wav
+cea34b828e0756430010b543a53d69e3667ba612611c2a4fcde0d5f644c3b6be
+$ psql: select count(*) from generation_attempts where not is_traced
+0
+$ pnpm studio export $PKG | jq '{ready, sources, workflow}'
+{"ready":true,"blockers":[],"sources":[{"role":"lyrics","version":2,"status":"approved"},{"role":"style-recipe","version":2,"status":"approved"},{"role":"meta-tag-set","version":2,"status":"approved"}],"workflow":{"name":"build-suno-package","status":"success"}}
+
+## 2j. The trace survives a Vault export and import (a fresh database)
+$ pnpm vault export $PROOF/export
+{"dir":"/tmp/aos03-proof-6Aiz/export","records":38,"blobs":2}
+$ XYP_DATABASE_URL=…_b pnpm vault import $PROOF/export
+{"records":38,"inserted":38,"skipped":0,"blobs":2}
+generation_attempts row in B equals A: yes
+
+## 3. The UI in a real browser (pnpm web:build && pnpm web:smoke): next start, Chromium, throwaway DB
+ok  without a session, /vault answers 401 and sends the browser to /login on the same host
+ok  the raw file route is guarded too (401)
+ok  a wrong token is refused (wrong token)
+ok  the token opens a session and lands on /vault
+ok  a song is created (records-songs) and opens
+ok  the uploaded lyric sheet became a lineage (vault-curator → x3lius-lyric-editor) and opens
+ok  v1 is a draft until the owner decides
+ok  approve records the owner's decision; v1 is marked approved (v1 ◆approvedx3lius-lyric-editor2026-09-26 00:22:33Zowner (smoke) at 2026-09-26 00:22:33Z: the first take is the one)
+ok  the song shows its lyric sheet file and its lyrics
+ok  pnpm embed indexed the version and the file ({"model":"Supabase/gte-small","artifact":{"embedded":1,"skipped":0,"truncated":0},"source":{"embedded":1,"skipped":0,"truncated":0},"research_finding":{"embedded":0,"skipped":0,"truncated":0}})
+ok  vault search finds the lyrics by a line
+ok  the master is in the Vault, linked to the song
+ok  a person is added (records-catalog)
+ok  the song's master is registered on a new draft single (register-track) and its blockers show
+ok  splits, a credit by case-insensitive name, ISRC, UPC and artwork clear every check
+ok  schedule runs the Rights check and the calendar; the missing delivery shows
+ok  marked released; the missing platform link shows
+ok  the platform link clears the last check
+ok  a task on the release is added and moved to done (records-tasks)
+ok  the dashboard shows the release released on its date ([FIXTURE] Night City X3LIUSsinglereleased2026-09-2600)
+ok  the dashboard shows the time it was read
+ok  a style recipe is written (x3lius-studio-editor) as v1, a draft
+ok  the owner approves the recipe v1
+ok  the default tag set is the code labels (S2): verses numbered
+ok  an edit with cues is v2 of the tag set, and the owner approves it
+ok  the song builds a Suno package (build-suno-package): the approved lyrics rendered with the tag set
+ok  every version it names is approved, so the package is ready to hand off
+ok  the handoff is recorded as a manual submission (suno-submitter)
+ok  Suno's audio is uploaded into the Vault and recorded as the attempt's take
+ok  the owner rates the take 5/5 with what to keep
+ok  the package export names every approved version and the workflow that built it
+ok  the attempt is listed on /studio, traced (2026-09-26 00:22:37Z[FIXTURE] Night City[FIXTURE] Night Cityv5manual1yes)
+smoke: all checks passed
+
+## 4. Gates at the final commit
+$ pnpm typecheck
+(clean)
+$ pnpm test
+ Test Files  89 passed (89)
+      Tests  1263 passed (1263)
+$ pnpm agents:validate
+validateAll(): 0 failure(s)
+$ pnpm db:down && pnpm db:up && pnpm db:down && pnpm db:up (dev DB)
+rolled back: 20260925160000
+applied: 20260925160000
+rolled back: 20260925160000
+applied: 20260925160000
+$ pnpm web:build
+ ✓ Compiled successfully
+├ ƒ /studio                              179 B          87.4 kB
+├ ƒ /studio/packages/[id]                179 B          87.4 kB
+├ ƒ /studio/packages/[id]/export         0 B                0 B
+├ ƒ /studio/recipes/[id]                 179 B          87.4 kB
+├ ƒ /studio/tags/[id]                    178 B          87.4 kB

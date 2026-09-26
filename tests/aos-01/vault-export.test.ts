@@ -96,8 +96,9 @@ describe('xyp-vault-export/v1: A → B → A\' round trip', () => {
     expect(manifest.migrationHead).toMatch(/^\d{14}$/);
     expect(manifest.counts).toMatchObject({
       songs: 1, song_revisions: 2, song_links: 7, song_link_retractions: 1, source_texts: 2, source_tags: 3, tags: 2,
-      // the lyrics lineage (v1, v2) and the take's formula artifact
-      creative_artifacts: 2 + 1, approval_queue: 2, suno_takes: 1, suno_submissions: 1, tracks: 1, releases: 1, rights_splits: 1,
+      // the lyrics lineage (v1, v2) and the take's submitted artifact: since AOS-03 a package, which brings
+      // the three versions it was built from (lyric, recipe, tag set) and their approvals
+      creative_artifacts: 2 + 1 + 3, approval_queue: 2 + 3, suno_takes: 1, suno_submissions: 1, tracks: 1, releases: 1, rights_splits: 1,
       research_questions: 1, research_projects: 1,
     });
     expect(manifest.counts.sources).toBe(2);

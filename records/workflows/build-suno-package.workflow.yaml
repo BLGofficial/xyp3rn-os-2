@@ -1,0 +1,33 @@
+name: build-suno-package
+description: >-
+  AOS-03 (S3, S4): the Suno prompt package for a song. x3lius-suno-package renders one lyric version
+  with one meta-tag set and copies one style recipe's style and exclusions, naming each version; then
+  records-songs links the package to its song (role suno-package). The run is the package's workflow
+  version: the submission gate refuses a package that no successful workflow run built. The package
+  builds from drafts too (a preview); suno-submitter hands it off only once the owner has approved the
+  lyric, recipe and tag set versions it names.
+input:
+  required: [songId, lyricsArtifactId, styleRecipeArtifactId, tagSetArtifactId, title, sunoModel]
+output:
+  packageId: { $from: steps.package.output.artifactId }
+  lineageId: { $from: steps.package.output.lineageId }
+  sources: { $from: steps.package.output.sources }
+  limits: { $from: steps.package.output.limits }
+  linkId: { $from: steps.link.output.linkId }
+steps:
+  - id: package
+    agent: x3lius-suno-package
+    input:
+      lyricsArtifactId: { $from: input.lyricsArtifactId }
+      styleRecipeArtifactId: { $from: input.styleRecipeArtifactId }
+      tagSetArtifactId: { $from: input.tagSetArtifactId }
+      title: { $from: input.title }
+      sunoModel: { $from: input.sunoModel }
+  - id: link
+    agent: records-songs
+    dependsOn: [package]
+    input:
+      link:
+        songId: { $from: input.songId }
+        role: suno-package
+        artifactId: { $from: steps.package.output.artifactId }

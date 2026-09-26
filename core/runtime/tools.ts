@@ -18,7 +18,7 @@ import { createReadCritiqueTool, createWriteCritiqueTool } from '../../records/x
 import { createRecordsOpsTools } from '../../records/ops/tools.ts';
 import { createReadFrontierEvidenceTool, createWriteRdBacklogTool } from '../../tech/r-and-d/tools.ts';
 import { createLinkTraceReportTool, createRecordTraceAnalysisTool } from '../../tech/trace/tools.ts';
-import { createCaptureSunoTakesTool, createSubmitSunoTool } from '../../records/x3lius/suno/tools.ts';
+import { createCaptureSunoTakesTool, createRateTakeTool, createSubmitSunoTool } from '../../records/x3lius/suno/tools.ts';
 import { createFetchSourceTool } from '../../research-intelligence/tools/fetch-source.ts';
 import { createWriteEvidenceTool } from '../../research-intelligence/tools/write-evidence.ts';
 
@@ -32,7 +32,8 @@ import { createWriteEvidenceTool } from '../../research-intelligence/tools/write
  *   schedule_release; TECH (Phase 14): record_trace_analysis, link_trace_report, read_frontier_evidence,
  *   write_rd_backlog; and the Creative Vault (AOS-01): register_vault_file, read_vault_file, write_song,
  *   link_song, unlink_song; the Command Center (AOS-02): add_person, add_alias, write_credit, retract_credit,
- *   write_platform_link, retract_platform_link, set_artwork, record_delivery, write_task, move_task.
+ *   write_platform_link, retract_platform_link, set_artwork, record_delivery, write_task, move_task; Studio
+ *   (AOS-03): rate_take.
  *   `vault` is the byte store (default: the local store at defaultVaultDir(env)).
  */
 export const createRuntimeTools = (deps: {
@@ -56,6 +57,7 @@ export const createRuntimeTools = (deps: {
     createReadCritiqueTool(deps),
     createSubmitSunoTool(external),
     createCaptureSunoTakesTool(external),
+    createRateTakeTool(deps),
     ...createRecordsOpsTools(deps),
     createRecordTraceAnalysisTool(deps),
     createLinkTraceReportTool(deps),

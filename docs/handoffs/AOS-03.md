@@ -1,0 +1,51 @@
+HANDOFF — Artist OS AOS-03 (Studio mode + Suno-ready workflows) complete; AOS-04 (Research mode) next
+
+- **Built** (design `docs/artist-os/AOS-03-design.md`, decisions S1–S4 in ARCHITECTURE F40; proof `docs/proofs/AOS-03-studio.txt`):
+  - **Data:** migration `20260925160000_studio` (+ rollback) adds:
+    - the package writer guard (only `x3lius-suno-package` writes a `x3lius.suno-package/v1`, never a second version);
+    - `suno_takes.source_id` (a take is a Vault audio file or a URL, exactly one);
+    - `xyp_suno_package_ready` (every reason a package can't be handed off) and the submission gate on `suno_submissions`;
+    - `take_ratings` (1–5, keep/change) with `current_take_ratings`;
+    - the trace views `generation_attempts` and `generation_takes`.
+  - **Artifact schemas (no table):** `x3lius.style-recipe/v1`, `x3lius.meta-tag-set/v1`, `x3lius.suno-package/v1`.
+  - **Agents** (all `model: none`):
+    - `x3lius-studio-editor` (Creative, new): `recipe`, `recipeFrom`, `tagSet`, `defaultTagSet`;
+    - `x3lius-suno-package` (Creative, new): renders a lyric version with a tag set, copies a recipe's Suno fields, checks limits and F22;
+    - `suno-submitter` submits packages only (readiness first, so a draft never reaches an adapter), captures Vault takes, and gains `rate`.
+  - **Tools and capabilities:** 1 tool (`rate_take`), 1 capability (`feedback.write`, Execution).
+  - **Workflows:** `build-suno-package` (package → link to the song) is new. The engine takes `input.optional` (an absent input binds as null); `register-track` uses it.
+  - **Export:** `take_ratings` joins `xyp-vault-export/v1`. The closure follows an artifact's `body.sources` and an exported package's submissions, takes and ratings. The import orders a submission after the approvals the gate checks.
+  - **CLI:** `pnpm studio export <packageId> [--text]`.
+  - **UI:**
+    - `/studio`: recipes, tag sets, recent attempts;
+    - `/studio/recipes/[id]`, `/studio/tags/[id]`: versions, approve/reject, edit as the next version, the packages built from it;
+    - `/studio/packages/[id]`: the Suno fields to copy, JSON/text download, the trace, what blocks the handoff, hand off, upload the take, play it, rate it;
+    - `/songs/[id]` gains a Studio section (build a package from the song's lyric versions, a recipe and a tag set).
+    - `pnpm web:smoke` drives the whole Studio journey in Chromium.
+- **Numbers:** 51 agents (+2), 37 tools (+1), 23 capabilities (+1), 55 tables (+1) and 18 views (+3), 1263 tests (up from 1194 at AOS-02).
+  - Gates on every push: typecheck, the full suite, `agents:validate`, a migration down/up/down/up on the dev DB, and `web:build`.
+- **The gate** (PLAN §5 Phase 3): every generation attempt names its exact lyric, style recipe and tag set versions, its workflow's spec sha256, and its audio's sha256. It is shown three ways: `tests/aos-03/idea-to-take.test.ts`, the CLIs (proof §2), and the browser (proof §3).
+  - Honest note: the gate test was written after the features it drives, so it was never red. The DB, agent, export and web tests were red first.
+- **Changed on purpose:**
+  - A bare Phase 9 formula can no longer be submitted (S4 + S2). The shared records fixture, the Phase 9 schema and submitter tests and the Phase 13 DB test now build an approved package (`tests/helpers/package-fixture.ts`). The submitter tests assert that a formula is refused.
+  - `submit_suno` takes `packageId`; the old `formulaArtifactId` key is refused with a pointer.
+  - The song's Lyrics list shows lyric lineages only, since packages are linked to songs too.
+- **Found and fixed on the way:**
+  - Importing a take whose bytes were already in the Vault and linked to the song failed on the duplicate song link. The take's audio is no longer linked to the song; the take is the song's through its package.
+  - The rollback's first guard named a table in the same IF that tested for it; a second run (idempotency) failed. The IFs are nested now.
+  - The AOS-01 upload test counted `xyp-upload-*` dirs in the shared tmpdir, so any file uploading in parallel could break it. It runs in its own TMPDIR now.
+- **Open** (F41):
+  - Instrumental sections can't be tagged.
+  - Model-proposed recipes and tag sets: AOS-07.
+  - No live `recipeFrom` or canonical-limit run (no key, no `suno.limit.*` claim admitted).
+  - Engine approval steps, resume and pause: AOS-08.
+  - Reseller takes stay URLs.
+  - A bounce and the same file as a take are two recordings for the ISRC rule.
+  - The column `formula_artifact_id` holds packages.
+  - Forms keep typed values after a write (F39).
+- **Next phase needs (AOS-04, Research mode: G12 specialists that run, G13 research linked to songs, styles and decisions):**
+  1. **Decisions from the operator:**
+     - Which LLM provider and key the 20 specialists run on (C7: they need an LLM program and a key).
+     - How a finding links to what it informs: research questions are song link targets already (A1); styles and decisions need a target (a recipe or tag set lineage, an F-decision).
+     - The approval path for reusable findings: the Promotion Gate's candidate → `approval_queue` (D2), or a lighter owner approval for findings that are not canonical knowledge.
+  2. **Building on AOS-03:** a recipe's tested notes and a take's keep/change ratings are the first owner signals that research findings can cite.

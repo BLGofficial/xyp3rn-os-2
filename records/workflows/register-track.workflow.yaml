@@ -4,12 +4,14 @@ description: >-
   Knowledge lookup resolves the take's chain and the target release into a fully specified
   registration; the Execution catalog agent writes it (F10: the guide's Knowledge/Execution hybrid,
   split into two single-class agents). Splits and codes are separate records-catalog operations.
-  title and mixReportArtifactId are required keys whose null means "not given" (the title then
-  comes from the formula artifact): the workflow engine has no optional inputs.
+  title and mixReportArtifactId are optional; null or absent means "not given" (the title then comes
+  from the submitted artifact).
   AOS-02 (B4): the recording is exactly one of takeId (a Suno take) or sourceId (a Vault audio file,
-  an FL Studio bounce); the other is null. A Vault recording's title defaults to its one linked song.
+  an FL Studio bounce); the other is left out or null (AOS-03: optional inputs). A Vault recording's
+  title defaults to its one linked song.
 input:
-  required: [takeId, sourceId, release, position, title, mixReportArtifactId]
+  required: [release, position]
+  optional: [takeId, sourceId, title, mixReportArtifactId]
 output: { $from: steps.catalog.output }
 steps:
   - id: lookup
