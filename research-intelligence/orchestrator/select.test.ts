@@ -48,10 +48,20 @@ describe('selectSpecialists', () => {
 describe('planResearch', () => {
   it('emits a workflow plan with one independent step per selected specialist', () => {
     const plan = planResearch('How do I control dark baritone vocals in Suno?', [SUNO, VOCAL, MIX]);
+    // AOS-04: every step binds the brief from the workflow input.
+    const BRIEF_INPUT = { question: { $from: 'input.question' }, intendedUse: { $from: 'input.intendedUse' }, urls: { $from: 'input.urls' } };
     expect(plan.workflow.steps).toEqual([
-      { id: 'ai-vocal-systems-researcher', agent: 'ai-vocal-systems-researcher', input: { question: 'How do I control dark baritone vocals in Suno?' } },
-      { id: 'suno-researcher', agent: 'suno-researcher', input: { question: 'How do I control dark baritone vocals in Suno?' } },
+      { id: 'ai-vocal-systems-researcher', agent: 'ai-vocal-systems-researcher', input: BRIEF_INPUT },
+      { id: 'suno-researcher', agent: 'suno-researcher', input: BRIEF_INPUT },
     ]);
     expect(plan.workflow.name).toBe('research-specialists');
+    expect(plan.workflow.input).toEqual({ required: ['question'], optional: ['intendedUse', 'urls'] });
+  });
+
+  it('uses the owner\'s picks when given, marking the selection as the owner\'s', () => {
+    const plan = planResearch('What should we eat tonight?', [SUNO, VOCAL, MIX], ['suno-researcher']);
+    expect(plan.selection.selected.map((s) => s.name)).toEqual(['suno-researcher']);
+    expect(plan.selection.owner).toBe(true);
+    expect(() => planResearch('q', [SUNO], ['nobody'])).toThrow(/unknown specialist nobody/);
   });
 });
