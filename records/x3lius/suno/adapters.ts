@@ -13,8 +13,10 @@ export type SunoAdapterName = (typeof SUNO_ADAPTERS)[number];
 
 export type SunoPrompt = { readonly title: string; readonly style: string; readonly excludeStyles: readonly string[]; readonly lyrics: string };
 
+/** One take: an https URL (the provider's, or the operator's) or, since AOS-03, a Vault audio file (S3). */
 export type TakeInput = {
-  readonly audioUrl: string;
+  readonly audioUrl?: string;
+  readonly sourceId?: string;
   readonly providerTakeId?: string;
   readonly title?: string;
   readonly durationSeconds?: number;
@@ -45,17 +47,23 @@ export const toSunoApiModel = (v: string): string => {
   return `V${m[1]}${m[2] ? `_${m[2]}` : ''}${m[3] ? m[3].toUpperCase() : ''}`;
 };
 
-/** Validates operator-supplied takes; returns them normalized or throws listing every problem. */
+/**
+ * Validates operator-supplied takes; returns them normalized or throws listing every problem. Since
+ * AOS-03 (S3) a take is the audio file itself, uploaded to the Vault (`sourceId`), or an https URL.
+ */
 const operatorTakes = (takes: readonly unknown[] | undefined): TakeInput[] => {
-  if (!Array.isArray(takes) || takes.length === 0) throw new Error('manual capture needs takes: [{ audioUrl, title?, durationSeconds? }] from the Suno UI');
+  if (!Array.isArray(takes) || takes.length === 0) throw new Error('manual capture needs takes: [{ sourceId | audioUrl, title?, durationSeconds? }] from the Suno UI');
   const errors: string[] = [];
   const out = takes.map((t, i) => {
     const o = (t ?? {}) as Record<string, unknown>;
-    if (typeof o.audioUrl !== 'string' || !HTTPS_URL.test(o.audioUrl)) errors.push(`takes[${i}].audioUrl must be an https URL`);
+    if ((o.audioUrl === undefined) === (o.sourceId === undefined)) errors.push(`takes[${i}] needs exactly one of audioUrl, sourceId (a Vault audio file)`);
+    else if (o.audioUrl !== undefined && (typeof o.audioUrl !== 'string' || !HTTPS_URL.test(o.audioUrl))) errors.push(`takes[${i}].audioUrl must be an https URL`);
+    else if (o.sourceId !== undefined && typeof o.sourceId !== 'string') errors.push(`takes[${i}].sourceId must be a Vault file id`);
     if (o.durationSeconds !== undefined && !(typeof o.durationSeconds === 'number' && o.durationSeconds > 0)) errors.push(`takes[${i}].durationSeconds must be a positive number`);
     if (o.title !== undefined && typeof o.title !== 'string') errors.push(`takes[${i}].title must be a string`);
     return {
-      audioUrl: o.audioUrl as string,
+      ...(typeof o.audioUrl === 'string' ? { audioUrl: o.audioUrl } : {}),
+      ...(typeof o.sourceId === 'string' ? { sourceId: o.sourceId } : {}),
       ...(typeof o.title === 'string' ? { title: o.title } : {}),
       ...(typeof o.durationSeconds === 'number' ? { durationSeconds: o.durationSeconds } : {}),
     };

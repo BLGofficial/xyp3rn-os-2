@@ -35,6 +35,7 @@ The enforced copy lives in `core/tool-registry/capabilities.ts`; `tests/phase-04
 | `vault.write` | Register Creative Vault files and tag them; create and revise songs; link and unlink a song's targets (AOS-01) | — | — | — | — | — | — | Y | — |
 | `vault.read` | Read a Vault file's metadata, tags and extracted text (AOS-01) | — | Y | — | Y | — | — | Y | — |
 | `task.write` | Create the owner's tasks and move them (done, cancelled, reopened) (AOS-02) | — | — | — | — | — | — | Y | — |
+| `feedback.write` | Record the owner's rating of a generation's take, with what to keep and what to change (AOS-03) | — | — | — | — | — | — | Y | — |
 | `external.execute` | Perform an external side effect (API submit, file export) | — | — | — | — | — | — | Y | — |
 | `governance.flag` | Write compliance/legal/rights flags; enqueue approval items | — | — | — | — | — | — | — | Y |
 | `canonical.write` | INSERT/UPDATE `canonical_prompts` / `modules` | — | — | — | — | — | — | — | — |

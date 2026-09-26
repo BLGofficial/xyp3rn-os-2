@@ -23,6 +23,7 @@ export const CAPABILITIES = [
   'vault.write',
   'vault.read',
   'task.write',
+  'feedback.write',
   'external.execute',
   'governance.flag',
   'canonical.write',
@@ -70,6 +71,9 @@ export const CLASS_CAPABILITIES: Readonly<Record<Capability, readonly AgentClass
   // AOS-02 (B2): the owner's to-dos, through records-tasks (Execution) as xyp_tasks. Not catalog data,
   // so not catalog.write: a task says what to do, the catalog records what is.
   'task.write': ['Execution'],
+  // AOS-03: the owner's rating of a generation's result (take_ratings), through suno-submitter as
+  // xyp_execution. Feedback, not a score: the Critic's take_scores stay its own (F30).
+  'feedback.write': ['Execution'],
   'external.execute': ['Execution'],
   'governance.flag': ['Governance'],
   // No agent class, ever: the Promotion Gate's service account, humans with an RBAC role, and

@@ -16,7 +16,8 @@ const system = loadMusicSystem();
 const BUILT: readonly string[] = BUILT_SUBDOMAINS;
 // Agents that work inside a sub-domain without being one (Phase 10: the Vocal DNA's RVC consumer;
 // Phase 12: Evaluation's Revision agent; AOS-01: the owner's lyric editor, in Lyrics).
-const SUBDOMAIN_MEMBERS = ['x3lius-lyric-editor', 'x3lius-revision', 'x3lius-rvc-post'];
+// AOS-03 adds the Studio members of x3lius-suno's area: the owner's recipe/tag-set editor and the package builder.
+const SUBDOMAIN_MEMBERS = ['x3lius-lyric-editor', 'x3lius-revision', 'x3lius-rvc-post', 'x3lius-studio-editor', 'x3lius-suno-package'];
 
 describe('Agent Registry: one agent per sub-domain', () => {
   it('every manifest sub-domain has a built agent (Phase 12 built Evaluation, the last stub)', () => {

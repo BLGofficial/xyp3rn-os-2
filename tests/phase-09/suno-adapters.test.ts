@@ -57,7 +57,9 @@ describe('manual adapter', () => {
     [undefined, /manual capture needs takes/],
     [[], /manual capture needs takes/],
     [[{ audioUrl: 'http://cdn1.suno.ai/abc.mp3' }], /takes\[0\]\.audioUrl must be an https URL/],
-    [[{ url: 'https://x' }], /takes\[0\]\.audioUrl must be an https URL/],
+    // AOS-03: a take is an https URL or a Vault audio file (sourceId), exactly one.
+    [[{ url: 'https://x' }], /takes\[0\] needs exactly one of audioUrl, sourceId/],
+    [[{ audioUrl: 'https://x.org/a.mp3', sourceId: '00000000-0000-4000-8000-000000000000' }], /takes\[0\] needs exactly one of audioUrl, sourceId/],
     [[{ audioUrl: 'https://x.org/a.mp3', durationSeconds: -3 }], /takes\[0\]\.durationSeconds must be a positive number/],
   ])('refuses %j', async (takes, error) => {
     await expect(manual.capture({ providerTaskId: null, ...(takes ? { takes } : {}) })).rejects.toThrow(error);

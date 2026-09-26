@@ -122,7 +122,7 @@ describe('the submission gate (S4)', () => {
       insert into creative_artifacts (schema_id, agent_name, agent_run_id, brief, body, context_refs, knowledge, model)
       values ('x3lius.suno-prompt/v1', 'x3lius-suno', ${runId}, '[FIXTURE] b', '{}', '[]', '{}', 'm') returning id`)[0]!.id);
     expect(await ready(formula)).toEqual([expect.stringMatching(/is a x3lius\.suno-prompt\/v1, not a x3lius\.suno-package\/v1/)]);
-    const e = await submitAs({ packageId: formula, sunoModel: 'v5', prompt: { title: 't', style: 's', excludeStyles: [], lyrics: 'l' } } as FixturePackage).catch((x: postgres.PostgresError) => x);
+    const e = await submitAs({ packageId: formula, sunoModel: 'v5', prompt: { title: 't', style: 's', excludeStyles: [], lyrics: 'l' } } as unknown as FixturePackage).catch((x: postgres.PostgresError) => x);
     expect(e).toMatchObject(code('55000'));
     expect((e as Error).message).toMatch(/x3lius\.suno-package\/v1/);
   });
@@ -162,13 +162,14 @@ describe('the submission gate (S4)', () => {
 
   it('refuses a package whose sources do not match their artifacts (55000)', async () => {
     const p = await insertPackage(db.sql);
-    const [runId] = (await db.sql<{ id: string }[]>`
+    const [run] = await db.sql<{ id: string }[]>`
       insert into agent_runs (agent_name, class, domain, input, workflow_run_id, step_id)
-      values ('x3lius-suno-package', 'Creative', 'RECORDS', '{}', ${p.workflowRunId}, 'package') returning id`).map((r) => r.id);
+      values ('x3lius-suno-package', 'Creative', 'RECORDS', '{}', ${p.workflowRunId}, 'package') returning id`;
+    const runId = run!.id;
     const bad = (await db.sql<{ id: string }[]>`
       insert into creative_artifacts (schema_id, agent_name, agent_run_id, brief, body, context_refs, knowledge, model)
       values ('x3lius.suno-package/v1', 'x3lius-suno-package', ${runId}, '[FIXTURE] b',
-              ${db.sql.json({ sunoModel: 'v5', ...p.prompt, limits: [], rulesApplied: [], ungroundedChoices: [], sources: [
+              ${db.sql.json({ sunoModel: 'v5', ...p.prompt, excludeStyles: [...p.prompt.excludeStyles], limits: [], rulesApplied: [], ungroundedChoices: [], sources: [
                 { role: 'lyrics', artifactId: p.lyricsId, schemaId: 'x3lius.lyrics/v2', version: 2 },
                 { role: 'style-recipe', artifactId: p.lyricsId, schemaId: 'x3lius.style-recipe/v1', version: 1 },
               ] })}, '[]', '{}', 'none') returning id`)[0]!.id;

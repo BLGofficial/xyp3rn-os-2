@@ -17,6 +17,8 @@ export type WorkflowSpec = {
   readonly name: string;
   readonly description: string;
   readonly requiredInput: readonly string[];
+  /** Inputs a caller may leave out (AOS-03, G11); an absent one binds as null. */
+  readonly optionalInput: readonly string[];
   readonly steps: readonly WorkflowStep[];
   /** What the run returns; defaults to the last step's output. */
   readonly output: unknown;
@@ -103,8 +105,12 @@ export const parseWorkflowSpec = (yaml: string, agents: ReadonlySet<string>): Sp
   if (typeof r.name !== 'string' || !KEBAB.test(r.name)) errors.push(`name must be kebab-case: ${String(r.name)}`);
   if (typeof r.description !== 'string' || r.description.trim() === '') errors.push('description is required');
 
-  const inputDecl = (r.input ?? { required: [] }) as { required?: unknown };
+  const inputDecl = (r.input ?? { required: [] }) as { required?: unknown; optional?: unknown };
   const requiredInput = Array.isArray(inputDecl.required) ? inputDecl.required.map(String) : [];
+  if (inputDecl.optional !== undefined && !Array.isArray(inputDecl.optional)) errors.push('input.optional must be a list');
+  const optionalInput = Array.isArray(inputDecl.optional) ? inputDecl.optional.map(String) : [];
+  for (const k of optionalInput) if (requiredInput.includes(k)) errors.push(`input ${k} is both required and optional`);
+  const declaredInput = [...requiredInput, ...optionalInput];
 
   if (!Array.isArray(r.steps) || r.steps.length === 0) {
     errors.push('steps must be a non-empty list');
@@ -147,8 +153,9 @@ export const parseWorkflowSpec = (yaml: string, agents: ReadonlySet<string>): Sp
   const checkRef = (where: string, ref: string, upstream: Set<string> | 'all') => {
     const p = ref.split('.');
     if (p[0] === 'input' && p.length >= 2) {
-      if (requiredInput.length > 0 && !requiredInput.includes(p[1]!)) {
-        errors.push(`${where}: $from ${ref} is not a declared input (required: ${requiredInput.join(', ')})`);
+      if (declaredInput.length > 0 && !declaredInput.includes(p[1]!)) {
+        const optional = optionalInput.length > 0 ? `; optional: ${optionalInput.join(', ')}` : '';
+        errors.push(`${where}: $from ${ref} is not a declared input (required: ${requiredInput.join(', ')}${optional})`);
       }
     } else if (p[0] === 'steps' && p[2] === 'output' && p[1]) {
       if (!ids.has(p[1])) errors.push(`${where}: $from ${ref} references unknown step ${p[1]}`);
@@ -172,6 +179,7 @@ export const parseWorkflowSpec = (yaml: string, agents: ReadonlySet<string>): Sp
       name: r.name as string,
       description: r.description as string,
       requiredInput,
+      optionalInput,
       steps,
       output: r.output ?? { $from: `steps.${last}.output` },
     },

@@ -24,6 +24,7 @@ import { renderLyrics, SONG_TO_SUNO_WORKFLOW } from '../../records/x3lius/suno/f
 import { STUB_SCORER } from '../../records/x3lius/suno/score-hook.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../helpers/db.ts';
 import { FAKE_KEYS, FAKE_USAGE, fakeBody, fakeModel } from '../helpers/fake-llm.ts';
+import { insertPackage, type FixturePackage } from '../helpers/package-fixture.ts';
 
 // Phase 9 proof: song → Suno prompt → submission → takes → scoring hook, against a throwaway DB
 // holding the real ingested guide + X3LIUS manifest.
@@ -134,7 +135,8 @@ describe('registry: Phase 9 agents', () => {
   });
 
   it('suno-submitter is a deterministic Execution agent under RECORDS', () => {
-    expect(registry.get('suno-submitter')).toMatchObject({ class: 'Execution', domain: 'RECORDS', model: 'none', tools: ['submit_suno', 'capture_suno_takes', 'log_message'] });
+    // AOS-03 adds rate_take (feedback.write): the owner's rating of a take.
+    expect(registry.get('suno-submitter')).toMatchObject({ class: 'Execution', domain: 'RECORDS', model: 'none', tools: ['submit_suno', 'capture_suno_takes', 'rate_take', 'log_message'] });
     expect(HANDLERS['suno-submitter']).toBeTypeOf('function');
   });
 
@@ -488,17 +490,24 @@ describe('mixed-script words: refused in text Suno receives, a warning on the ar
   });
 });
 
+// Since AOS-03 the submitter hands off a ready Suno prompt package (approved versions, built in a
+// workflow run: S4), never a formula; the package here is a fixture (tests/helpers/package-fixture.ts),
+// and tests/aos-03 builds real ones through the agents.
 describe('the Suno Execution agent (suno-submitter)', () => {
   let manualSubmission: string;
+  let pkg: FixturePackage;
+  beforeAll(async () => {
+    pkg = await insertPackage(db.sql);
+  });
 
-  it('manual: records the exact prompt from the formula artifact, and logs it in full to agent_runs', async () => {
-    const r = await run(depsWith(fakeModel()), 'suno-submitter', { submit: { formulaArtifactId: ids.formula, adapter: 'manual' } });
+  it('manual: records the exact prompt from the package, and logs it in full to agent_runs', async () => {
+    const r = await run(depsWith(fakeModel()), 'suno-submitter', { submit: { packageId: pkg.packageId, adapter: 'manual' } });
     expect(r.status, r.error).toBe('success');
     const o = r.output as { submissionId: string; adapter: string; status: string };
     expect(o).toMatchObject({ adapter: 'manual', status: 'awaiting-takes' });
     manualSubmission = o.submissionId;
 
-    const [a] = await db.sql<{ body: Record<string, unknown> }[]>`select body from creative_artifacts where id = ${ids.formula}`;
+    const [a] = await db.sql<{ body: Record<string, unknown> }[]>`select body from creative_artifacts where id = ${pkg.packageId}`;
     const [s] = await db.sql<{ prompt: unknown; suno_model: string; provider_task_id: string | null }[]>`select prompt, suno_model, provider_task_id from suno_submissions where id = ${manualSubmission}`;
     expect(s).toEqual({ prompt: { title: a!.body.title, style: a!.body.style, excludeStyles: a!.body.excludeStyles, lyrics: a!.body.lyrics }, suno_model: 'v5', provider_task_id: null });
 
@@ -508,11 +517,12 @@ describe('the Suno Execution agent (suno-submitter)', () => {
     expect(JSON.parse(line.slice('submit_suno prompt (manual, v5): '.length))).toEqual(s!.prompt);
   });
 
-  it('the operation must be fully specified: no adapter, a wrong artifact, or both modes at once are refused', async () => {
+  it('the operation must be fully specified: no adapter, a wrong artifact (since AOS-03 a formula too), or both modes at once are refused', async () => {
     const deps = depsWith(fakeModel());
-    expect((await run(deps, 'suno-submitter', { submit: { formulaArtifactId: ids.formula } })).error).toMatch(/adapter must be one of manual, sunoapi/);
-    expect((await run(deps, 'suno-submitter', { submit: { formulaArtifactId: ids.lyrics, adapter: 'manual' } })).error).toMatch(/expects a x3lius\.suno-prompt\/v1 artifact, got x3lius\.lyrics\/v2/);
-    expect((await run(deps, 'suno-submitter', { submit: { formulaArtifactId: ids.formula, adapter: 'manual' }, capture: { submissionId: 'x' } })).error).toMatch(/exactly one of submit, capture/);
+    expect((await run(deps, 'suno-submitter', { submit: { packageId: pkg.packageId } })).error).toMatch(/adapter must be one of manual, sunoapi/);
+    expect((await run(deps, 'suno-submitter', { submit: { packageId: ids.lyrics, adapter: 'manual' } })).error).toMatch(/expects a x3lius\.suno-package\/v1 .*, got x3lius\.lyrics\/v2/);
+    expect((await run(deps, 'suno-submitter', { submit: { packageId: ids.formula, adapter: 'manual' } })).error).toMatch(/expects a x3lius\.suno-package\/v1 .*, got x3lius\.suno-prompt\/v1/);
+    expect((await run(deps, 'suno-submitter', { submit: { packageId: pkg.packageId, adapter: 'manual' }, capture: { submissionId: 'x' } })).error).toMatch(/exactly one of submit, capture/);
   });
 
   it('manual capture: the operator’s takes are recorded and each gets a STUB score row (no number)', async () => {
@@ -546,7 +556,7 @@ describe('the Suno Execution agent (suno-submitter)', () => {
       ] } } },
     ]);
     const deps = depsWith(fakeModel(), { env: SUNO_ENV, fetch: suno.fn });
-    const sub = await run(deps, 'suno-submitter', { submit: { formulaArtifactId: ids.formula, adapter: 'sunoapi' } });
+    const sub = await run(deps, 'suno-submitter', { submit: { packageId: pkg.packageId, adapter: 'sunoapi' } });
     expect(sub.status, sub.error).toBe('success');
     const submissionId = (sub.output as { submissionId: string }).submissionId;
     const [s] = await db.sql<{ provider_task_id: string }[]>`select provider_task_id from suno_submissions where id = ${submissionId}`;
@@ -562,7 +572,7 @@ describe('the Suno Execution agent (suno-submitter)', () => {
   it('a provider rejection still leaves the full prompt on agent_runs, and no submission row', async () => {
     const before = await db.sql<{ n: number }[]>`select count(*)::int as n from suno_submissions`;
     const deps = depsWith(fakeModel(), { env: SUNO_ENV, fetch: fakeSuno([{ code: 429, msg: 'insufficient credits', data: null }]).fn });
-    const r = await run(deps, 'suno-submitter', { submit: { formulaArtifactId: ids.formula, adapter: 'sunoapi' } });
+    const r = await run(deps, 'suno-submitter', { submit: { packageId: pkg.packageId, adapter: 'sunoapi' } });
     expect(r.error).toMatch(/sunoapi error 429: insufficient credits/);
     const [row] = await db.sql<{ output: { logs: { message: string }[] } }[]>`select output from agent_runs where id = ${r.runId}`;
     expect(row!.output.logs.map((l) => l.message).join('\n')).toMatch(/submit_suno prompt \(sunoapi, v5\): \{"title":/);

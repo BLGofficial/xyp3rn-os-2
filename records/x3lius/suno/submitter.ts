@@ -1,19 +1,21 @@
 import type { AgentHandler } from '../../../core/orchestrator/dispatch.ts';
 
+const OPS = { submit: 'submit_suno', capture: 'capture_suno_takes', rate: 'rate_take' } as const;
+
 /**
  * suno-submitter (Execution, deterministic): performs exactly the operation it is given, one of
- * - `{ submit: { formulaArtifactId, adapter } }` — send a formula artifact to Suno;
- * - `{ capture: { submissionId, takes? } }` — record a submission's takes (+ the scoring hook).
- * It creates no content and chooses nothing: the artifact and the adapter come from the caller.
- * @param ctx - run context; tools submit_suno / capture_suno_takes carry the side effects
- * @param input - one of the two shapes above
+ * - `{ submit: { packageId, adapter } }` — hand a ready Suno prompt package to Suno (AOS-03: packages only);
+ * - `{ capture: { submissionId, takes? } }` — record a submission's takes (+ the scoring hook);
+ * - `{ rate: { takeId, rating, keep?, change? } }` — record the owner's rating of a take (AOS-03).
+ * It creates no content and chooses nothing: the package, the adapter and the rating come from the caller.
+ * @param ctx - run context; tools submit_suno / capture_suno_takes / rate_take carry the writes
+ * @param input - one of the shapes above
  * @returns the tool's result as the run output
  */
 export const sunoSubmitter: AgentHandler = async (ctx, input) => {
-  const i = (input ?? {}) as { submit?: unknown; capture?: unknown };
-  if ((i.submit === undefined) === (i.capture === undefined)) {
-    throw new Error('suno-submitter input needs exactly one of submit, capture');
-  }
-  const output = i.submit !== undefined ? await ctx.useTool('submit_suno', i.submit) : await ctx.useTool('capture_suno_takes', i.capture);
+  const i = (input ?? {}) as Record<string, unknown>;
+  const ops = (Object.keys(OPS) as (keyof typeof OPS)[]).filter((k) => i[k] !== undefined);
+  if (ops.length !== 1) throw new Error(`suno-submitter input needs exactly one of ${Object.keys(OPS).join(', ')}`);
+  const output = await ctx.useTool(OPS[ops[0]!], i[ops[0]!]);
   return { output, tokensUsed: 0 };
 };

@@ -66,7 +66,7 @@ const asRuntime = <T>(deps: EngineDeps, fn: (tx: postgres.TransactionSql) => Pro
  * Runs a workflow to completion or first failure.
  * @param deps - dispatcher dependencies (DB, registries, handlers)
  * @param wf - loaded spec
- * @param input - workflow input (must carry every required key)
+ * @param input - workflow input (must carry every required key; an absent optional one is null)
  * @param options - per-step `timeoutMs`; `researchRunId` stamped on every step's agent_runs row;
  *   `log` receives the loud failure line (default stderr)
  * @returns run id, status, output or the failing step + reason, skipped steps, per-step run ids
@@ -78,7 +78,7 @@ export const runWorkflow = async (
   options: { readonly timeoutMs?: number; readonly researchRunId?: string; readonly log?: (line: string) => void } = {},
 ): Promise<WorkflowResult> => {
   const log = options.log ?? ((line: string) => console.error(line));
-  const spec = { name: wf.name, description: wf.description, requiredInput: wf.requiredInput, steps: wf.steps, output: wf.output };
+  const spec = { name: wf.name, description: wf.description, requiredInput: wf.requiredInput, optionalInput: wf.optionalInput, steps: wf.steps, output: wf.output };
   const [opened] = await asRuntime(deps, (tx) => tx<{ id: string }[]>`
     insert into workflow_runs (workflow_name, spec_sha256, spec, input)
     values (${wf.name}, ${wf.sha256}, ${tx.json(spec as postgres.JSONValue)}, ${tx.json(input as postgres.JSONValue)})
@@ -102,7 +102,8 @@ export const runWorkflow = async (
   const missing = wf.requiredInput.filter((k) => !(k in input));
   if (missing.length > 0) return fail('(input)', `missing required input: ${missing.join(', ')}`);
 
-  const memory = createRunMemory(input);
+  // An optional input the caller left out binds as null, so a step sees "not given", never a missing path.
+  const memory = createRunMemory({ ...Object.fromEntries(wf.optionalInput.filter((k) => !(k in input)).map((k) => [k, null])), ...input });
   for (const stepId of order) {
     const step = wf.steps.find((s) => s.id === stepId)!;
     let stepInput: unknown;

@@ -93,9 +93,12 @@ const body = async (id: string) => (await db.sql<{ body: Record<string, any>; ag
 const status = async (id: string) => (await db.sql<{ status: string }[]>`select status from artifact_approvals where id = ${id}`)[0]!.status;
 
 const SHEET = '[Verse 1]\n[FIXTURE] neon on the wet street\n[FIXTURE] nobody sleeps in this city\n[Chorus]\n[FIXTURE] we run tonight\n[Verse 2]\n[FIXTURE] sirens sing the second verse\n[Chorus]\n[FIXTURE] we run tonight\n';
-/** The owner's lyrics: a lyric sheet in the Vault, imported by the lyric editor (AOS-01). */
+/**
+ * The owner's lyrics: a lyric sheet in the Vault, imported by the lyric editor (AOS-01). The closing
+ * direction (never sung) makes each sheet's bytes unique, so each call is a new lyric version.
+ */
 const lyrics = async (text = SHEET): Promise<string> => {
-  const r = await addAndImport(deps, { path: file('sheet.txt', text), as: 'lyric_sheet', language: 'en' });
+  const r = await addAndImport(deps, { path: file('sheet.txt', `${text}[FIXTURE sheet ${++seq}]\n`), as: 'lyric_sheet', language: 'en' });
   return (r.lyrics as { artifactId: string }).artifactId;
 };
 const recipe = async (over: Record<string, unknown> = {}) =>
@@ -259,7 +262,7 @@ describe('x3lius-suno-package: a package from a lyric, a recipe and a tag set', 
   });
 
   it('limits come from canonical claims for that Suno model only; over a limit is refused', () => {
-    const claim = (topic: string, value: number, modelScope: string) => ({ ref: { table: 'canonical_prompts', id: '11111111-1111-4111-8111-111111111111' }, slug: 'fixture', version: 1, title: '[FIXTURE]', module: 'x3lius-suno', topic, value, modelScope, source: null });
+    const claim = (topic: string, value: number, modelScope: string) => ({ ref: { table: 'canonical_prompts' as const, id: '11111111-1111-4111-8111-111111111111' }, slug: 'fixture', version: 1, title: '[FIXTURE]', module: 'x3lius-suno', topic, value, modelScope, source: null });
     const measured = { title: 20, style: 50, 'exclude-styles': 0, lyrics: 400 };
     const r = sunoLimits([claim('suno.limit.lyrics-chars', 3000, 'suno-v5'), claim('suno.limit.style-chars', 40, 'model-agnostic'), claim('suno.limit.title-chars', 5, 'suno-v4.5'), claim('suno.other', 1, 'suno-v5')], measured, 'v5');
     expect(r.limits).toEqual([
@@ -282,8 +285,8 @@ describe('build-suno-package: the package, linked to its song, built in a workfl
     const [w] = await db.sql`select w.workflow_name, w.status from agent_runs a join workflow_runs w on w.id = a.workflow_run_id
       where a.id = (select agent_run_id from creative_artifacts where id = ${out.packageId})`;
     expect(w).toEqual({ workflow_name: 'build-suno-package', status: 'success' });
-    const [{ reasons }] = await db.sql<{ reasons: string[] }[]>`select xyp_suno_package_ready(${out.packageId}) as reasons`;
-    expect(reasons.map((x) => x.split(' ')[0])).toEqual(['lyrics', 'style-recipe', 'meta-tag-set']);
+    const [ready] = await db.sql<{ reasons: string[] }[]>`select xyp_suno_package_ready(${out.packageId}) as reasons`;
+    expect(ready!.reasons.map((x) => x.split(' ')[0])).toEqual(['lyrics', 'style-recipe', 'meta-tag-set']);
   });
 });
 

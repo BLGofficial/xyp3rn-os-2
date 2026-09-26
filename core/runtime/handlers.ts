@@ -20,6 +20,8 @@ import { VAULT_CURATOR_AGENT, vaultCurator } from '../../knowledge/ingestion/vau
 import { LYRIC_EDITOR_AGENT, lyricEditor } from '../../records/vault/lyric-editor.ts';
 import { recordsSongs, SONGS_AGENT } from '../../records/vault/songs-agent.ts';
 import { recordsTasks, TASKS_AGENT } from '../../records/ops/tasks/tasks.ts';
+import { STUDIO_EDITOR_AGENT, studioEditor } from '../../records/x3lius/studio/editor.ts';
+import { PACKAGE_AGENT, sunoPackage } from '../../records/x3lius/suno/package.ts';
 
 /** X3LIUS sub-domains a phase has built: no longer served by the Phase 7 stub. */
 export const BUILT_SUBDOMAINS: readonly string[] = [...CREATIVE_SUBDOMAINS, 'x3lius-vocal-dna', 'x3lius-mix-master', 'x3lius-evaluation'];
@@ -57,6 +59,10 @@ export const HANDLERS: HandlerMap = {
   [LYRIC_EDITOR_AGENT]: lyricEditor,
   // AOS-02: the owner's to-dos (Execution, deterministic); catalog metadata goes through records-catalog.
   [TASKS_AGENT]: recordsTasks,
+  // AOS-03: Studio (Creative, deterministic): the owner's style recipes and tag sets, and the Suno
+  // prompt package built from them (in records/workflows/build-suno-package.workflow.yaml).
+  [STUDIO_EDITOR_AGENT]: studioEditor,
+  [PACKAGE_AGENT]: sunoPackage,
   ...Object.fromEntries(loadTechSystem().components.filter((c) => c.builtIn === null).map((c) => [c.slug, techStub])),
   // Phase 7: one stub per X3LIUS sub-domain no phase has built yet (none since Phase 12): the
   // fallback for a sub-domain a future manifest adds. Built ones run as LLM agents (core/runtime/programs.ts).

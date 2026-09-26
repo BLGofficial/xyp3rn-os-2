@@ -12,7 +12,9 @@ import { TRACE_CHECK_SCHEMA } from '../../../tech/trace/report.ts';
  * every stylistic choice is left to the canonical rules the agent is given at run time.
  */
 
-const SECTION_KIND: JsonSchema = { type: 'string', enum: ['intro', 'verse', 'pre-chorus', 'chorus', 'post-chorus', 'hook', 'bridge', 'breakdown', 'outro'] };
+/** Every section kind a structure, a lyric version or a meta-tag set (AOS-03) may name, in this order. */
+export const SECTION_KINDS = ['intro', 'verse', 'pre-chorus', 'chorus', 'post-chorus', 'hook', 'bridge', 'breakdown', 'outro'] as const;
+const SECTION_KIND: JsonSchema = { type: 'string', enum: SECTION_KINDS };
 const LANGUAGE = str('Language of this text: an ISO 639-1 code, or "mixed" when it switches within the line');
 
 const TRACEABILITY = {
@@ -171,6 +173,50 @@ export const MIX_REPORT_SCHEMA = obj({
   unset: arr(str('A metric no rubric claim bounds: reported, never defaulted')),
 });
 
+// AOS-03 (S1): the owner's Studio records, versioned and approved like lyrics. Code writes them from
+// the owner's input, so the traceability pair records "owner-authored" rather than rules.
+const upstreamOf = (role: string) => obj({ role: { type: 'string', enum: [role] }, artifactId: str(), schemaId: str(), version: int('Artifact version') });
+export const STYLE_RECIPE_SCHEMA_ID = 'x3lius.style-recipe/v1';
+export const STYLE_RECIPE_SCHEMA = obj({
+  name: str('The recipe’s name'),
+  style: str('The "Style of Music" field, sent to Suno verbatim'),
+  excludeStyles: arr(str('A style to exclude, sent to Suno verbatim')),
+  mood: arr(str('A mood word; never sent to Suno')),
+  production: arr(str('A production direction note; never sent to Suno')),
+  notes: arr(str('A tested note: what worked and what did not; never sent to Suno')),
+  sources: arr(upstreamOf('suno-prompt'), 'The model-written formula it was seeded from; empty when the owner wrote it'),
+  ...TRACEABILITY,
+});
+
+// AOS-03 (S2): section tags as a versioned record. The default set is the code labels (sectionLabels).
+export const META_TAG_SET_SCHEMA_ID = 'x3lius.meta-tag-set/v1';
+export const META_TAG_SET_SCHEMA = obj({
+  name: str('The tag set’s name'),
+  sections: arr(obj({
+    kind: SECTION_KIND,
+    label: str('The section tag, e.g. "Chorus"'),
+    numbered: { type: 'boolean', description: 'Occurrences are numbered in song order, e.g. "Verse 1", "Verse 2"' },
+    cues: arr(str('A vocal, performance or arrangement tag rendered after the label, e.g. "Whispered"')),
+  }), 'One entry per section kind it covers'),
+  notes: arr(str('A usage note; never sent to Suno')),
+  ...TRACEABILITY,
+});
+
+// AOS-03 (S3): the Suno prompt package. Code builds it from one lyric, one style recipe and one tag set
+// version (x3lius-suno-package); submitting it requires each to be approved (S4, the DB gate).
+export const SUNO_PACKAGE_SCHEMA_ID = 'x3lius.suno-package/v1';
+export const SUNO_PACKAGE_SCHEMA = obj({
+  sunoModel: str('Target Suno model version, e.g. v5'),
+  title: str('Track title'),
+  style: str('The "Style of Music" field: the recipe’s, verbatim'),
+  excludeStyles: arr(str('A style to exclude: the recipe’s, verbatim')),
+  lyrics: str('The lyrics field: the lyric version rendered with the tag set'),
+  sources: arr(obj({ role: { type: 'string', enum: ['lyrics', 'style-recipe', 'meta-tag-set'] }, artifactId: str(), schemaId: str(), version: int('Artifact version') }),
+    'Exactly one of each role'),
+  limits: arr(obj({ field: str(), max: int('Canonical limit'), actual: int('Measured length'), ref: str('Claim ref stating the limit') })),
+  ...TRACEABILITY,
+});
+
 /** schema id → schema: what write_artifact accepts. */
 export const ARTIFACT_SCHEMAS: Readonly<Record<string, JsonSchema>> = {
   [SONG_STRUCTURE_SCHEMA_ID]: SONG_STRUCTURE_SCHEMA,
@@ -182,4 +228,7 @@ export const ARTIFACT_SCHEMAS: Readonly<Record<string, JsonSchema>> = {
   [ARRANGEMENT_SCHEMA_ID]: ARRANGEMENT_SCHEMA,
   [PRODUCTION_SCHEMA_ID]: PRODUCTION_SCHEMA,
   [MIX_REPORT_SCHEMA_ID]: MIX_REPORT_SCHEMA,
+  [STYLE_RECIPE_SCHEMA_ID]: STYLE_RECIPE_SCHEMA,
+  [META_TAG_SET_SCHEMA_ID]: META_TAG_SET_SCHEMA,
+  [SUNO_PACKAGE_SCHEMA_ID]: SUNO_PACKAGE_SCHEMA,
 };

@@ -162,7 +162,7 @@ Sections are separated by a blank line. A section kind the set doesn't cover ref
   2. `link` (`records-songs`: the package lineage to the song, role `suno-package`).
 - **`suno-submitter`:**
   - `{ submit: { packageId, adapter } }`: a package only. It calls `xyp_suno_package_ready` first, so a draft never reaches an adapter (`sunoapi` makes no call). The DB gate enforces the same rule again. The Phase 9 `formulaArtifactId` key is refused with a pointer to packages.
-  - `{ capture: { submissionId, takes } }`: `manual` takes are each `{ sourceId }` (a Vault audio file) or `{ audioUrl }`, plus an optional `title` / `durationSeconds`. A Vault take's title defaults to the file's.
+  - `{ capture: { submissionId, takes } }`: `manual` takes are each `{ sourceId }` (a Vault audio file) or `{ audioUrl }`, plus an optional `title` / `durationSeconds`. A Vault take without a title shows its file's (`generation_takes.file_title`).
   - `{ rate: { takeId, rating, keep?, change? } }` (new tool `rate_take`, `feedback.write`).
 - **Optional inputs (engine):** `input: { required: [...], optional: [...] }`. A name in both lists, or a `$from input.x` that neither declares, is a spec error. The run's stored spec records both lists.
 - **Import a take (UI and CLI):** the audio goes into the Vault first (`vault-curator`), then `capture` with its `sourceId`. This is the artwork pattern from AOS-02.
