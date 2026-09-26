@@ -87,6 +87,10 @@ describe('research ops and loaders (AOS-04 §8)', () => {
 
   it('accept → library; promote → pending; approve → promoted, as the owner', async () => {
     await decideFindingOp(db.sql, findingId, 'accept', '[FIXTURE] reusable', 'owner');
+    // The form posts the domain as text: an unknown one is refused before a candidate is written.
+    await expect(promoteOp(db.sql, { findingId, proposed_kind: 'canonical_prompt', target_slug: 'web-descriptor-first', title: '[FIXTURE] t', body: '[FIXTURE] b', domain: 'NOPE' }))
+      .rejects.toThrow(/domain must be one of CORE, KNOWLEDGE/);
+    expect(await db.sql`select 1 from knowledge_candidates`).toHaveLength(0);
     expect((await library(db.sql)).map((l) => l.findingId)).toEqual([findingId]);
     const p = await promoteOp(db.sql, { findingId, proposed_kind: 'canonical_prompt', target_slug: 'web-descriptor-first', title: '[FIXTURE] t', body: '[FIXTURE] b', domain: 'RECORDS' });
     expect(p.gate.outcome).toBe('pending_approval');
