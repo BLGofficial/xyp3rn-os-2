@@ -3,10 +3,18 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
+import { createAgentRegistry } from '../../../core/agent-registry/registry.ts';
 import { databaseUrl } from '../../../core/db/client.ts';
+import { createLlmRunner } from '../../../core/llm/runner.ts';
+import { dispatch } from '../../../core/orchestrator/dispatch.ts';
+import { HANDLERS } from '../../../core/runtime/handlers.ts';
+import { LLM_PROGRAMS } from '../../../core/runtime/programs.ts';
+import { createRuntimeTools } from '../../../core/runtime/tools.ts';
 import { loadEmbedder } from '../../../knowledge/vector-retrieval/embedder.ts';
 import { embedVault } from '../../../knowledge/vector-retrieval/pipeline.ts';
+import { executeResearch, openResearch } from '../../../research-intelligence/entrypoint.ts';
 import { createTestDb, REPO_ROOT } from '../../../tests/helpers/db.ts';
+import { FAKE_KEYS, fakeModel } from '../../../tests/helpers/fake-llm.ts';
 
 // AOS-01/AOS-02 proof: the UI end to end in a real browser, against `next start` (run `pnpm --filter
 // @xyp3rn/web build` first) on a throwaway migrated database and a temporary Vault store.
@@ -16,8 +24,12 @@ import { createTestDb, REPO_ROOT } from '../../../tests/helpers/db.ts';
 // from the song → splits, credit, ISRC, UPC, artwork → schedule → delivery → released → platform
 // link → task → the dashboard shows it released with nothing blocking. AOS-03: a style recipe → approve
 // → the default tag set → an edit with cues → approve → the song builds a Suno package → hand off →
-// upload Suno's audio as the take → rate it → the export and /studio show it traced. Prints one line
-// per checked step; exits 1 on the first failure.
+// upload Suno's audio as the take → rate it → the export and /studio show it traced. AOS-04: a brief run
+// to completion in this process (FAKE MODEL, stubbed page; the server has no key) and linked to the song →
+// /research lists it → the run page shows the quote → accept → the library shows canonical: none → promote
+// → pending → approve → promoted → the song's Research section → a brief with no specialist picked is refused
+// → a brief no specialist matches runs in the background and ends success. Prints one line per checked step;
+// exits 1 on the first failure.
 
 const PORT = 3199;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -259,6 +271,83 @@ try {
   await page.goto(`${BASE}/studio`);
   const attemptRow = await page.locator(`tr:has(a[href="/studio/packages/${packageId}"])`).first().textContent();
   check(attemptRow?.includes('yes') === true && attemptRow.includes('[FIXTURE] Night City'), `the attempt is listed on /studio, traced (${attemptRow})`);
+
+  // AOS-04: Research. The seeded run is the specialists' part (FAKE MODEL here, never in the server).
+  const PAGE = '<html><head><title>[FIXTURE] Suno style order</title></head><body><p>[FIXTURE] Put the vocal descriptor first.</p></body></html>';
+  const model = fakeModel({
+    override: (schema) => ('claims' in ((schema.properties ?? {}) as object)
+      ? { claims: [{ passage: 1, quote: 'Put the vocal descriptor first.', claim: '[FAKE] the vocal descriptor goes first', claim_topic: 'suno.vocal-descriptor-position', claim_value: '"first"', model_tag: 'suno-v5', confidence: 0.6, confidence_inputs: { basis: '[FAKE] one page', directness: 'direct' } }], declined: [] }
+      : undefined),
+  });
+  const seedDeps = {
+    sql: db.sql, registry: createAgentRegistry({ dir: join(REPO_ROOT, 'agents') }), handlers: HANDLERS,
+    tools: createRuntimeTools({ sql: db.sql, env: {}, fetch: async () => new Response(PAGE, { status: 200, headers: { 'content-type': 'text/html' } }) }),
+    llmRunner: createLlmRunner({ programs: LLM_PROGRAMS, env: FAKE_KEYS, fetch: model.fn }),
+  };
+  const QUESTION = '[FIXTURE] Where should the vocal descriptor go in a Suno style prompt?';
+  const opened = await openResearch(seedDeps, {
+    projectSlug: 'smoke', question: QUESTION, intendedUse: '[FIXTURE] the Night drive recipe order', urls: ['https://example.org/suno-style-order'],
+    specialists: ['suno-researcher'], targets: [{ kind: 'decision', decisionKey: 'F41' }],
+  }, { requireIntendedUse: true });
+  const linked = await dispatch(seedDeps, 'records-songs', { link: { songId, researchQuestionId: opened.questionId, role: 'research' } });
+  const seeded = await executeResearch(seedDeps, opened.researchRunId, { log: () => {} });
+  check(linked.status === 'success' && seeded.status === 'success', 'a brief linked to the song runs to completion (suno-researcher, FAKE MODEL, stubbed page)');
+
+  await page.goto(`${BASE}/research`);
+  const briefRow = await page.locator(`tr:has(a[href="/research/runs/${opened.researchRunId}"])`).first().textContent();
+  check(briefRow?.includes('song: [FIXTURE] Night City') === true && briefRow.includes('decision: F41') && briefRow.includes('success'), `/research lists the brief with its targets and run (${briefRow})`);
+  await page.click(`a[href="/research/runs/${opened.researchRunId}"]`);
+  await page.waitForURL(`${BASE}/research/runs/${opened.researchRunId}`);
+  const runBody = (await page.textContent('body')) ?? '';
+  check(runBody.includes('suno.vocal-descriptor-position') && runBody.includes('“Put the vocal descriptor first.”') && runBody.includes('1 of 1 specialists finished'),
+    'the run page shows the finding by topic, with the verbatim quote and its source');
+  await shot(page, '10-research-run');
+  await page.fill('form:has(button[value=accept]) input[name=reason]', 'matches the studio notes');
+  await page.click('form:has(button[value=accept]) button[value=accept]');
+  await page.waitForSelector('.status-accepted, p.error');
+  check(!(await page.$('p.error')) && (await page.textContent('body'))?.includes('by owner (smoke)') === true, 'the owner accepts the finding into the Findings Library');
+
+  await page.goto(`${BASE}/research/library`);
+  check((await page.locator('article .status-none').count()) === 1, 'the library lists it with canonical: none (accepted is not canonical)');
+  const promote = page.locator('form:has(input[name=targetSlug])');
+  await promote.locator('input[name=title]').fill('Lead the style prompt with the vocal descriptor');
+  await promote.locator('textarea[name=body]').fill('Put the vocal descriptor first in a Suno style prompt.');
+  await submit(page, promote, 'article .status-candidate');
+  check(true, 'promoting it makes a candidate (the gate queues it for the owner)');
+  await page.goto(`${BASE}/research/runs/${opened.researchRunId}`);
+  check((await page.locator('.status-pending_approval').count()) === 1, 'the run page shows the canonical approval pending');
+  await page.fill('form:has(button[value=approve]) input[name=reason]', 'make it canonical');
+  await approveIn(page, page.locator('form:has(button[value=approve])'), '.status-promoted');
+  await page.goto(`${BASE}/research/library`);
+  check((await page.locator('article .status-promoted').count()) === 1, 'the owner approves: the library shows canonical: promoted');
+  await shot(page, '11-research-library');
+
+  await page.goto(`${BASE}/songs/${songId}`);
+  check((await page.locator(`a[href="/research/runs/${opened.researchRunId}"]`).count()) > 0, 'the song\'s Research section links the brief and its finding');
+
+  await page.goto(`${BASE}/research`);
+  const briefForm = page.locator('form:has(textarea[name=intendedUse])');
+  await briefForm.locator('textarea[name=question]').fill('[FIXTURE] How loud should the master be?');
+  await briefForm.locator('textarea[name=intendedUse]').fill('[FIXTURE] mastering target');
+  await briefForm.locator('input[name=override]').check();
+  await briefForm.locator('button[type=submit]').click();
+  await page.waitForSelector('p.error');
+  check((await page.textContent('p.error'))?.includes('specialists: pick at least one') === true, 'a brief with the override ticked and nobody picked is refused, naming the field');
+
+  const emptyForm = page.locator('form:has(textarea[name=intendedUse])');
+  await emptyForm.locator('textarea[name=question]').fill('[FIXTURE] What should we eat tonight?');
+  await emptyForm.locator('textarea[name=intendedUse]').fill('[FIXTURE] dinner');
+  // F39: the refused form keeps what was typed and ticked, the override included.
+  await emptyForm.locator('input[name=override]').uncheck();
+  await emptyForm.locator('button[type=submit]').click();
+  await page.waitForURL(/\/research\/runs\/[0-9a-f-]{36}$/);
+  for (let i = 0; !(await page.textContent('body'))?.includes('no specialist selected') || (await page.locator('.status-running').count()) > 0; i++) {
+    if (i > 20) throw new Error(`FAILED: the empty brief's run never ended: ${await page.textContent('body')}`);
+    await new Promise((r) => setTimeout(r, 500));
+    await page.reload();
+  }
+  check((await page.locator('p.meta .status-success').count()) === 1, 'a brief no specialist matches opens, runs in the background of next start, and ends success with no specialist selected');
+  await shot(page, '12-research-empty');
   console.log('smoke: all checks passed');
 } catch (e) {
   console.error((e as Error).message);
