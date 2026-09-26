@@ -1,5 +1,6 @@
 import type postgres from 'postgres';
 import type { AgentRegistry } from '../../../core/agent-registry/registry.ts';
+import { DOMAINS } from '../../../core/contracts/taxonomy.ts';
 import type { Sql } from '../../../core/db/client.ts';
 import { parseScope, selectByScope, type Selection } from '../../../core/orchestrator/scope-select.ts';
 import { LYRICS_SCHEMA_ID, META_TAG_SET_SCHEMA_ID, STYLE_RECIPE_SCHEMA_ID } from '../../../records/x3lius/creative/schemas.ts';
@@ -93,6 +94,9 @@ const briefsOf = async (tx: postgres.TransactionSql, where: postgres.PendingQuer
     latestRun: q.run_id ? { id: q.run_id, status: q.run_status!, createdAt: q.run_created_at!.toISOString() } : null,
   }));
 };
+
+/** The domains a canonical candidate may be filed under (the promote form's choices). */
+export const promotionDomains = (): readonly string[] => [...DOMAINS];
 
 // The roster the Research Orchestrator scores against: every Research agent with a Scope.
 const rosterOf = (registry: AgentRegistry) =>

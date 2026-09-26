@@ -1,3 +1,4 @@
+import { DOMAINS, isDomain } from '../../../core/contracts/taxonomy.ts';
 import type { Sql } from '../../../core/db/client.ts';
 import type { DispatchDeps } from '../../../core/orchestrator/dispatch.ts';
 import { runGate } from '../../../knowledge/promotion-gate/gate.ts';
@@ -76,8 +77,18 @@ export const rerun = async (deps: DispatchDeps, runId: string, log: Log = stderr
 export const decideFindingOp = (sql: Sql, findingId: string, decision: 'accept' | 'reject', reason: string, owner: string) =>
   decideFinding(sql, findingId, { decision, approver: owner, reason });
 
-/** An accepted finding proposed for canonical: a candidate through the gate (pending the owner's approval, D2). */
-export const promoteOp = (sql: Sql, input: CandidateInput) => promoteFinding(sql, input);
+/**
+ * An accepted finding proposed for canonical: a candidate through the gate (pending the owner's approval, D2).
+ * @param sql - the app's pool
+ * @param input - the candidate; `domain` arrives as the form's text and is checked here
+ * @returns the candidate and the gate's result
+ * @throws Error for a domain outside DOMAINS, before anything is written
+ */
+export const promoteOp = async (sql: Sql, input: Omit<CandidateInput, 'domain'> & { readonly domain: string }) => {
+  const { domain } = input;
+  if (!isDomain(domain)) throw new Error(`domain must be one of ${DOMAINS.join(', ')}, got ${domain}`);
+  return promoteFinding(sql, { ...input, domain });
+};
 
 // As `pnpm gate decide`: re-run the gate, and embed a promotion so retrieval sees it straight away.
 const propagate = async (sql: Sql, candidateId: string) => {
