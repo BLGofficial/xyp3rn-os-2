@@ -20,6 +20,8 @@
   .tag { @apply mr-1 inline-block border border-rule px-1 text-xs; }
   .error { @apply my-4 border-2 border-records p-2 text-records; }
   .field { @apply flex flex-col gap-1 text-xs uppercase tracking-widest; }
+  .card { @apply border-2 border-rule p-3; }
+  .quote { @apply border-l-4 border-records pl-3 text-sm; }
 }
 
 /* Outside @layer on purpose: the pages build these names as `status-${status}`, which Tailwind's
@@ -30,3 +32,7 @@
 .status-scheduled { @apply border border-records px-1 text-records; }
 .status-released, .status-done, .status-live, .status-success { @apply bg-paper px-1 text-ink; }
 .status-cancelled, .status-error { @apply border border-zinc-500 px-1 text-zinc-400 line-through; }
+/* AOS-04: a research run in progress, the Findings Library, and canonical candidates. */
+.status-running, .status-candidate, .status-pending_approval { @apply border border-records px-1 text-records; }
+.status-accepted, .status-promoted { @apply bg-records px-1 text-ink; }
+.status-none, .status-blocked { @apply border border-zinc-500 px-1 text-zinc-400; }

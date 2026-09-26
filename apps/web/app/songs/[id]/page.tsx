@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation';
-import { catalogLoaders, loaders, runtime, studioLoaders } from '../../../lib/server';
+import { catalogLoaders, loaders, researchLoaders, runtime, studioLoaders } from '../../../lib/server';
 import { linkSong, reviseSong, unlinkSong } from '../../actions';
 import { registerTrackAction } from '../../catalog-actions';
 import { buildPackageAction } from '../../studio-actions';
 import { Checks, CreditForm, Credits, TaskForm, Tasks } from '../../catalog-ui';
+import { ResearchSection } from '../../research/research-ui';
 import { ErrorBanner, Status, Time } from '../../ui';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,9 @@ export default async function Song({ params, searchParams }: { params: { id: str
   if (!d || !w) notFound();
   const { song } = d;
   // After the existence check: the id is cast to uuid there, so a malformed one must 404 first.
-  const [options, studio] = await Promise.all([(await catalogLoaders()).recordingOptions(rt.sql, song.id), (await studioLoaders()).songStudio(rt.sql, song.id)]);
+  const [options, studio, research] = await Promise.all([
+    (await catalogLoaders()).recordingOptions(rt.sql, song.id), (await studioLoaders()).songStudio(rt.sql, song.id), (await researchLoaders()).researchFor(rt.sql, { songId: song.id }),
+  ]);
   const optionLabel = (o: { name: string; version: number; status: string }) => `${o.name} v${o.version} (${o.status})`;
   const back = `/songs/${song.id}`;
   return (
@@ -131,6 +134,8 @@ export default async function Song({ params, searchParams }: { params: { id: str
           {d.research.map((r) => <tr key={r.linkId}><td>research</td><td>{r.question}</td><td /><td><Unlink songId={song.id} linkId={r.linkId} /></td></tr>)}
         </tbody>
       </table>
+
+      <ResearchSection research={research} />
 
       <h2>Link</h2>
       <form action={linkSong} className="flex flex-wrap items-end gap-3">

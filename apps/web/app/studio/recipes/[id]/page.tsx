@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
-import { runtime, studioLoaders } from '../../../../lib/server';
+import { researchLoaders, runtime, studioLoaders } from '../../../../lib/server';
+import { ResearchSection } from '../../../research/research-ui';
 import { ErrorBanner, Time } from '../../../ui';
 import { RecipeForm, VersionTable } from '../../studio-ui';
 
@@ -11,6 +12,7 @@ const Items = ({ items }: { items: readonly string[] | undefined }) =>
 export default async function Recipe({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
   const l = await (await studioLoaders()).studioLineage((await runtime()).sql, params.id);
   if (!l || l.kind !== 'recipe') notFound();
+  const research = await (await researchLoaders()).researchFor((await runtime()).sql, { lineageId: l.lineageId });
   const latest = l.versions.at(-1)!;
   const b = latest.body;
   const back = `/studio/recipes/${l.lineageId}`;
@@ -51,6 +53,8 @@ export default async function Recipe({ params, searchParams }: { params: { id: s
           {l.packages.length === 0 && <tr><td colSpan={4} className="meta">none yet</td></tr>}
         </tbody>
       </table>
+
+      <ResearchSection research={research} />
     </section>
   );
 }

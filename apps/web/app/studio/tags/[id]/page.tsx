@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
-import { runtime, studioLoaders } from '../../../../lib/server';
+import { researchLoaders, runtime, studioLoaders } from '../../../../lib/server';
+import { ResearchSection } from '../../../research/research-ui';
 import { ErrorBanner, Time } from '../../../ui';
 import { TagSetForm, tagPreview, VersionTable } from '../../studio-ui';
 
@@ -11,6 +12,7 @@ export default async function TagSet({ params, searchParams }: { params: { id: s
   const sl = await studioLoaders();
   const l = await sl.studioLineage((await runtime()).sql, params.id);
   if (!l || l.kind !== 'tags') notFound();
+  const research = await (await researchLoaders()).researchFor((await runtime()).sql, { lineageId: l.lineageId });
   const latest = l.versions.at(-1)!;
   const b = latest.body as { name: string; sections: Section[]; notes: string[] };
   const back = `/studio/tags/${l.lineageId}`;
@@ -51,6 +53,8 @@ export default async function TagSet({ params, searchParams }: { params: { id: s
           {l.packages.length === 0 && <tr><td colSpan={4} className="meta">none yet</td></tr>}
         </tbody>
       </table>
+
+      <ResearchSection research={research} />
     </section>
   );
 }
