@@ -24,7 +24,8 @@ const fetchRows = async (tx: postgres.TransactionSql, table: ExportTable, where:
  * exported row points at (a take's submission and formula, a track's release, every agent run…) and
  * the rows that belong to an exported one (a track's splits, a file's text and tags, a version's
  * approval) until nothing new is found. Since AOS-03 also the versions an artifact was built from
- * (body.sources), the submissions of an exported package, their takes and the takes' ratings.
+ * (body.sources), the submissions of an exported package, their takes and the takes' ratings; since
+ * AOS-04 an exported brief's research links, runs, evidence, findings and the owner's decisions on them.
  */
 const collect = async (tx: postgres.TransactionSql, schema: Schema): Promise<Map<string, Row>> => {
   const rows = new Map<string, Row>();
@@ -88,6 +89,18 @@ const collect = async (tx: postgres.TransactionSql, schema: Schema): Promise<Map
     added += add('suno_submissions', await fetchRows(tx, 'suno_submissions', 'formula_artifact_id = any($2::uuid[])', [idsOf('creative_artifacts')]));
     added += add('suno_takes', await fetchRows(tx, 'suno_takes', 'submission_id = any($2::uuid[])', [idsOf('suno_submissions')]));
     added += add('take_ratings', await fetchRows(tx, 'take_ratings', 'take_id = any($2::uuid[])', [idsOf('suno_takes')]));
+    // AOS-04: what belongs to an exported brief (a research question reached through song_links): its
+    // research links and their retractions, its runs, the runs' evidence (sources follow by FK), findings,
+    // the findings' evidence joins and contradictions, and the owner's decisions on those findings.
+    const questions = idsOf('research_questions');
+    added += add('research_runs', await fetchRows(tx, 'research_runs', 'question_id = any($2::uuid[])', [questions]));
+    added += add('research_links', await fetchRows(tx, 'research_links', 'question_id = any($2::uuid[])', [questions]));
+    added += add('research_link_retractions', await fetchRows(tx, 'research_link_retractions', 'research_link_id = any($2::uuid[])', [idsOf('research_links')]));
+    added += add('research_evidence', await fetchRows(tx, 'research_evidence', 'research_run_id = any($2::uuid[])', [idsOf('research_runs')]));
+    added += add('research_findings', await fetchRows(tx, 'research_findings', 'research_run_id = any($2::uuid[])', [idsOf('research_runs')]));
+    added += add('research_finding_evidence', await fetchRows(tx, 'research_finding_evidence', 'finding_id = any($2::uuid[])', [idsOf('research_findings')]));
+    added += add('contradictions', await fetchRows(tx, 'contradictions', 'finding_id = any($2::uuid[])', [idsOf('research_findings')]));
+    added += add('approval_queue', await fetchRows(tx, 'approval_queue', `item_type::text = 'research_finding' and item_id = any($2::uuid[])`, [idsOf('research_findings')]));
     if (added === 0) return rows;
   }
 };
@@ -131,6 +144,9 @@ const order = (rows: Map<string, Row>, schema: Schema): Row[] => {
   relinks('song_links', 'song_link_retractions', target);
   relinks('credits', 'credit_retractions', (r) => `${r.obj.person_id}|${r.obj.role}|${r.obj.song_id ?? r.obj.track_id}`);
   relinks('platform_links', 'platform_link_retractions', (r) => `${r.obj.platform}|${r.obj.release_id ?? r.obj.track_id}`);
+  // AOS-04: one live research link per brief and target (xyp_research_links_guard).
+  relinks('research_links', 'research_link_retractions',
+    (r) => `${r.obj.question_id}|${r.obj.artifact_lineage_id ?? ''}|${r.obj.workflow_name ?? ''}@${r.obj.workflow_sha256 ?? ''}|${r.obj.decision_key ?? ''}`);
   // AOS-03: the submission gate runs on import too, so a submission follows the versions its package
   // names and the owner's decisions on them (neither is a foreign key of the submission).
   const decisionOf = new Map(all.filter((r) => r.table === 'approval_queue').map((r) => [String(r.obj.item_id), r.key]));
