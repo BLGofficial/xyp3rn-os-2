@@ -428,3 +428,26 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **Tasks have no assignee:** one owner until AOS-07/08 bring identities.
 - **The UI keeps typed values after a write.** A successful form redirects to the same page, and React keeps uncontrolled inputs, so a second click re-submits. The DB refuses duplicate people, credits and links (23505); a duplicate task or delivery event would be written. Resetting forms on success is not in AOS-02's scope.
 - **The song workspace registers Vault audio only.** A song's linked Suno takes are registered from `/releases`.
+
+**F40. Studio mode and Suno-ready workflows (AOS-03).** DECIDED (operator, 2026-09-25; design `docs/artist-os/AOS-03-design.md`).
+- **S1:** style recipes (`x3lius.style-recipe/v1`) and meta-tag sets (`x3lius.meta-tag-set/v1`) are creative-artifact lineages, written by `x3lius-studio-editor` (Creative, deterministic) and approved by the owner like lyrics (`xyp_decide_artifact`). A recipe is reused across songs by building packages from it. Rejected: their own tables; canonical knowledge.
+- **S2 (settles baseline C3 and F21's "until a canonical rule says otherwise"):** the code labels are the default tag set's first version (`defaultTagSet()`). Every package names a tag-set version. The owner's cues render as tags after the section label. Tags are still never the model's. Rejected: code labels with an optional cue layer; deferring tag sets.
+- **S3:** the Suno handoff is a prompt package (`x3lius.suno-package/v1`, built by `x3lius-suno-package` in `build-suno-package`, exported as `xyp-suno-package/v1` and copy-paste text) recorded as the `manual` submission. The result is a Vault audio file registered as the attempt's take (`suno_takes.source_id`). Rejected: a plain linked file; the sunoapi reseller as the main path.
+- **S4:** a submission is refused unless every version its package names is approved and a successful workflow run built it. This is enforced by the DB (`xyp_suno_package_ready`, the submission gate) and asked by the submitter before any adapter call. Rejected: warn only; a workflow-engine approval step.
+- **Defaults:**
+  - only `x3lius-suno-package` writes a package, and a package is never revised;
+  - the Phase 9 formula stays a proposer (`recipeFrom` seeds a draft recipe from it) and can no longer be submitted;
+  - the owner rates a take 1–5 with keep/change notes (`take_ratings`, `feedback.write`), apart from the Critic's `take_scores`;
+  - workflow specs take `input.optional` (an absent one binds as null), used by `register-track`.
+- **The gate** (PLAN §5 Phase 3): `generation_attempts` names each attempt's exact lyric, recipe and tag set versions, and the workflow's name and spec sha256. `generation_takes` names each take's Vault file and sha256. Both survive a Vault export.
+
+**F41. Open after AOS-03.**
+- **Instrumental sections can't be tagged:** v2 lyrics list them by id only, so the renderer skips them, as the formula did.
+- **Model-proposed recipes and tag sets:** only the owner's editor writes them (`recipeFrom` copies a formula as a draft). Proposals with evaluation are AOS-07.
+- **No live run of `recipeFrom` or of a package under a canonical limit.** The formula needs an LLM key. No `suno.limit.*` claim is admitted, so limits are proven by a unit test over claim items and by the wiring (`retrieve_claims`).
+- **Engine approval steps, resume and pause** (G11's rest): AOS-08. S4 puts approval on the submission.
+- **Reseller takes stay URLs:** `sunoapi` takes are not downloaded into the Vault.
+- **Same recording, two paths:** a Vault bounce registered directly and the same file as a take count as two recordings for the ISRC rule.
+- **`suno_submissions.formula_artifact_id`** holds a package since AOS-03. The rename is deferred (every Phase 9/13 reader uses the name).
+- **A take's audio isn't linked to its song:** the take is the song's through its package. The song's Files list doesn't show it; the Studio section does.
+- **Forms keep typed values after a write** (F39): the take upload form keeps the chosen file. A second submit of the same file to the same attempt is refused ("already a take").

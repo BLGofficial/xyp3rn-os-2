@@ -47,7 +47,7 @@ export const text = (tool: string, field: string, v: unknown): string => {
 
 /** What resolve_take returns: one take's provenance, formula to audio. */
 export type TakeChain = {
-  readonly take: { readonly id: string; readonly audioUrl: string; readonly title: string | null; readonly durationSeconds: number | null };
+  readonly take: { readonly id: string; readonly audioUrl: string | null; readonly title: string | null; readonly durationSeconds: number | null };
   readonly submission: { readonly id: string; readonly adapter: string; readonly sunoModel: string };
   readonly formula: { readonly artifactId: string; readonly schemaId: string; readonly title: string | null };
   readonly mixReport: { readonly artifactId: string; readonly schemaId: string } | null;
@@ -72,7 +72,8 @@ export const createResolveTakeTool = (deps: Deps): Tool =>
       return asReader(deps.sql, async (tx) => {
         // xyp_runtime can't read the Suno trail (Phase 9); xyp_resolve_take returns this one chain.
         const [row] = await tx<{
-          take_id: string; audio_url: string; take_title: string | null; duration_seconds: string | null;
+          // Null since AOS-03 when the take is a Vault audio file (suno_takes.source_id).
+          take_id: string; audio_url: string | null; take_title: string | null; duration_seconds: string | null;
           submission_id: string; adapter: string; suno_model: string; formula_artifact_id: string; formula_schema_id: string; formula_title: string | null;
         }[]>`
           select take_id, audio_url, take_title, duration_seconds::text, submission_id, adapter, suno_model,

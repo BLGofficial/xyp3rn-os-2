@@ -29,3 +29,19 @@ Files:
 - `release-calendar/calendar.ts` (`records-release-calendar`, Execution) handles scheduling only, and only on a pass for the same release.
 - `ops-hint.ts`: `pnpm ask` answers a Records ops request with these commands. Ops run on ids, dates and percentages, never on free text.
 - `../workflows/register-track.workflow.yaml` runs lookup → catalog. `../workflows/schedule-release.workflow.yaml` runs rights → calendar.
+
+## x3lius/studio and the Suno package (AOS-03)
+
+Studio's records are versioned creative artifacts, approved by the owner like lyrics (`docs/artist-os/AOS-03-design.md`, decisions S1–S4).
+
+- `x3lius/studio/tags.ts`: meta-tag sets.
+  - `defaultTagSet()` is the code labels (`sectionLabels`, F21) as a tag set.
+  - `renderWithTags` renders a lyric version with a set's labels, numbering and cues.
+- `x3lius/studio/editor.ts` (`x3lius-studio-editor`, Creative, deterministic): style recipes and tag sets. Its operations are `recipe`, `recipeFrom` (a model formula's style as a draft recipe), `tagSet` and `defaultTagSet`.
+- `x3lius/suno/package.ts` (`x3lius-suno-package`, Creative, deterministic): the Suno prompt package, built from one lyric, one recipe and one tag set version. `../workflows/build-suno-package.workflow.yaml` runs it and links it to the song.
+- `x3lius/suno/package-export.ts`: `xyp-suno-package/v1` and its copy-paste text (`pnpm studio export`).
+- `x3lius/suno/tools.ts` (`suno-submitter`):
+  - hands off ready packages only, asking readiness before any adapter call;
+  - records takes from Vault audio;
+  - `rate_take` records the owner's rating.
+

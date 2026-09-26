@@ -29,7 +29,7 @@ pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_part
 pnpm research <cmd> '<json>'    # 6C engines by hand: observation, cite, finding, candidate, eligibility, resolve, experiment:*
 pnpm dispatch x3lius-lyrics '{"request":"..."}'   # Phase 8 Creative agent (also x3lius-songwriting, x3lius-composition); needs the key for its model's provider
 pnpm workflow records/x3lius/song-to-suno.workflow.yaml '{"request":"...","sunoModel":"v5"}'   # Phase 9: brief → Suno-ready prompt artifact
-pnpm dispatch suno-submitter '{"submit":{"formulaArtifactId":"<id>","adapter":"manual"}}'       # Phase 9: submit (manual | sunoapi); then {"capture":{...}}
+pnpm dispatch x3lius-studio-editor '{"recipeFrom":{"artifactId":"<formula id>"}}'       # Phase 9 formula → a draft style recipe (AOS-03: a formula is no longer submitted)
 pnpm gate run <candidateId>     # 6D Promotion Gate: the nine-step state machine, the only canonical writer
 pnpm gate queue                 # pending human approvals with the gate's reasons
 pnpm gate decide <approvalId> approve|reject "<approver>" "<reason>"   # operator decision, then re-run the gate
@@ -44,6 +44,10 @@ pnpm ingest --file tech/tech.manifest.yaml --origin first_party   # Phase 14: TE
 pnpm dispatch records-catalog '{"credit":{"person":"X3LIUS","role":"writer","songId":"<uuid>"}}'   # AOS-02: people, credits, links, artwork, deliveries
 pnpm dispatch records-tasks '{"create":{"title":"...","releaseId":"<uuid>","dueDate":"YYYY-MM-DD"}}'   # AOS-02: the owner's tasks
 pnpm workflow records/workflows/schedule-release.workflow.yaml '{"releaseId":"<uuid>","releaseDate":"YYYY-MM-DD"}'   # Phase 13: Rights check, then schedule
+pnpm dispatch x3lius-studio-editor '{"recipe":{"name":"...","style":"...","excludeStyles":["..."]}}'   # AOS-03: a style recipe (also recipeFrom, tagSet, defaultTagSet)
+pnpm workflow records/workflows/build-suno-package.workflow.yaml '{"songId":"<uuid>","lyricsArtifactId":"<uuid>","styleRecipeArtifactId":"<uuid>","tagSetArtifactId":"<uuid>","title":"...","sunoModel":"v5"}'   # AOS-03: the Suno package
+pnpm studio export <packageId> [--text]   # AOS-03: xyp-suno-package/v1, or the copy-paste blocks for Suno's form
+pnpm dispatch suno-submitter '{"submit":{"packageId":"<uuid>","adapter":"manual"}}'   # AOS-03: hand off (every version approved); then {"capture":{...}} and {"rate":{...}}
 pnpm test        # vitest: phase proofs + unit tests (DB tests use throwaway databases)
 pnpm typecheck   # tsc --noEmit
 ```
@@ -68,7 +72,13 @@ The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md))
   - platform links (fixed list, host-checked), artwork from the Vault, delivery status;
   - tracks from your own Vault audio as well as Suno takes;
   - the dashboard at `/`, and the `/releases`, `/people` and `/tasks` screens; the song page is the song's workspace.
-- [ ] AOS-03: Studio mode and Suno-ready workflows (styles, meta-tag sets, generation tracking). Decisions are listed in the AOS-02 handoff.
+- [x] AOS-03: Studio mode and Suno-ready workflows ([design](docs/artist-os/AOS-03-design.md), [proof](docs/proofs/AOS-03-studio.txt), [handoff](docs/handoffs/AOS-03.md)):
+  - style recipes and meta-tag sets as versioned lineages the owner approves; the code labels are the default tag set's first version;
+  - the Suno prompt package: a lyric version rendered with a tag set, a recipe's style and exclusions, built in `build-suno-package` and exported as JSON or copy-paste text;
+  - the handoff is refused until every version the package names is approved (a DB gate); Suno's audio comes back as a Vault take, which the owner rates;
+  - every generation attempt traced to its exact lyric, style, tags, workflow sha256 and audio sha256 (`generation_attempts`);
+  - the `/studio` screens, the package page, and a Studio section on the song page.
+- [ ] AOS-04: Research mode (research briefs, specialists that run, findings linked to songs and styles). Decisions are listed in the AOS-03 handoff.
 
 ## Build status (Agentic OS build guide)
 

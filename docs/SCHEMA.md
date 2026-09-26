@@ -438,6 +438,48 @@ Migration `20260925150000_command_center.sql` (+ rollback). Design: `docs/artist
 - **Export:** the new tables join `xyp-vault-export/v1`. People (with aliases) and tasks (with events) are exported whole; credits, links, artwork and deliveries follow their songs, releases and tracks.
 - **Rollback:** refuses while a track records a Vault file (it would lose the recording), then restores `tracks` and the Phase 13 `xyp_tracks_guard`.
 
+## AOS-03 additions: the package writer guard, Vault takes, the submission gate, take ratings, the trace
+
+Migration `20260925160000_studio.sql` (+ rollback). Design: `docs/artist-os/AOS-03-design.md` (decisions S1–S4, ARCHITECTURE F40).
+
+- **Studio records are artifacts (S1):** style recipes (`x3lius.style-recipe/v1`), meta-tag sets (`x3lius.meta-tag-set/v1`) and Suno prompt packages (`x3lius.suno-package/v1`) are `creative_artifacts` lineages. No table was added for them: versioning, immutability, approvals (`artifact_approvals`), song links and the export are AOS-01's.
+- **The package writer guard** (`xyp_creative_artifacts_package_writer`, BEFORE INSERT): a `x3lius.suno-package/v1` row must have `agent_name = 'x3lius-suno-package'` and no parent (a package is never revised), 23514.
+- **Takes from the Vault (S3):** `suno_takes.audio_url` is nullable and `suno_takes.source_id` (FK `sources`) is added.
+  - Exactly one of the two is set (`suno_takes_audio_check`, 23514).
+  - The file must be a Vault audio file (`xyp_suno_takes_vault_audio`, SECURITY DEFINER, 23514).
+  - A file is a take of a submission once (`suno_takes_submission_source_key`, 23505).
+- **`xyp_suno_package_ready(uuid) returns text[]`** (SECURITY DEFINER, stable): every reason a package can't be handed off, none when it can. The reasons are:
+  - not a package;
+  - a missing or duplicated source role;
+  - a source whose artifact, schema or version doesn't match;
+  - a source version that is not approved (the exact version; an approved later version doesn't count);
+  - no workflow run built it, or that run didn't succeed.
+
+  EXECUTE: `xyp_execution` and `xyp_web` only.
+- **The submission gate (S4)** (`xyp_suno_submissions_gate`, BEFORE INSERT on `suno_submissions`):
+  - any readiness reason refuses the row (55000, the reasons in the message);
+  - a `prompt` other than the package's `{title, style, excludeStyles, lyrics}`, or a `suno_model` other than its `sunoModel`, is 23514.
+
+  It runs on insert only, so pre-AOS-03 rows stay. The column is still `formula_artifact_id`; since AOS-03 it holds a package.
+- **`take_ratings`:** `(take_id, rating 1–5, keep, change, agent_run_id)`, both notes optional and non-blank when set (23514). Append-only (`xyp_suno_trail_immutable`, 55000). `current_take_ratings` is the latest per take.
+- **The trace (views, `security_invoker`):**
+  - `generation_attempts`: one row per submission. It has:
+    - the package, its version and its song (the live `suno-package` link);
+    - the title and model;
+    - the lyric, recipe and tag set ids and versions (read from a package's `sources` only);
+    - the workflow run, name and `spec_sha256`;
+    - `take_count`, and `is_traced`.
+  - `generation_takes`: one row per take, with the Vault file, its title and `audio_sha256` (or the URL), and the current rating.
+- **Roles:**
+  - `xyp_execution` gains SELECT/INSERT on `take_ratings` and SELECT on `current_take_ratings`;
+  - `xyp_web` and `service_role` read the new table and views;
+  - `xyp_runtime`, `anon` and `authenticated` get nothing.
+- **Export:**
+  - `take_ratings` joins `xyp-vault-export/v1`.
+  - The closure also takes the lineages an exported artifact names in `body.sources`, the submissions of exported artifacts, their takes, and the takes' ratings.
+  - On import, a submission is ordered after its package's source versions and the decisions on them, because the gate runs on import too.
+- **Rollback:** refuses while any rating exists, or any take is a Vault file (either would lose the owner's data). Then it drops the trace, the ratings, the gate, the readiness function and the guard, and restores `suno_takes.audio_url NOT NULL`.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).
