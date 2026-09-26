@@ -132,3 +132,21 @@ describe('the specialist program (R4)', () => {
     expect(out.passages).toBe(1);
   });
 });
+
+describe('passage order', () => {
+  it('lists the brief\'s pages before canonical rows, so the owner\'s sources are never crowded out', async () => {
+    const real = createRuntimeTools({ sql: db.sql, env: {}, fetch: pageFetch });
+    const canonical: Tool = {
+      ...real.get('retrieve_context')!,
+      handler: async () => ({ items: [{ ref: { table: 'canonical_prompts', id: randomUUID() }, title: '[FIXTURE] big canonical row', text: 'x'.repeat(23_990), snippet: 'x', source: { id: randomUUID(), uri: 'file:///fixture' } }] }),
+    };
+    const model = scripted([]);
+    const deps: DispatchDeps = {
+      sql: db.sql, registry, handlers: HANDLERS, tools: createToolRegistry([...real.list().filter((t) => t.name !== 'retrieve_context'), canonical]),
+      llmRunner: createLlmRunner({ programs: LLM_PROGRAMS, env: FAKE_KEYS, fetch: model.fn }),
+    };
+    const out = (await dispatch(deps, 'suno-researcher', { question: '[FIXTURE] q', urls: ['https://example.org/suno'] }, { researchRunId, timeoutMs: 60_000 })).output as Out;
+    expect(out.passages).toBe(1);
+    expect(model.calls[0]!.user).toMatch(/\[1\] \[FIXTURE\] Suno tips <https:\/\/example\.org\/suno>/);
+  });
+});
