@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
-import { catalogLoaders, loaders, runtime } from '../../../lib/server';
+import { catalogLoaders, loaders, runtime, studioLoaders } from '../../../lib/server';
 import { linkSong, reviseSong, unlinkSong } from '../../actions';
 import { registerTrackAction } from '../../catalog-actions';
+import { buildPackageAction } from '../../studio-actions';
 import { Checks, CreditForm, Credits, TaskForm, Tasks } from '../../catalog-ui';
 import { ErrorBanner, Status, Time } from '../../ui';
 
@@ -24,7 +25,8 @@ export default async function Song({ params, searchParams }: { params: { id: str
   if (!d || !w) notFound();
   const { song } = d;
   // After the existence check: the id is cast to uuid there, so a malformed one must 404 first.
-  const options = await (await catalogLoaders()).recordingOptions(rt.sql, song.id);
+  const [options, studio] = await Promise.all([(await catalogLoaders()).recordingOptions(rt.sql, song.id), (await studioLoaders()).songStudio(rt.sql, song.id)]);
+  const optionLabel = (o: { name: string; version: number; status: string }) => `${o.name} v${o.version} (${o.status})`;
   const back = `/songs/${song.id}`;
   return (
     <section>
@@ -68,6 +70,36 @@ export default async function Song({ params, searchParams }: { params: { id: str
         </div>
       </div>
 
+      <h2>Studio</h2>
+      {studio.lyrics.length === 0 || studio.recipes.length === 0 || studio.tagSets.length === 0 ? (
+        <p className="meta">
+          A Suno package needs a lyric version linked to this song, a style recipe and a meta-tag set
+          ({[studio.lyrics.length === 0 && 'no lyrics', studio.recipes.length === 0 && 'no recipe', studio.tagSets.length === 0 && 'no tag set'].filter(Boolean).join(', ')}): see <a href="/studio">Studio</a>.
+        </p>
+      ) : (
+        <form action={buildPackageAction} className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="songId" value={song.id} />
+          <label className="field">Lyrics<select name="lyricsArtifactId" required>{studio.lyrics.map((o) => <option key={o.id} value={o.id}>{optionLabel(o)}</option>)}</select></label>
+          <label className="field">Style recipe<select name="styleRecipeArtifactId" required>{studio.recipes.map((o) => <option key={o.id} value={o.id}>{optionLabel(o)}</option>)}</select></label>
+          <label className="field">Tag set<select name="tagSetArtifactId" required>{studio.tagSets.map((o) => <option key={o.id} value={o.id}>{optionLabel(o)}</option>)}</select></label>
+          <label className="field">Title<input name="title" required defaultValue={song.title} /></label>
+          <label className="field">Suno model<input name="sunoModel" required defaultValue="v5" size={6} /></label>
+          <button type="submit">Build Suno package</button>
+        </form>
+      )}
+      <table className="mt-2">
+        <thead><tr><th>Package</th><th>Built</th><th>Handoff</th><th>Attempts</th></tr></thead>
+        <tbody>
+          {studio.packages.map((p) => (
+            <tr key={p.packageId}>
+              <td><a href={`/studio/packages/${p.packageId}`}>{p.title}</a></td><td className="meta"><Time at={p.createdAt} /></td>
+              <td>{p.ready ? <span className="status-approved">ready</span> : <span className="meta">{p.blockers} blocking</span>}</td><td>{p.attempts}</td>
+            </tr>
+          ))}
+          {studio.packages.length === 0 && <tr><td colSpan={4} className="meta">no package yet</td></tr>}
+        </tbody>
+      </table>
+
       <h2>Tasks</h2>
       <Tasks tasks={w.tasks} back={back} showTarget={false} />
       <TaskForm target={{ songId: song.id }} back={back} />
@@ -94,7 +126,7 @@ export default async function Song({ params, searchParams }: { params: { id: str
       <h2>Takes, tracks, research</h2>
       <table>
         <tbody>
-          {d.takes.map((t) => <tr key={t.linkId}><td>take</td><td>{t.title ?? t.id}</td><td className="break-all meta">{t.audioUrl}</td><td><Unlink songId={song.id} linkId={t.linkId} /></td></tr>)}
+          {d.takes.map((t) => <tr key={t.linkId}><td>take</td><td>{t.title ?? t.id}</td><td className="break-all meta">{t.audioUrl ?? 'a Vault audio file'}</td><td><Unlink songId={song.id} linkId={t.linkId} /></td></tr>)}
           {d.tracks.map((t) => <tr key={t.linkId}><td>track</td><td>{t.title}</td><td className="meta">{t.releaseTitle} ({t.releaseStatus})</td><td><Unlink songId={song.id} linkId={t.linkId} /></td></tr>)}
           {d.research.map((r) => <tr key={r.linkId}><td>research</td><td>{r.question}</td><td /><td><Unlink songId={song.id} linkId={r.linkId} /></td></tr>)}
         </tbody>

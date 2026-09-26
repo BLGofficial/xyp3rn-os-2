@@ -110,15 +110,22 @@ describe('the song’s Studio section and the package', () => {
     await approve(lyricsId);
     await approve(tags.artifactId);
     const { submissionId } = await handOff(deps, packageId);
-    const { takeId } = await importTake(deps, { submissionId, songId, upload: { name: 'night-city-take-1.wav', bytes: WAV }, title: '[FIXTURE] take 1' });
+    const { takeId, sourceId } = await importTake(deps, { submissionId, upload: { name: 'night-city-take-1.wav', bytes: WAV }, title: '[FIXTURE] take 1' });
+    // The same bytes again (already in the Vault) are the same file: a second attempt can take them; the same attempt can't.
+    const again = await handOff(deps, packageId);
+    expect((await importTake(deps, { submissionId: again.submissionId, upload: { name: 'renamed.wav', bytes: WAV } })).sourceId).toBe(sourceId);
+    await expect(importTake(deps, { submissionId, upload: { name: 'night-city-take-1.wav', bytes: WAV } })).rejects.toThrow(/already a take of this attempt/);
     await rateTake(deps, { takeId, rating: 5, keep: '[FIXTURE] the whispered verse' });
     p = await packageDetail(db.sql, packageId);
     expect(p!.export.ready).toBe(true);
-    expect(p!.attempts).toEqual([expect.objectContaining({
+    expect(p!.attempts[0]).toEqual(expect.objectContaining({
       submissionId, adapter: 'manual',
       takes: [expect.objectContaining({ takeId, title: '[FIXTURE] take 1', audioSha256: createHash('sha256').update(WAV).digest('hex'), rating: 5, keep: '[FIXTURE] the whispered verse' })],
-    })]);
-    expect((await studioIndex(db.sql)).attempts).toEqual([expect.objectContaining({ submissionId, songTitle: '[FIXTURE] Night City', title: '[FIXTURE] Night City', takeCount: 1, isTraced: true })]);
+    }));
+    expect(p!.attempts.map((a) => a.submissionId)).toEqual([submissionId, again.submissionId]);
+    expect((await studioIndex(db.sql)).attempts.map((a) => [a.submissionId, a.songTitle, a.takeCount, a.isTraced])).toEqual([
+      [again.submissionId, '[FIXTURE] Night City', 1, true], [submissionId, '[FIXTURE] Night City', 1, true],
+    ]);
     expect(await packageDetail(db.sql, lyricsId)).toBeNull();
   });
 });

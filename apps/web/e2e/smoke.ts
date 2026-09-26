@@ -14,8 +14,10 @@ import { createTestDb, REPO_ROOT } from '../../../tests/helpers/db.ts';
 // AOS-01: log in → create a song → upload a lyric sheet to it → see the lineage → approve v1 → find
 // the line through vault search. AOS-02: upload the song's master → register it on a new release
 // from the song → splits, credit, ISRC, UPC, artwork → schedule → delivery → released → platform
-// link → task → the dashboard shows it released with nothing blocking. Prints one line per checked
-// step; exits 1 on the first failure.
+// link → task → the dashboard shows it released with nothing blocking. AOS-03: a style recipe → approve
+// → the default tag set → an edit with cues → approve → the song builds a Suno package → hand off →
+// upload Suno's audio as the take → rate it → the export and /studio show it traced. Prints one line
+// per checked step; exits 1 on the first failure.
 
 const PORT = 3199;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -39,11 +41,19 @@ const submit = async (page: Page, form: Locator, until: string) => {
   const refused = await page.$('p.error');
   if (refused) throw new Error(`FAILED: refused: ${await refused.textContent()}`);
 };
-const wav = (): Buffer => {
+/** A decide form has Approve and Reject: click Approve, then wait as `submit` does. */
+const approveIn = async (page: Page, form: Locator, until: string) => {
+  await form.locator('button[value=approve]').click();
+  await page.waitForSelector(`${until}, p.error`);
+  const refused = await page.$('p.error');
+  if (refused) throw new Error(`FAILED: refused: ${await refused.textContent()}`);
+};
+/** One second of 8 kHz 16-bit mono; `fill` makes different recordings different bytes (the master is silence). */
+const wav = (fill = 0): Buffer => {
   const h = Buffer.alloc(44);
   h.write('RIFF', 0); h.writeUInt32LE(36 + 16000, 4); h.write('WAVE', 8); h.write('fmt ', 12); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20);
   h.writeUInt16LE(1, 22); h.writeUInt32LE(8000, 24); h.writeUInt32LE(16000, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(16000, 40);
-  return Buffer.concat([h, Buffer.alloc(16000)]);
+  return Buffer.concat([h, Buffer.alloc(16000, fill)]);
 };
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 /** A fixture UPC-A: an 11-digit base in an unused range plus its GS1 check digit. */
@@ -196,6 +206,59 @@ try {
   check(releaseRow?.includes('released') === true && releaseRow.includes(today), `the dashboard shows the release released on its date (${releaseRow})`);
   check((await page.textContent('body'))?.includes('as of') === true, 'the dashboard shows the time it was read');
   await shot(page, '7-dashboard');
+
+  // AOS-03: Studio, from a style recipe and a tag set to a rated take of the song, every version approved.
+  await page.goto(`${BASE}/studio`);
+  const recipeForm = page.locator('form:has(textarea[name=style])');
+  await recipeForm.locator('input[name=name]').fill('[FIXTURE] Night drive');
+  await recipeForm.locator('textarea[name=style]').fill('dark melodic trap, 140 bpm, male baritone, sodium-lit synths');
+  await recipeForm.locator('input[name=excludeStyles]').fill('country, acoustic');
+  await recipeForm.locator('textarea[name=notes]').fill('140 bpm keeps the hook tight');
+  await recipeForm.locator('button').click();
+  await page.waitForURL(/\/studio\/recipes\/[0-9a-f-]{36}$/);
+  check((await page.textContent('h1')) === '[FIXTURE] Night drive' && (await page.textContent('pre'))?.includes('sodium-lit synths') === true, 'a style recipe is written (x3lius-studio-editor) as v1, a draft');
+  await page.fill('form:has(button[value=approve]) input[name=reason]', 'the house sound');
+  await approveIn(page, page.locator('form:has(button[value=approve])'), 'td .status-approved');
+  check(true, 'the owner approves the recipe v1');
+
+  await page.goto(`${BASE}/studio`);
+  await page.click('button:text("Create the default tag set")');
+  await page.waitForURL(/\/studio\/tags\/[0-9a-f-]{36}$/);
+  check((await page.textContent('body'))?.includes('[Verse 1]') === true, 'the default tag set is the code labels (S2): verses numbered');
+  await page.fill('form:has(input[name="cues:chorus"]) input[name=name]', '[FIXTURE] X3LIUS live');
+  await page.fill('input[name="cues:chorus"]', 'Anthemic, Full band');
+  await submit(page, page.locator('form:has(input[name="cues:chorus"])'), 'td:text-is("v2")');
+  await page.fill('tr:has(td:text-is("v2")) input[name=reason]', 'cues for the live chorus');
+  await approveIn(page, page.locator('tr:has(td:text-is("v2")) form'), 'td:text-is("v2 ◆")');
+  check((await page.textContent('body'))?.includes('[Chorus] [Anthemic] [Full band]') === true, 'an edit with cues is v2 of the tag set, and the owner approves it');
+  await shot(page, '8-tag-set');
+
+  await page.goto(`${BASE}/songs/${songId}`);
+  await submit(page, page.locator('form:has(select[name=lyricsArtifactId])'), 'h1');
+  await page.waitForURL(/\/studio\/packages\/[0-9a-f-]{36}$/);
+  const packageId = page.url().split('/').pop()!;
+  const lyricsField = (await page.textContent('pre[data-field="Lyrics"]')) ?? '';
+  check(lyricsField.includes('[Chorus]\n[Anthemic]\n[Full band]\nWe run the city till the morning breaks') && lyricsField.startsWith('[Verse 1]\nNeon bleeding on the glass'),
+    'the song builds a Suno package (build-suno-package): the approved lyrics rendered with the tag set');
+  check((await page.textContent('body'))?.includes('ready') === true, 'every version it names is approved, so the package is ready to hand off');
+  await submit(page, page.locator('form:has(button:text("Hand off (manual)"))'), '[data-attempt]');
+  check(true, 'the handoff is recorded as a manual submission (suno-submitter)');
+  await page.setInputFiles('input[name=audio]', { name: 'night-city-suno-take-1.wav', mimeType: 'audio/wav', buffer: wav(1) });
+  await page.fill('form:has(input[name=audio]) input[name=title]', 'Night City (take 1)');
+  await submit(page, page.locator('form:has(input[name=audio])'), 'audio');
+  check(true, 'Suno\'s audio is uploaded into the Vault and recorded as the attempt\'s take');
+  await page.selectOption('form:has(input[name=takeId]) select[name=rating]', '5');
+  await page.fill('form:has(input[name=takeId]) input[name=keep]', 'the baritone');
+  await submit(page, page.locator('form:has(input[name=takeId])'), '.status-approved:text-is("5/5")');
+  check((await page.textContent('body'))?.includes('keep: the baritone') === true, 'the owner rates the take 5/5 with what to keep');
+  await shot(page, '9-package');
+
+  const exported = await (await page.request.get(`${BASE}/studio/packages/${packageId}/export`)).json() as { format: string; ready: boolean; sources: { status: string }[]; workflow: { name: string } };
+  check(exported.format === 'xyp-suno-package/v1' && exported.ready && exported.sources.every((x) => x.status === 'approved') && exported.workflow.name === 'build-suno-package',
+    'the package export names every approved version and the workflow that built it');
+  await page.goto(`${BASE}/studio`);
+  const attemptRow = await page.locator(`tr:has(a[href="/studio/packages/${packageId}"])`).first().textContent();
+  check(attemptRow?.includes('yes') === true && attemptRow.includes('[FIXTURE] Night City'), `the attempt is listed on /studio, traced (${attemptRow})`);
   console.log('smoke: all checks passed');
 } catch (e) {
   console.error((e as Error).message);

@@ -38,17 +38,26 @@ afterAll(async () => {
 
 describe('ops: the UI\'s writes, each an agent run or the owner\'s decision', () => {
   it('uploads: bytes go to a server-side temp file (never a browser path), removed after; a lyric sheet becomes a lineage', async () => {
-    const tmpBefore = readdirSync(tmpdir()).filter((f) => f.startsWith('xyp-upload-')).length;
-    const songId = (await songCreate(deps, { title: '[FIXTURE] Night City', artist: 'X3LIUS', language: 'en' })).songId;
-    const [sheet, notes] = await uploadFiles(deps, [
-      { name: '../../etc/night-city.txt', bytes: enc('[Verse 1]\nNight city lights\n[Chorus]\nWe run tonight\n') },
-      { name: 'notes.md', bytes: enc('# Notes\n\nLA-2A on the verses.\n') },
-    ], { as: 'lyric_sheet', language: 'en', tags: ['New Era'], songId });
-    expect(sheet).toMatchObject({ file: { status: 'added', mediaClass: 'lyric_sheet' }, lyrics: { version: 1 } });
-    expect(notes!.file.mediaClass).toBe('lyric_sheet');
-    expect((await db.sql`select title from sources where id = ${sheet!.file.sourceId}`)[0]).toEqual({ title: 'night-city.txt' });
-    expect(readdirSync(tmpdir()).filter((f) => f.startsWith('xyp-upload-')).length).toBe(tmpBefore);
-    await expect(uploadFiles(deps, [{ name: '', bytes: enc('x') }], {})).rejects.toThrow(/file name/);
+    // This file's own temp root: other test files upload in parallel, so the shared tmpdir can't be counted.
+    const root = mkdtempSync(join(tmpdir(), 'aos01-upload-root-'));
+    const prev = process.env.TMPDIR;
+    process.env.TMPDIR = root;
+    try {
+      const songId = (await songCreate(deps, { title: '[FIXTURE] Night City', artist: 'X3LIUS', language: 'en' })).songId;
+      const [sheet, notes] = await uploadFiles(deps, [
+        { name: '../../etc/night-city.txt', bytes: enc('[Verse 1]\nNight city lights\n[Chorus]\nWe run tonight\n') },
+        { name: 'notes.md', bytes: enc('# Notes\n\nLA-2A on the verses.\n') },
+      ], { as: 'lyric_sheet', language: 'en', tags: ['New Era'], songId });
+      expect(sheet).toMatchObject({ file: { status: 'added', mediaClass: 'lyric_sheet' }, lyrics: { version: 1 } });
+      expect(notes!.file.mediaClass).toBe('lyric_sheet');
+      expect((await db.sql`select title from sources where id = ${sheet!.file.sourceId}`)[0]).toEqual({ title: 'night-city.txt' });
+      expect(readdirSync(root)).toEqual([]);
+      await expect(uploadFiles(deps, [{ name: '', bytes: enc('x') }], {})).rejects.toThrow(/file name/);
+    } finally {
+      if (prev === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = prev;
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

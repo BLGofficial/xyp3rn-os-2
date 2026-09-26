@@ -39,7 +39,7 @@ describe('xyp-suno-package/v1', () => {
     expect(e).toEqual({
       format: SUNO_PACKAGE_EXPORT_FORMAT,
       package: { id: p.packageId, version: 1, createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
-      sunoModel: 'v5', title: p.prompt.title, style: p.prompt.style, excludeStyles: p.prompt.excludeStyles, lyrics: p.prompt.lyrics,
+      sunoModel: 'v5', title: p.prompt.title, style: p.prompt.style, excludeStyles: p.prompt.excludeStyles, lyrics: p.prompt.lyrics, limits: [],
       sources: [
         { role: 'lyrics', artifactId: p.lyricsId, schemaId: 'x3lius.lyrics/v2', version: 1, status: 'approved' },
         { role: 'style-recipe', artifactId: p.recipeId, schemaId: 'x3lius.style-recipe/v1', version: 1, status: 'approved' },

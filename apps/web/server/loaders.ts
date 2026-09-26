@@ -200,11 +200,12 @@ export const songDetail = (sql: Sql, id: string) =>
              (select max(c.version) from creative_artifacts c where c.lineage_id = l.artifact_lineage_id) as latest_version,
              (select max(ap.approved_version) from artifact_approvals ap where ap.lineage_id = l.artifact_lineage_id) as approved_version
       from current_song_links l join creative_artifacts root on root.id = l.artifact_lineage_id
-      where l.song_id = ${id} order by l.created_at`;
+      where l.song_id = ${id} and root.schema_id = any(${LYRICS_SCHEMAS}::text[]) order by l.created_at`;
     const files = await tx<{ link_id: string; role: string | null; id: string; title: string; media_class: string | null }[]>`
       select l.id as link_id, l.role, s.id, s.title, s.media_class from current_song_links l join sources s on s.id = l.source_id
       where l.song_id = ${id} order by l.created_at`;
-    const takes = await tx<{ link_id: string; role: string | null; id: string; title: string | null; audio_url: string }[]>`
+    // A take is a URL or, since AOS-03, a Vault audio file (audio_url null).
+    const takes = await tx<{ link_id: string; role: string | null; id: string; title: string | null; audio_url: string | null }[]>`
       select l.id as link_id, l.role, t.id, t.title, t.audio_url from current_song_links l join suno_takes t on t.id = l.take_id
       where l.song_id = ${id} order by l.created_at`;
     const tracks = await tx<{ link_id: string; role: string | null; id: string; title: string; release_title: string; release_status: string }[]>`

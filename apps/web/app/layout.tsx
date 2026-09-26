@@ -12,6 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <nav className="flex flex-wrap gap-5 text-sm uppercase tracking-widest">
             <a href="/">Command</a>
             <a href="/songs">Songs</a>
+            <a href="/studio">Studio</a>
             <a href="/releases">Releases</a>
             <a href="/tasks">Tasks</a>
             <a href="/people">People</a>

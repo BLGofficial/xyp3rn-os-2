@@ -165,7 +165,7 @@ Sections are separated by a blank line. A section kind the set doesn't cover ref
   - `{ capture: { submissionId, takes } }`: `manual` takes are each `{ sourceId }` (a Vault audio file) or `{ audioUrl }`, plus an optional `title` / `durationSeconds`. A Vault take without a title shows its file's (`generation_takes.file_title`).
   - `{ rate: { takeId, rating, keep?, change? } }` (new tool `rate_take`, `feedback.write`).
 - **Optional inputs (engine):** `input: { required: [...], optional: [...] }`. A name in both lists, or a `$from input.x` that neither declares, is a spec error. The run's stored spec records both lists.
-- **Import a take (UI and CLI):** the audio goes into the Vault first (`vault-curator`), then `capture` with its `sourceId`. This is the artwork pattern from AOS-02.
+- **Import a take (UI and CLI):** the audio goes into the Vault first (`vault-curator`), then `capture` with its `sourceId`. This is the artwork pattern from AOS-02. The file is not linked to the song: the take is the song's through its package, and bytes already in the Vault are the same file.
 - **The package export** (`records/x3lius/suno/package.ts`, `packageExport`), format `xyp-suno-package/v1`:
   - the package id and version, the Suno model;
   - the four Suno fields;

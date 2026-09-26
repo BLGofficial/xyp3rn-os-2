@@ -16,6 +16,8 @@ export type SunoPackageExport = {
   readonly style: string;
   readonly excludeStyles: readonly string[];
   readonly lyrics: string;
+  /** The canonical length limits applied when it was built (F20), each with its claim ref. */
+  readonly limits: readonly { readonly field: string; readonly max: number; readonly actual: number; readonly ref: string }[];
   readonly sources: readonly { readonly role: string; readonly artifactId: string; readonly schemaId: string; readonly version: number; readonly status: string }[];
   readonly workflow: { readonly runId: string; readonly name: string; readonly sha256: string; readonly status: string } | null;
   readonly ready: boolean;
@@ -23,7 +25,7 @@ export type SunoPackageExport = {
   readonly blockers: readonly string[];
 };
 
-type Body = { sunoModel: string; title: string; style: string; excludeStyles: string[]; lyrics: string; sources: { role: string; artifactId: string; schemaId: string; version: number }[] };
+type Body = { sunoModel: string; title: string; style: string; excludeStyles: string[]; lyrics: string; limits: SunoPackageExport['limits']; sources: { role: string; artifactId: string; schemaId: string; version: number }[] };
 
 /**
  * @param tx - a transaction whose role reads creative_artifacts, artifact_approvals, agent_runs and
@@ -47,7 +49,7 @@ export const readPackageExport = async (tx: postgres.TransactionSql, packageId: 
   return {
     format: SUNO_PACKAGE_EXPORT_FORMAT,
     package: { id: a.id, version: a.version, createdAt: a.created_at.toISOString() },
-    sunoModel: b.sunoModel, title: b.title, style: b.style, excludeStyles: b.excludeStyles, lyrics: b.lyrics,
+    sunoModel: b.sunoModel, title: b.title, style: b.style, excludeStyles: b.excludeStyles, lyrics: b.lyrics, limits: b.limits,
     sources: b.sources.map((s) => ({ role: s.role, artifactId: s.artifactId, schemaId: s.schemaId, version: s.version, status: statuses.get(s.artifactId) ?? 'missing' })),
     workflow: w ? { runId: w.id, name: w.workflow_name, sha256: w.spec_sha256, status: w.status } : null,
     ready: ready!.reasons.length === 0,
