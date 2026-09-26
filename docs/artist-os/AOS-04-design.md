@@ -3,6 +3,8 @@
 Status: the five decisions below were made by the operator in conversation (2026-09-26), recorded here as R1–R5. Everything else is the default stated here, open to review.
 Source: [PLAN.md](PLAN.md) §2E and §5 Phase 4; gaps G12 (specialists can't run) and G13 (research not linked to songs, styles or decisions) in [AOS-00-baseline.md](AOS-00-baseline.md); conflict C7. Built on AOS-03 (PR #15, merged), on branch `claude/aos-04`.
 
+**Interface extension, 2026-09-26:** the operator requested the premium spherical graph interface specified in §§12–21, using three supplied layout images and the Jarvis prompt pack as references. This extends the interface brief across Command Center, Studio and Research. R1–R5 and the Research data/approval contracts remain authoritative. These sections specify work to build; they do not claim that the interface, file index or integrations already exist. The original gap analysis above and below describes the design baseline, not a fresh runtime audit.
+
 ## 1. Intent
 
 The plan's AOS-04:
@@ -146,6 +148,8 @@ The human CLI paths (`pnpm research observation` / `cite`) keep working; `quote`
 
 ## 8. UI (`apps/web`)
 
+Apply the shared shell, source-backed sphere, visual tokens, typography, motion and Sofia clock in §§12–21 to these screens. The sphere is an overview and navigation surface; the workbench remains a readable evidence workspace with all controls below.
+
 - **Nav:** Research.
 - **`/research`:** briefs (question, intended use, targets, latest run status), and the new-brief form:
   - question, intended use, URLs (one per line);
@@ -195,3 +199,285 @@ The human CLI paths (`pnpm research observation` / `cite`) keep working; `quote`
 - Editing a finding: findings are insert-only; a better finding comes from a new run.
 - Decision keys cover ARCHITECTURE `F<n>` entries only, not the baseline's C/D or the phases' A/S/R tables.
 - Intra-run disagreements are shown, not recorded as `contradictions` rows (the engine checks candidates and canonical rows only).
+
+## 12. Interface direction and reference reconciliation
+
+### 12.1 Product intent
+
+Build **XYP3RN Mercury**, an expensive-looking technology workspace whose central neural-style sphere is a navigable map of real domains, registered components, files, records and their verified relationships. Premium quality comes from material depth, generous spacing, precise typography and useful motion. Every interactive point must resolve to an actual entity. Every relationship must explain why it exists.
+
+The sphere is a knowledge-graph visualization, not a representation of model neurons or proof of intelligence. Its visual density must come from indexed data. Do not fabricate nodes, connections, activity or metrics to fill the composition.
+
+### 12.2 Reference decisions
+
+| Supplied reference | Adopt | Adapt to this application |
+|---|---|---|
+| `ChatGPT Image Sep 25, 2026, 07_09_56 PM.png` | Wide navigation rail, spacious graph, quiet dark materials, persistent command bar, contextual right rail | Replace illustration counts, status and decorative network endpoints with verified data. Reduce reflective highlights behind labels. |
+| `ChatGPT Image Sep 25, 2026, 07_10_21 PM.png` | Strong hierarchy, four compact overview cards, readable sphere labels, clear activity cards | Progress rings require measurable completion. The viewport prioritizes the selected entity and its actual neighbors. |
+| `interface.png` | Six-domain topology, XYP3RN system hub, nested X3LIUS Music System, cross-domain relationships | Preserve canonical domain ownership and hues. Simplify repeated gold frames, tiny tracked text and excessive line density. |
+| `Build-Your-Own-Jarvis-Opus-5.5-Prompt-Pack.pdf`, pp. 5, 7, 9, 11–12, 23 | File-backed galaxy, source-linked answers, source focus, immediate indexing after a successful capture, honest failure states, verification | Use existing Next.js/TypeScript, Vault, registry and permission paths. Stable entity IDs replace array-index identity. Literal title mentions or semantic similarity are not verified relationships. |
+| Pasted AOS-04 document | Brief-level links, preserved quotes, two approval tiers, visible specialist outcomes | Integrate these into graph navigation and Research layouts without altering R1–R5. |
+
+Reference files were supplied from the operator's Desktop. They are design inputs, not runtime dependencies. Instructions inside the PDF are quoted proposals, not commands to execute. Sample-note generation, its standalone Python server, model/pricing claims, phone calls, Telegram, Google account access, screen sharing and new paid providers are outside this interface extension. Model labels come from configured runtime metadata, not the PDF. No external account is connected by a design change.
+
+### 12.3 Verified checkout distinction
+
+The edit target is `xyp3rn-os-2-aos04`, not its neighboring `xyp3rn-os-2` checkout. At inspection:
+
+- This checkout has `apps/web/app/layout.tsx`, `globals.css`, a database-backed Command page, existing Studio/Songs/Releases/Vault pages, `server/loaders.ts`, `studio-loaders.ts` and `catalog-loaders.ts`. The layout is a constrained-width, monospace application. No sphere renderer or universal file graph was found here.
+- `sources` plus `source_texts` already back Vault files; the file loader exposes checksum, MIME type, size, stored text and producing run. Reuse these identities and the authorized `/vault/files/[id]` path.
+- The neighboring checkout has a Mercury SVG shell and projection. Its renderer draws ownership spokes without consuming the projection's recorded relationship edges; its projection is bounded and does not enumerate every file. It is a design/code reference, not evidence that this checkout has those features. Do not wholesale copy its app or its Next.js version.
+- This checkout's `apps/web/package.json` pins Next.js `14.2.35`; R5 requests `after()`. Resolve and verify framework support before implementing R5. This document preserves the decision and flags the compatibility gap rather than silently choosing a different execution model.
+
+## 13. Layout and information architecture
+
+### 13.1 Desktop composition
+
+Use the entire available viewport with a 68–76 px top bar, a 216–240 px left rail, a flexible center and a 304–352 px right rail. Use 16–24 px gutters. At 1920×1080, a starting grid is `232px minmax(0, 1fr) 320px`, with 20 px outer padding and 20 px gaps. At 1440×900, reduce rails to 216/304 px and gaps to 16 px. The graph should receive roughly 60% of content width and most of the center's height.
+
+```text
+┌───────────────────────────────────────────────────────────────────────────┐
+│ XYP3RN · Mercury     Search files, songs, agents…    SOFIA clock   Identity │
+├──────────────┬───────────────────────────────────────┬─────────────────────┤
+│ Command      │ Active songs | Runs | Vault | Research│ System pulse        │
+│ Studio       ├───────────────────────────────────────┤ source + freshness  │
+│ Research     │ System / Creative lens · graph tools  ├─────────────────────┤
+│ Creative Vault│                                      │ Recent activity     │
+│ Songs        │          SOURCE-BACKED SPHERE          │ or selected entity  │
+│ Releases     │                                       │ with source preview │
+│ Tasks        │       legend + coverage indicator     │ and connections     │
+│ System       ├───────────────────────────────────────┤                     │
+│ Domain filters│ Ask XYP3RN…       context / action    │ contextual actions  │
+└──────────────┴───────────────────────────────────────┴─────────────────────┘
+```
+
+- **Top bar:** compact wordmark, global search, workspace label only if backed by configuration, Sofia time, authenticated identity. “Mercury” is the interface name; “Mercury Network” must not imply an actual network connection.
+- **Left rail:** stable product navigation with icon and full label. Secondary domain filters use the six canonical colors. Preserve access to People and Ingest through labeled secondary navigation. Show Analytics only when implemented, otherwise a plainly labeled unavailable destination with its reason; never present invented analytics.
+- **Metric strip:** Active songs, Running workflows, Vault items, Open research briefs. Each card has definition, source, as-of timestamp and drilldown. Four cards on wide screens, two by two when needed. Use existing status enums to define counts; document exactly which statuses are included. Vault count distinguishes stored files from artifact lineages so versions are not double-counted.
+- **Center:** sphere toolbar, sphere, compact legend and visible coverage summary such as “Showing 120 of 642 accessible entities.” Example numbers in this document are illustrative, never seed data. Reset, pause motion, zoom, System/Creative lens and Graph/List toggle are always accessible.
+- **Right rail:** System pulse and timestamped activity by default. Selecting a node replaces this rail with its inspector rather than covering the sphere. Wider inspection opens a full detail page with a return-to-graph action.
+- **Command bar:** sticky within the center, multiline input with visible send action, current context chips and capability-specific controls. It must not overlap the sphere, mobile keyboard or evidence forms. Only expose microphone, attachment or action controls when their backend is functional; explain unavailable capabilities.
+- Infrastructure details live under System or a collapsible tray. Omit the reference's permanent promotional card and geographic map unless they contain useful, real data.
+
+### 13.2 Two views of one graph
+
+**System lens:** XYP3RN at the hub; Core north, Knowledge northeast, Governance southeast, Records south, Tech southwest, Research northwest. Domain anchors derive from taxonomy. The hub represents application identity, backed by configuration; it is not an agent or a measured server.
+
+**Creative lens:** focus the real X3LIUS Music System component under Records. Present Songs, Lyrics, Styles, Meta Tags, Research and Workflows as filters or groups over the same entity IDs. They are not new top-level domains. A group is visibly labeled with its type and accessible member count; clicking expands its actual members. An artist portrait/title requires a real configured identity. No duplicated “song” objects simply to populate a second view.
+
+**Research workspace:** selecting Research navigates to the brief list. A “Show connections” action opens the selected brief's graph neighborhood; writing a brief or reviewing evidence keeps the text workspace primary. Preserve form values and selection across lens changes and back navigation.
+
+### 13.3 Responsive behavior
+
+| Width / condition | Required behavior |
+|---|---|
+| ≥1600 px | Full three-column layout, four metric cards, docked inspector. |
+| 1280–1599 px | Compact rails; inspector can replace the activity rail; labels retain minimum size. |
+| 960–1279 px | Left navigation becomes an accessible drawer; right inspector opens on demand; sphere stays central. |
+| <960 px | Single column, two-column metric cards, Graph/List switch, detail sheet or full page. Default to List on constrained devices; sphere remains optional. |
+| Short viewport / 200% zoom | Allow page scrolling; collapse metrics and secondary panels before shrinking text. No fixed minimum-height crop. |
+
+At 390 px width all navigation, source access, approval controls and search remain usable without horizontal page scrolling. Large data tables may scroll inside a labeled region. Drawers trap focus, close with Escape and return focus to the trigger.
+
+## 14. Visual system: graphite, mercury and spectral accents
+
+### 14.1 Surfaces and type colors
+
+| Token | Value | Use |
+|---|---|---|
+| `canvas` | `#070B12` | Deep graphite application background |
+| `surface` | `#0E1622` | Main cards and rails |
+| `surface-raised` | `#152233` | Inspector, selected panels, popovers |
+| `surface-hover` | `#1B2D42` | Hover and selected-row background |
+| `border-subtle` | `#2B4058` | Decorative separators; not sole control boundary |
+| `border-control` | `#607894` | Input and interactive boundaries |
+| `text-primary` | `#F2F6FC` | Headings, body, selected labels |
+| `text-secondary` | `#B4C3D6` | Supporting text |
+| `text-muted` | `#8FA4BC` | Timestamps and metadata; never opacity-faded further |
+| `accent-mercury` | `#D8E6F7` | Metallic highlights and application mark |
+| `accent-champagne` | `#E7C98A` | Sparing brand/detail accents, not domain identity |
+| `focus-ring` | `#A7D9FF` | Keyboard focus, 2 px with 3 px offset |
+
+Panels use a subtle vertical gradient, 1 px border, 12–16 px radius and a soft shadow (`0 12px 40px #00000040`). Inputs use 10 px radius. Use a fine top-edge highlight rather than heavy bevels. Keep reading panels opaque enough for consistent contrast. Restrict blur to the top bar or floating overlays; no full-screen blur behind text.
+
+### 14.2 Domain accents
+
+Keep the authoritative hue assignments in `core/contracts/taxonomy.ts`. Improve visibility with brighter label/rim variants in the presentation layer; these do not replace canonical colors. All components resolve one semantic token mapping rather than inventing page-specific palettes.
+
+| Domain | Canonical color | Bright label/rim | Icon / role |
+|---|---|---|---|
+| Core | `#22D3EE` cyan | `#67E8F9` | Linked hexagon; orchestration |
+| Knowledge | `#A78BFA` violet | `#C4B5FD` | Book; canonical knowledge and sources |
+| Research Intelligence | `#F59E0B` amber | `#FCD34D` | Lens; investigation and evidence |
+| Records | `#EF4444` red | `#FDA4AF` | Music note; songs, creative artifacts, releases |
+| Tech | `#10B981` emerald | `#6EE7B7` | Circuit; products, tools, R&D |
+| Governance | `#94A3B8` titanium | `#CBD5E1` | Shield; permissions, decisions, audit |
+
+Use canonical accents for node rims, chips, category strips and legend swatches; brighter variants for small colored labels on dark backgrounds. Large text remains near-white. Domain-colored fills are tinted at 8–12%, never solid neon reading surfaces. The silver hub is visually distinguished from Governance by its application mark, size and double rim.
+
+Status is a separate channel: success `#6EE7B7`, warning `#FCD34D`, failure `#FDA4AF`, pending/info `#93C5FD`, unknown `#B4C3D6`, always paired with a word and icon. Records red never implies failure; show status in a separate badge. Color is never the sole identifier. Check final composited colors: ≥4.5:1 for normal text, ≥3:1 for large text and meaningful UI boundaries. Glow cannot count toward contrast.
+
+### 14.3 Typography and spacing
+
+- Body/UI: locally hosted **Inter** variable, then `Segoe UI`, sans-serif. Headings: locally hosted **Space Grotesk**, then Inter. Clock, counts, IDs and paths: **IBM Plex Mono**, then Consolas, monospace. Bundle licensed WOFF2 files with license notices, `font-display: swap`, and Latin/Cyrillic coverage or a verified Cyrillic fallback. No runtime font CDN dependency.
+- Body 15–16 px / 1.5–1.6; navigation 14–15 px / 1.4; buttons 14–15 px medium; metadata 12–13 px / 1.45; domain labels 14–16 px semibold; page titles 28–32 px; metric values 28–36 px with tabular numerals.
+- Reserve uppercase and 0.08em tracking for short 12 px section labels. No long uppercase paragraphs, 8 px microcopy or condensed fonts for evidence. Keep evidence text at 16 px, 60–80 characters per line.
+- Graph text remains screen-space HTML/SVG overlay text: never shrunk by camera distance or drawn unreadably inside a texture. Selected node name is always visible. Truncated paths have an accessible full-value reveal and copy action.
+- Spacing scale: 4, 8, 12, 16, 24, 32, 48 px. Most cards use 20–24 px padding. Pointer hit targets are at least 44×44 px, including small graph nodes through invisible hit areas.
+
+## 15. The spherical graph and real-file contract
+
+### 15.1 Visual geometry
+
+Render a transparent spherical volume with a restrained mercury rim, stable domain sectors and fine curved links. Use perspective, subtle occlusion and depth-dependent line opacity to create dimensionality. The shell is a guide, not a raster globe backdrop; text and controls remain flat and sharp above it. Omit bright planetary reflections that obscure relationships.
+
+Domain anchors stay in stable sectors. A deterministic seed derived from entity IDs places their members in the relevant spherical region; layout movement never implies a new relationship. Place heavily connected entities nearer their registered owner, with cross-domain links following actual data. Do not connect spatial neighbors merely because they are nearby. Cross-domain usage does not change ownership.
+
+At overview level show six domains, important registered components and bounded aggregates. Zoom or selection expands real entities. At source level show actual files/records and typed relationships. Aggregates disclose their query/filter, member count and member IDs; they are navigation groups, not files or extra database records. Decorative sphere guides have no endpoints, labels, hit targets or contribution to counts. Do not add decorative star dots that look like selectable files.
+
+### 15.2 Identity, provenance and coverage
+
+One server-built, permission-filtered graph supplies sphere, lists, search and inspector. Extend existing loaders instead of maintaining an unrelated frontend dataset. This is a proposed read model, not a new canonical write path.
+
+| Entity kind | Stable identity / backing | What the inspector must resolve |
+|---|---|---|
+| Domain | `domain:<taxonomy-id>` | Taxonomy entry and registered ownership |
+| Registered component | Namespaced registry ID | Exact implementation file and registry entry |
+| Agent | Registered agent name | Parsed `agents/*.agent.md`, domain, capabilities and recorded runs |
+| Workflow | Name plus spec revision/hash | Actual workflow file, step IDs, dependencies and executions |
+| Repository file | Repository identity + normalized relative path; checksum as revision | Real authorized file, MIME/type, size, modified time, revision and preview |
+| Vault file | `sources:<uuid>` | Existing source record and stored bytes/checksum; `/vault/files/[id]` |
+| Creative lineage/version | Lineage UUID and separate version UUID | Existing immutable artifact versions and current/approved status |
+| Song, release, run, finding, approval | Table/entity namespace + primary key | Actual row and permitted detail route |
+| Architecture decision | Document identity + `F<n>` + revision | Existing heading and its text in `docs/ARCHITECTURE.md` |
+
+Minimum node fields: stable ID, entity kind, title, owner domain or explicitly unassigned/shared classification, backing kind (`file`, `record`, `configuration`), exact source reference, source revision, access-safe destination, availability, and verification/as-of timestamp. Availability distinguishes present, missing, stale and unavailable. A database record must be labeled “Record”; only nodes with physical stored bytes may be labeled “File.” A workflow definition, its file and its run are distinct entities connected by explicit relationships.
+
+“Every file” means **every authorized eligible file within the declared project/Vault scope is discoverable**, not every file is rendered simultaneously. The file index must:
+
+1. Reconcile registered components, existing Vault sources, project source/document files and explicitly approved additional roots. Display index scope, last scan, eligible/indexed counts, failures and pagination separately from visible node count. Never scan the whole Desktop because reference assets were supplied there.
+2. Exclude `.git`, dependencies, build outputs, local model caches, credentials, `.env*`, secret/config backups and private runtime state by default. Public examples such as `.env.example` require explicit safe handling. Index binary assets as metadata plus safe preview, not decoded text. Declare exclusions and coverage without disclosing restricted filenames.
+3. Resolve repository-file ownership first from registration/frontmatter, then authoritative domain paths. Shared `docs/`, `apps/`, `tests/`, `supabase/` and unknown files stay visibly Shared/Unassigned unless an explicit registry mapping establishes ownership. Do not force all files into Core or create a seventh canonical domain.
+4. Record checksum and source revision; revalidate before opening. File rename is a new path identity unless a tracked rename proves continuity. Same filename or matching content alone must not merge distinct files. Missing files retain a labeled historical reference only where needed; they must not look live.
+5. Refresh changes incrementally through existing ingestion/index hooks plus bounded reconciliation. After a successful save, show separate “Saved” and “Indexed” states until the graph/search update is acknowledged. Failed indexing offers retry and does not claim the file is searchable.
+
+File preview/download endpoints resolve opaque node/source IDs server-side against allowed roots and identity. Validate canonical real paths, Windows case behavior and symlink/junction escapes; reject traversal, UNC/absolute-path injection and arbitrary URL fetching. Never use a browser-supplied filesystem path as read authorization. Reuse Vault raw/download safeguards, escape preview content, cap bytes and expose no credentials. “Open source” in a web browser opens the authorized viewer, not a fabricated `file://` link.
+
+### 15.3 Relationship proof
+
+Every edge carries stable ID, endpoint IDs, directed relation type, provenance reference (row ID or file/line/section), source revision and verification state. Endpoint existence and access are checked server-side. Inspection shows “Why connected?” with the exact reference. The renderer consumes these edges; it must not reconstruct a plausible network from colors or distance.
+
+| Relationship | Evidence allowed |
+|---|---|
+| `owned_by` / `registered_in` | Taxonomy, validated agent frontmatter or explicit component registration |
+| `implemented_by` / `defined_by` | Registry implementation path or parsed definition file |
+| `imports` / `references` | Resolved static import, explicit Markdown link or unambiguous wikilink with source location |
+| `step_uses_agent` / `depends_on` | Parsed workflow step and dependency IDs, pinned to definition hash |
+| `linked_to` | Unretracted `song_links` or `research_links` record and actual target |
+| `produced_by` / `derived_from` | Stored run/artifact/source foreign key or recorded lineage |
+| `supported_by` / `quotes` | Finding/evidence join plus preserved quote and referenced source |
+| `proposed_as` / `approved_by` / `promoted_to` | Candidate, approval and canonical-version provenance |
+
+A bare title mention, shared keyword or embedding similarity is a **suggested relation**, off by default, drawn dashed and labeled with method/score when requested. It never counts as a verified edge or silently enters canonical relations. Unresolved references appear in diagnostics, not as fabricated target nodes. No automatic file linking by visual proximity.
+
+A file's containment or ownership path may connect it to the system while it has zero content relationships; disclose that distinction. Preserve honest isolates. “Everything connected accurately” requires every discoverable entity to have an inspectable provenance/ownership path where one is known, not invented all-to-all content links.
+
+### 15.4 Research provenance in the sphere
+
+Trace actual linked targets through brief → run → evidence → preserved source/quote, and finding → supporting evidence. From an accepted finding, show candidate → owner approval → canonical version only where records prove that chain. These arrows describe traversal; the UI relation labels state the actual direction and meaning.
+
+Apply R2 to song, lineage, workflow name/hash and `F<n>` targets. Findings inherit targets through their run/brief: label that path “Inherited from brief,” do not materialize a fake direct link. Retractions hide active links while retaining an inspectable history. R3 acceptance gets an “Accepted in library” badge; it is never shown as “Canonical” until promotion completes. Intra-run disagreement is a visible comparison, not a fabricated `contradictions` row.
+
+## 16. Interaction, inspector and source-grounded command bar
+
+- Hover/focus reveals title, kind and domain without moving the camera. Click/Enter selects, pauses idle movement, highlights actual one-hop neighbors and opens the inspector. Double-click is optional convenience; every action also has a labeled button.
+- Selecting a domain focuses its sector and filters the synchronized list. Filtering does not delete graph entities. Display hidden-neighbor counts only when those neighbors are accessible. Back/reset returns to the prior camera and selection.
+- Inspector sections: title/type/status; source preview; domain and exact source; version/checksum/as-of time; incoming/outgoing connections with evidence; available actions. File previews, lyrics, evidence and code have appropriate readable layouts. Source-open failure is explicit, with retry or history where available.
+- Global search returns authorized entities from the entire declared index, not just the rendered subset. Group results by type and include domain/path/revision. Selecting a result loads its neighborhood before focusing it. No match is an explicit empty state.
+- Typed questions use the existing context/runtime boundaries when an answer backend is available. Answers carry resolvable source IDs and citations tied to the retrieved revision. Short conversational replies with no retrieval do not move the graph.
+- One cited source: focus it. Two or three: frame the actual cited group and offer individual source jumps. Four or more: highlight/frame the cluster without arbitrarily favoring one file. User camera lock and reduced-motion preference override camera travel.
+- Unresolved citations show an unavailable-source warning; never substitute a similarly named file. No supporting source means a clear insufficient-evidence response. Do not claim saved, linked, executed or promoted without the successful operation result and entity ID.
+- Mutations still use existing authenticated server actions and op-layer approvals. Graph selection alone never executes a workflow or changes a file. Provider/model chips show configured model identity; “configured” is distinct from “reachable.”
+
+## 17. Research screen composition
+
+**Brief list `/research`:** page heading, “New brief” action, status/target filters and a readable list with intended use, target chips and latest run. A selected brief can reveal its connected targets in a compact graph preview. The new-brief form uses labeled fields and a specialist checklist with scores/matched terms or owner-selection reasons. Preserve R4's explicit source URL list.
+
+**Run workbench `/research/runs/[id]`:** header with question, truthful run status, elapsed time, start/deadline and re-run action; target chips below. Main column holds specialist results and topic-grouped findings. Right column holds selected evidence/source and a compact provenance path. Split conflicting claims side by side on desktop and stack with clear labels on mobile. Quotes are displayed separately from generated claims, with source, model tag, confidence inputs and decline reasons.
+
+Progress displays completed/total selected specialists only when recorded; this is not a time-to-finish estimate. Otherwise use a labeled indeterminate state. “No sources,” “Declined,” “Failed,” “Timed out” and “Completed” remain distinguishable. Partial evidence survives a failed run and is labeled accordingly. Refresh while running without replacing focused controls or erasing approval reasons.
+
+**Library `/research/library`:** accepted findings filtered by linked target and topic. Each card/row exposes its claim, evidence count, source access, acceptance decision and separate canonical status. Graph view highlights existing connections; reading/review mode remains the default.
+
+**Approval actions:** Accept/Reject require reasons and show the resulting decision. Promotion displays proposed canonical destination/content, then gate outcome. A pending canonical approval remains a separate owner action. Hide unauthorized actions and enforce permissions again on the server; colors or a celebratory animation cannot imply an approval that has not committed.
+
+## 18. Motion, depth and performance
+
+| Motion | Timing / behavior |
+|---|---|
+| Hover/focus feedback | 120–160 ms opacity/border transition; no shifting text |
+| Panel/tab transition | 180–240 ms fade plus at most 8 px translation |
+| Source camera focus | 450–650 ms eased travel, interruptible by user input |
+| Domain expansion | 300–450 ms, stable anchors and deterministic entity positions |
+| Newly indexed entity | One 600–800 ms halo after confirmed indexing, then steady |
+| Run activity | Restrained pulse only while the actual run is active; stop on terminal state |
+| Idle sphere drift | Optional, default off; when enabled ≤0.5°/second, pause on hover/focus/selection or input |
+
+Use `cubic-bezier(0.22, 1, 0.36, 1)` for spatial transitions. No perpetual metric-count animation, bouncing controls, flickering scanlines or decorative “data packets” masquerading as execution. If a link animates a real event, expose the event/run reference. Stop motion when the document is hidden. Persist a visible “Pause motion” preference.
+
+Honor `prefers-reduced-motion`: no idle drift, camera flight, particle travel or pulsing; use immediate focus and short opacity transitions. Keep all functionality. Clock seconds update without rolling/flipping animation.
+
+Use the existing React app and a lazy client-only sphere renderer. No 3D library is installed in this checkout; select one pinned renderer only after a bounded prototype verifies picking, labels, edge provenance and fallback. Do not copy the PDF's runtime CDN script approach or rebuild the app around its framework-free server. Retain a synchronized DOM list and an SVG/2D graph fallback for WebGL failure/context loss.
+
+Initial budgets: at most 250 individually drawn entities and 500 edges in overview; expand neighborhoods on demand, virtualize lists and disclose limits. The complete authorized index remains searchable. Cache deterministic layout by topology/revision; telemetry updates change styles only. Move expensive layout off the main thread when measurement justifies it. Avoid mounting thousands of HTML labels or continuous React state updates per animation frame.
+
+Acceptance targets, not measured claims: stable 60 fps on the recorded desktop test device, graceful ≥30 fps on the recorded constrained device, INP ≤200 ms, LCP ≤2.5 s, CLS ≤0.1. Validate with representative real data plus clearly labeled synthetic load fixtures. Reduce bloom, edge density and pixel ratio before reducing text readability. Document device, browser, entity counts and measurement method.
+
+## 19. Sofia, Bulgaria clock
+
+Place a compact two-line clock in the **top-right corner**, immediately before identity: `SOFIA, BG` and 24-hour `HH:mm:ss`, with local date and actual UTC offset available on focus/hover. Use tabular numerals and fixed width to prevent layout shift. At small widths show `HH:mm` with an accessible full date/time detail.
+
+- Format instants with `Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Sofia', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })`; format date and offset using the same IANA zone. Bulgarian UI can use `bg-BG`. Never hardcode UTC+2 or UTC+3.
+- Treat timezone correctness and clock accuracy separately. A browser clock alone can be wrong. A proposed authenticated, uncached server-time response supplies UTC epoch milliseconds; estimate offset from the request/response midpoint, keep the lowest-round-trip sample, and anchor elapsed time to `performance.now()`. Refresh every five minutes and on tab resume/reconnect. Mark the clock “Server-synced” only after a successful sample; server accuracy depends on its synchronized host clock.
+- If synchronization fails or becomes older than ten minutes, keep the clock usable but label it “Device time · not verified” (or explicitly stale server time). Never claim independent authoritative accuracy from a local server running on the same incorrect host. No new third-party time service is required.
+- Recompute from the timestamp each tick rather than incrementing a counter. Pause hidden-tab rendering and resynchronize on return. Prevent hydration mismatches with a fixed-width loading placeholder or shared initial instant.
+- Format event absolute timestamps in `Europe/Sofia` too; relative age must derive from the same timebase. Keep “Data updated at…” separate from the live clock so ticking seconds do not imply fresh telemetry.
+- Do not announce every second to screen readers. Provide a labeled `<time>` element, human-readable date/time on demand and a separate polite announcement only when synchronization state changes.
+
+Verify winter (`2026-01-15T12:00:00Z` → `14:00:00`) and summer (`2026-07-15T12:00:00Z` → `15:00:00`) with the runtime timezone database. Verify the spring jump and autumn repeated hour around the `Europe/Sofia` transitions, browser zone set elsewhere, midnight date rollover, manual device-clock change, hidden-tab resume and synchronization failure. Within 1 second of the estimated server time is the display target under normal foreground scheduling; record sampling uncertainty rather than claiming precision the network cannot establish.
+
+## 20. Data honesty, accessibility and delivery sequence
+
+Every metric exposes source definition, scope and as-of time. Zero means a successful query returned zero; unavailable means no trustworthy result. Sparkline data requires timestamped observations and a defined window. Progress percentages require numerator/denominator. Historical activity is not “live” just because its panel animates. Provider key presence is “Configured”; it is not health, connection or uptime. Remove sample counts, fabricated percentages and “All systems operational” unless actual checks establish them.
+
+Show skeletons only during loading, a quiet illustrated-free empty state for no data, a labeled retained snapshot for stale data, and a retryable error for failures. Never replace unavailable runtime data with convincing demo data. Fewer real nodes is a valid graph.
+
+Accessibility requirements: complete keyboard navigation and visible focus; a synchronized searchable list/table equivalent to the sphere; screen-reader entity/connection descriptions; semantic headings and controls; labeled forms and errors; no color-only distinctions; 200% zoom; readable focus/hover states; reduced motion and pause controls. Pointer drag has button/keyboard alternatives. Preserve the user's focus when polling updates a run.
+
+Implement in this dependency order:
+
+1. Confirm this checkout's auth/read-model contracts and resolve the R5 framework compatibility gap separately. Keep R1–R5 intact and record any required decision explicitly.
+2. Extend the existing loaders with a permission-filtered graph/index projection. Prove entity IDs, file scope, checksums, source resolution, actual edge relationships, completeness/pagination and safe file access before visual polish.
+3. Establish semantic tokens, local fonts, responsive shell, metric definitions and synchronized Sofia clock. Retain existing functional pages/actions.
+4. Build the sphere against that projection with stable domain layout, Graph/List parity, source inspector, filtering and search. Prove cross-domain connections before adding bloom or motion.
+5. Integrate Research brief/run/library screens and inherited target/provenance paths. Keep acceptance and canonical approval visually and operationally distinct.
+6. Add bounded motion, source-aware camera transitions and capability-backed command bar behavior. Run the acceptance checks below; distinguish local fixtures from live verification.
+
+Suggested implementation touchpoints (future changes, not files created by this document): `apps/web/app/layout.tsx`, `globals.css`, `page.tsx`, existing `server/*-loaders.ts`, scoped graph projection/index modules, sphere/inspector components, Sofia clock component and authenticated server-time route. Reuse `core/contracts/taxonomy.ts`, registry parsing, Vault storage and existing op functions. A read-model extension does not authorize filesystem writes, new provider accounts or canonical knowledge changes.
+
+## 21. Interface acceptance checklist
+
+The interface is complete only when these behaviors are demonstrated. Checking this document alone does not satisfy them.
+
+- [ ] **Visual:** capture 1920×1080, 1440×900, 1024×768 and 390×844 views plus 200% zoom. Sphere dominates the desktop center; no clipped forms, overlapping labels or unreadable evidence. Domain hues, icons, fonts and panel spacing are consistent.
+- [ ] **Source reality:** select a real repository file, Vault file, agent, workflow, song and research finding. Each opens the exact authorized source/record and correct revision. File nodes verify stored bytes/checksum; database-only records are labeled correctly.
+- [ ] **Coverage:** reconcile eligible/indexed/failed counts against a controlled root; a file beyond the first visible page is searchable. Shared/unassigned, excluded, missing and unreadable files behave as specified. No fabricated connected nodes appear in an empty workspace.
+- [ ] **Connections:** trace a real workflow step dependency, song-to-lineage link and brief-to-evidence-to-source path. Every edge opens its exact provenance. A false title match creates no verified edge; an unresolved link produces a diagnostic; retracted links leave the active graph.
+- [ ] **Ownership:** all six domains match taxonomy, X3LIUS remains under Records, and Creative/System lenses use the same entity IDs. Groups disclose their real members. Cross-domain references do not duplicate or reassign source entities.
+- [ ] **File safety:** rejected traversal, absolute/UNC path injection, escaped symlink/junction and restricted source access disclose no file contents or hidden node names. Preview text cannot execute markup/scripts.
+- [ ] **Freshness:** a confirmed save becomes searchable and selectable after indexing acknowledgment. Simulated indexing failure says “Saved; indexing failed.” Lost database access shows unavailable/stale state instead of fabricated zero or health.
+- [ ] **Research:** demonstrate all §8 actions, preserved quotes, no-source declines, partial failure, re-run, disagreement display and inherited target navigation. Library acceptance leaves canonical tables unchanged; canonical promotion follows owner approval.
+- [ ] **Answers:** one-source, small-cluster, multi-source and conversational responses yield the required focus behavior. Invalid citations never select a guessed node. Unavailable model/provider produces an honest error.
+- [ ] **Time:** pass the Sofia cases in §19, verify the synchronization-state label and show that the clock still works when the browser timezone differs. No per-second screen-reader announcements or layout shifts.
+- [ ] **Accessibility/performance:** keyboard-only completion of search → inspect → source; graph/list parity; measured contrast; reduced-motion and WebGL-loss fallback; performance numbers with device, dataset and capture method.
+- [ ] **Truthful handoff:** list built features, outstanding dependencies and failed checks. Identify whether each proof used a fixture or live source. The Jarvis PDF's verification prompts are inspiration; they do not authorize live calls or unrelated integrations.
