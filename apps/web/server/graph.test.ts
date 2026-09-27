@@ -158,9 +158,10 @@ describe('nodeDetail', () => {
   it('gives a finding its evidence, and its targets only as inherited from the brief', async () => {
     const f = (await nodeDetail(db.sql, `research_findings:${findingId}`))!;
     expect(f.outgoing).toEqual(expect.arrayContaining([expect.objectContaining({ relation: 'supported_by', other: expect.objectContaining({ id: `research_evidence:${evidenceId}` }) })]));
-    expect(f.inherited.map((i) => [i.label, i.target.id]).sort()).toEqual([
+    expect(f.inherited.map((i) => [i.label, i.targetId]).sort()).toEqual([
       ['Inherited from brief', 'decision:F41'], ['Inherited from brief', `lineage:${recipeLineageId}`], ['Inherited from brief', `songs:${songId}`],
     ].sort());
+    expect(f.inherited.every((i) => i.target !== null && i.brief.id === `research_questions:${briefId}`)).toBe(true);
     expect(f.outgoing.filter((c) => c.relation === 'linked_to')).toEqual([]);
   });
 
@@ -189,7 +190,7 @@ describe('nodeDetail', () => {
 describe('neighbourhood, coverage and the creative lens', () => {
   it('returns one hop of actual edges around a node', async () => {
     const n = await neighbourhood(db.sql, `songs:${songId}`);
-    expect(n.center.id).toBe(`songs:${songId}`);
+    expect(n.center!.id).toBe(`songs:${songId}`);
     expect(n.edges.length).toBeGreaterThan(0);
     for (const e of n.edges) expect([e.fromId, e.toId]).toContain(`songs:${songId}`);
     expect(new Set(n.nodes.map((x) => x.id))).toEqual(new Set(n.edges.map((e) => (e.fromId === `songs:${songId}` ? e.toId : e.fromId))));
