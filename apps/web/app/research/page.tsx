@@ -37,7 +37,7 @@ export default async function Research({ searchParams }: { searchParams: Record<
           <select name="kind" defaultValue={kind ?? ''}><option value="">any</option><option>song</option><option>lineage</option><option>workflow</option><option>decision</option></select>
         </label>
         <label className="field">Target (id, workflow@sha or F-key) <input name="target" defaultValue={target ?? ''} /></label>
-        <button type="submit" className="border-control bg-transparent text-ink-1 hover:bg-hover">Filter</button>
+        <button type="submit" className="btn-quiet">Filter</button>
         {filtered && <a href="/research" className="self-center text-sm">Clear filters</a>}
       </form>
       <div className="table-scroll" role="region" aria-label="Briefs" tabIndex={0}>
@@ -61,7 +61,7 @@ export default async function Research({ searchParams }: { searchParams: Record<
       <h2 id="new-brief">New brief</h2>
       <form method="get" action="/research#new-brief" className="mt-2 flex flex-wrap items-end gap-3">
         <label className="field grow">Preview the specialists for a question <input name="q" defaultValue={q} className="w-full" /></label>
-        <button type="submit" className="border-control bg-transparent text-ink-1 hover:bg-hover">Preview</button>
+        <button type="submit" className="btn-quiet">Preview</button>
       </form>
       {preview && (
         <p className="meta mt-2">

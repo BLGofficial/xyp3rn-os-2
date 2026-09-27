@@ -1,6 +1,6 @@
 import { loaders, runtime } from '../../lib/server';
 import { createSong } from '../actions';
-import { ErrorBanner, Time } from '../ui';
+import { ErrorBanner, ScrollTable, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +10,7 @@ export default async function Songs({ searchParams }: { searchParams: Record<str
     <section>
       <h1>Songs</h1>
       <ErrorBanner error={searchParams.error} />
-      <table className="mt-4">
+      <ScrollTable label="Songs" className="mt-4">
         <thead><tr><th>Title</th><th>Artist</th><th>Status</th><th>Lang</th><th>Genre</th><th>Rev</th><th>Links</th><th>Created</th></tr></thead>
         <tbody>
           {songs.map((s) => (
@@ -20,7 +20,7 @@ export default async function Songs({ searchParams }: { searchParams: Record<str
             </tr>
           ))}
         </tbody>
-      </table>
+      </ScrollTable>
       <h2>New song</h2>
       <form action={createSong} className="flex flex-wrap items-end gap-3">
         <label className="field">Title<input name="title" required /></label>

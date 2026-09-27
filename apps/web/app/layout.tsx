@@ -43,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Icon name="owner" className="h-5 w-5 text-ink-3" />
                 <span>{owner}</span>
               </div>
-              <form action={logout}><button className="border-control bg-transparent px-3 text-ink-1 hover:bg-hover">Log out</button></form>
+              <form action={logout}><button className="btn-quiet">Log out</button></form>
             </div>
           </div>
         </header>

@@ -1,6 +1,6 @@
 import { catalogLoaders, runtime } from '../../lib/server';
 import { registerTrackAction } from '../catalog-actions';
-import { ErrorBanner, Status, Time } from '../ui';
+import { ErrorBanner, ScrollTable, Status, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,19 +11,19 @@ export default async function Releases({ searchParams }: { searchParams: Record<
     <section>
       <h1>Releases</h1>
       <ErrorBanner error={searchParams.error} />
-      <table className="mt-4">
+      <ScrollTable label="Releases" className="mt-4">
         <thead><tr><th>Release</th><th>Kind</th><th>Status</th><th>Date</th><th>UPC</th><th>Tracks</th><th>Blockers</th><th>Warnings</th><th>Created</th></tr></thead>
         <tbody>
           {releases.map((r) => (
             <tr key={r.id}>
               <td><a href={`/releases/${r.id}`}>{r.title}</a> <span className="meta">{r.artist}</span></td>
               <td>{r.kind}</td><td><Status status={r.status} /></td><td>{r.releaseDate ?? '—'}</td><td>{r.upc ?? '—'}</td>
-              <td>{r.tracks}</td><td className={r.blockers ? 'text-records' : ''}>{r.blockers}</td><td>{r.warnings}</td>
+              <td>{r.tracks}</td><td className={r.blockers ? 'text-fail' : ''}>{r.blockers}</td><td>{r.warnings}</td>
               <td className="meta"><Time at={r.createdAt} /></td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </ScrollTable>
 
       <h2>New release from a recording</h2>
       <form action={registerTrackAction} className="flex flex-wrap items-end gap-3">

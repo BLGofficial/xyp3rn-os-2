@@ -16,3 +16,10 @@ export const SongLinks = ({ songs }: { songs: readonly { id: string; title: stri
 export const Tags = ({ tags }: { tags: readonly string[] }) => <>{tags.map((t) => <a key={t} href={`/vault?tag=${encodeURIComponent(t)}`} className="tag no-underline">{t}</a>)}</>;
 
 export const first = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v) || undefined;
+
+/** A data table that scrolls inside its own labelled region at narrow widths, never the page (§13.3). */
+export const ScrollTable = ({ label, className = '', children }: { label: string; className?: string; children: React.ReactNode }) => (
+  <div className={`table-scroll ${className}`.trim()} role="region" aria-label={label} tabIndex={0}>
+    <table>{children}</table>
+  </div>
+);

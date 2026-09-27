@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { loaders, runtime } from '../../../../lib/server';
-import { ErrorBanner, SongLinks, Tags, Time } from '../../../ui';
+import { ErrorBanner, ScrollTable, SongLinks, Tags, Time } from '../../../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ export default async function File({ params, searchParams }: { params: { id: str
     <section>
       <h1>{f.title}</h1>
       <ErrorBanner error={searchParams.error} />
-      <table className="mt-4">
+      <ScrollTable label="File details" className="mt-4">
         <tbody>
           <tr><th>Class</th><td>{f.mediaClass}</td></tr>
           <tr><th>Language</th><td>{f.language ?? '—'}</td></tr>
@@ -24,9 +24,9 @@ export default async function File({ params, searchParams }: { params: { id: str
           <tr><th>Songs</th><td><SongLinks songs={f.songs} /></td></tr>
           <tr><th>Bytes</th><td><a href={raw}>open from the store</a></td></tr>
         </tbody>
-      </table>
+      </ScrollTable>
       {f.mediaClass === 'audio' && <audio className="mt-4 w-full" controls src={raw} />}
-      {f.mediaClass === 'image' && <img className="mt-4 max-w-full border-2 border-paper" src={raw} alt={f.title} />}
+      {f.mediaClass === 'image' && <img className="mt-4 max-w-full rounded-control border border-line" src={raw} alt={f.title} />}
       {f.text !== null && (
         <>
           <h2>Text ({f.extractor})</h2>

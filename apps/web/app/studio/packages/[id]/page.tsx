@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { runtime, studioLoaders } from '../../../../lib/server';
 import { handOffAction, importTakeAction, rateTakeAction } from '../../../studio-actions';
-import { ErrorBanner, Status, Time } from '../../../ui';
+import { ErrorBanner, ScrollTable, Status, Time } from '../../../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +51,7 @@ export default async function Package({ params, searchParams }: { params: { id: 
       </p>
 
       <h2>Trace</h2>
-      <table>
+      <ScrollTable label="Trace">
         <thead><tr><th>Role</th><th>Version</th><th>Status</th><th>Artifact</th></tr></thead>
         <tbody>
           {e.sources.map((s) => (
@@ -69,14 +69,14 @@ export default async function Package({ params, searchParams }: { params: { id: 
             <td className="meta">{e.workflow ? <>spec <code>{e.workflow.sha256.slice(0, 16)}…</code> run <code>{e.workflow.runId}</code></> : null}</td>
           </tr>
         </tbody>
-      </table>
+      </ScrollTable>
 
       <h2>Attempts</h2>
       {p.attempts.length === 0 && <p className="meta">not handed off yet</p>}
       {p.attempts.map((a, i) => (
         <div key={a.submissionId} className="mb-6" data-attempt={a.submissionId}>
           <p className="text-sm font-bold">Attempt {i + 1} · {a.adapter} · <Time at={a.createdAt} /> <span className="meta">submission <code>{a.submissionId}</code></span></p>
-          <table>
+          <ScrollTable label="Attempts">
             <thead><tr><th>Take</th><th>Audio</th><th>Rating</th><th>Rate</th></tr></thead>
             <tbody>
               {a.takes.map((t) => (
@@ -98,14 +98,14 @@ export default async function Package({ params, searchParams }: { params: { id: 
                       <select name="rating" defaultValue={String(t.rating ?? 3)} aria-label="rating">{[1, 2, 3, 4, 5].map((n) => <option key={n}>{n}</option>)}</select>
                       <input name="keep" placeholder="keep" size={14} aria-label="what to keep" />
                       <input name="change" placeholder="change" size={14} aria-label="what to change" />
-                      <button type="submit" className="px-1 text-xs">Rate</button>
+                      <button type="submit" className="btn-quiet">Rate</button>
                     </form>
                   </td>
                 </tr>
               ))}
               {a.takes.length === 0 && <tr><td colSpan={4} className="meta">no take yet</td></tr>}
             </tbody>
-          </table>
+          </ScrollTable>
           <form action={importTakeAction} className="mt-2 flex flex-wrap items-end gap-2">
             <input type="hidden" name="packageId" value={e.package.id} />
             <input type="hidden" name="submissionId" value={a.submissionId} />

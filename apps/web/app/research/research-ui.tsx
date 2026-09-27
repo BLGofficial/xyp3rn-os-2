@@ -1,5 +1,6 @@
 import type { Selection } from '../../../../core/orchestrator/scope-select.ts';
 import { briefAction, decideFindingAction, decidePromotionAction, promoteAction, retractLinkAction } from '../research-actions';
+import { ScrollTable } from '../ui';
 
 // Research's forms and small pieces (AOS-04 §17). Server components; every decision asks for a reason.
 
@@ -16,7 +17,7 @@ export const TargetChips = ({ targets }: { targets: readonly Target[] }) => (
 
 /** The brief's research links with an unlink form each (a song is unlinked on its own page). */
 export const TargetList = ({ targets, back }: { targets: readonly Target[]; back: string }) => (
-  <table>
+  <ScrollTable label="Research targets">
     <thead><tr><th>Kind</th><th>Target</th><th>Role</th><th /></tr></thead>
     <tbody>
       {targets.map((t) => (
@@ -29,7 +30,7 @@ export const TargetList = ({ targets, back }: { targets: readonly Target[]; back
               <form action={retractLinkAction} className="flex gap-1">
                 <input type="hidden" name="linkId" value={t.linkId} /><input type="hidden" name="back" value={back} />
                 <input name="reason" placeholder="why" required size={10} aria-label={`unlink reason for ${t.kind} ${t.label}`} />
-                <button className="px-1 text-xs">Unlink</button>
+                <button className="btn-quiet">Unlink</button>
               </form>
             ) : <span className="meta">unlink on the song page</span>}
           </td>
@@ -37,7 +38,7 @@ export const TargetList = ({ targets, back }: { targets: readonly Target[]; back
       ))}
       {targets.length === 0 && <tr><td colSpan={4} className="meta">no target</td></tr>}
     </tbody>
-  </table>
+  </ScrollTable>
 );
 
 export const BriefForm = (p: {
@@ -140,7 +141,7 @@ type ResearchOf = {
 export const ResearchSection = ({ research }: { research: ResearchOf }) => (
   <>
     <h2>Research</h2>
-    <table>
+    <ScrollTable label="Research briefs linking this">
       <thead><tr><th>Brief</th><th>Latest run</th></tr></thead>
       <tbody>
         {research.briefs.map((b) => (
@@ -151,7 +152,7 @@ export const ResearchSection = ({ research }: { research: ResearchOf }) => (
         ))}
         {research.briefs.length === 0 && <tr><td colSpan={2} className="meta">no brief links this yet — <a href="/research">open one</a></td></tr>}
       </tbody>
-    </table>
+    </ScrollTable>
     {research.findings.map((f) => (
       <p key={f.findingId} className="mt-1">
         <a href={`/research/runs/${f.runId}`}>{f.claimTopic}</a>: {f.claim} <span className="meta">(in the library; canonical: {f.canonicalStatus})</span>

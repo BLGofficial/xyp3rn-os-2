@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { researchLoaders, runtime, studioLoaders } from '../../../../lib/server';
 import { ResearchSection } from '../../../research/research-ui';
-import { ErrorBanner, Time } from '../../../ui';
+import { ErrorBanner, ScrollTable, Time } from '../../../ui';
 import { RecipeForm, VersionTable } from '../../studio-ui';
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +40,7 @@ export default async function Recipe({ params, searchParams }: { params: { id: s
       <RecipeForm back={back} parentId={latest.id} current={b} />
 
       <h2>Packages built from it</h2>
-      <table>
+      <ScrollTable label="Packages built from it">
         <thead><tr><th>Package</th><th>Version used</th><th>Song</th><th>Built</th></tr></thead>
         <tbody>
           {l.packages.map((p) => (
@@ -52,7 +52,7 @@ export default async function Recipe({ params, searchParams }: { params: { id: s
           ))}
           {l.packages.length === 0 && <tr><td colSpan={4} className="meta">none yet</td></tr>}
         </tbody>
-      </table>
+      </ScrollTable>
 
       <ResearchSection research={research} />
     </section>

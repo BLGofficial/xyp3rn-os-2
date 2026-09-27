@@ -1,6 +1,6 @@
 import { catalogLoaders, runtime, shellLoaders } from '../lib/server';
 import { WithRail } from './shell/right-rail';
-import { ErrorBanner, Status, Time } from './ui';
+import { ErrorBanner, ScrollTable, Status, Time } from './ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -128,7 +128,7 @@ export default async function Command({ searchParams }: { searchParams: Record<s
         <div className="grid gap-6 md:grid-cols-2">
           <div>
             <h2>Open tasks</h2>
-            <table>
+            <ScrollTable label="Open tasks">
               <tbody>
                 {d.openTasks.map((t) => (
                   <tr key={t.id}>
@@ -138,7 +138,7 @@ export default async function Command({ searchParams }: { searchParams: Record<s
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ScrollTable>
             <a href="/tasks" className="meta">all tasks →</a>
           </div>
           <div>

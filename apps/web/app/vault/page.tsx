@@ -1,5 +1,5 @@
 import { loaders, runtime } from '../../lib/server';
-import { ErrorBanner, first, SongLinks, Tags, Time } from '../ui';
+import { ErrorBanner, first, ScrollTable, SongLinks, Tags, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +32,7 @@ export default async function Vault({ searchParams }: { searchParams: Record<str
         <>
           <h2>Search: {search.query}</h2>
           <p className="meta">{search.model} · {search.diagnostics.knowledgeHits} knowledge + {search.diagnostics.vaultHits} vault hits · run `pnpm embed` after adding material</p>
-          <table>
+          <ScrollTable label="Search results">
             <thead><tr><th>Sim</th><th>Kind</th><th>Item</th><th>Songs</th></tr></thead>
             <tbody>
               {search.items.map((i) => (
@@ -47,12 +47,12 @@ export default async function Vault({ searchParams }: { searchParams: Record<str
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ScrollTable>
         </>
       )}
 
       <h2>Lyrics ({lineages.length})</h2>
-      <table>
+      <ScrollTable label="Lyrics">
         <thead><tr><th>Lineage</th><th>Latest</th><th>Approved</th><th>Lang</th><th>Songs</th><th>Created</th></tr></thead>
         <tbody>
           {lineages.map((l) => (
@@ -66,10 +66,10 @@ export default async function Vault({ searchParams }: { searchParams: Record<str
             </tr>
           ))}
         </tbody>
-      </table>
+      </ScrollTable>
 
       <h2>Files ({files.length})</h2>
-      <table>
+      <ScrollTable label="Files">
         <thead><tr><th>File</th><th>Class</th><th>Lang</th><th>Tags</th><th>Songs</th><th>Added</th></tr></thead>
         <tbody>
           {files.map((f) => (
@@ -83,7 +83,7 @@ export default async function Vault({ searchParams }: { searchParams: Record<str
             </tr>
           ))}
         </tbody>
-      </table>
+      </ScrollTable>
     </section>
   );
 }

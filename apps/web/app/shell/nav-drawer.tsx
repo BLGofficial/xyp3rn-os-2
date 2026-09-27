@@ -19,7 +19,7 @@ export function NavDrawer() {
         onClick={() => dialog.current?.showModal()}
         aria-label="Open navigation"
         aria-haspopup="dialog"
-        className="hidden border-control bg-transparent px-3 text-ink-1 hover:bg-hover max-lg:[.js_&]:inline-flex"
+        className="btn-quiet hidden max-lg:[.js_&]:inline-flex"
       >
         <Icon name="menu" />
       </button>
@@ -32,7 +32,7 @@ export function NavDrawer() {
       >
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-3">Navigation</span>
-          <button type="button" onClick={close} aria-label="Close navigation" className="border-control bg-transparent px-3 text-ink-1 hover:bg-hover">
+          <button type="button" onClick={close} aria-label="Close navigation" className="btn-quiet">
             <Icon name="close" />
           </button>
         </div>

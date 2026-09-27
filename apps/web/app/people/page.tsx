@@ -1,6 +1,6 @@
 import { catalogLoaders, runtime } from '../../lib/server';
 import { aliasAction, personAction } from '../catalog-actions';
-import { ErrorBanner, Time } from '../ui';
+import { ErrorBanner, ScrollTable, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ export default async function People({ searchParams }: { searchParams: Record<st
     <section>
       <h1>People</h1>
       <ErrorBanner error={searchParams.error} />
-      <table className="mt-4">
+      <ScrollTable label="People" className="mt-4">
         <thead><tr><th>Name</th><th>Aliases</th><th>Live credits</th><th>Added</th><th /></tr></thead>
         <tbody>{people.map((p) => (
           <tr key={p.id}>
@@ -21,12 +21,12 @@ export default async function People({ searchParams }: { searchParams: Record<st
               <form action={aliasAction} className="flex gap-1">
                 <input type="hidden" name="personId" value={p.id} />
                 <input name="alias" required size={12} placeholder="alias" aria-label={`alias for ${p.name}`} />
-                <button className="px-1 text-xs">Add alias</button>
+                <button className="btn-quiet">Add alias</button>
               </form>
             </td>
           </tr>
         ))}</tbody>
-      </table>
+      </ScrollTable>
       {people.length === 0 && <p className="meta">no people yet</p>}
 
       <h2>Add a person</h2>

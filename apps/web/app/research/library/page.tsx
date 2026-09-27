@@ -25,7 +25,7 @@ export default async function Library({ searchParams }: { searchParams: Record<s
         </label>
         <label className="field">Target (id, workflow@sha or F-key) <input name="target" defaultValue={target ?? ''} /></label>
         <label className="field">Topic (exact) <input name="topic" defaultValue={topic ?? ''} placeholder="suno.vocal-descriptor-position" /></label>
-        <button type="submit" className="border-control bg-transparent text-ink-1 hover:bg-hover">Filter</button>
+        <button type="submit" className="btn-quiet">Filter</button>
         {filtered && <a href="/research/library" className="self-center text-sm">Clear filters</a>}
       </form>
       {rows.map((l) => (

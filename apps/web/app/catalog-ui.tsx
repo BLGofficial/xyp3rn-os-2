@@ -1,5 +1,5 @@
 import { creditAction, moveTaskAction, taskAction, uncreditAction } from './catalog-actions';
-import { Status, Time } from './ui';
+import { ScrollTable, Status, Time } from './ui';
 
 // Pieces the Command Center screens share (AOS-02 §6). Server components only.
 // The option lists mirror the DB checks in 20260925150000_command_center.sql; the DB still decides,
@@ -15,13 +15,13 @@ type Check = { readonly severity: string; readonly subjectKind: string; readonly
 
 export const Checks = ({ checks }: { checks: readonly Check[] }) =>
   checks.length === 0 ? <p className="meta">no open checks</p> : (
-    <table>
+    <ScrollTable label="Checks">
       <tbody>{checks.map((c, i) => (
         <tr key={`${c.code}:${i}`}>
-          <td className={c.severity === 'blocker' ? 'text-records' : 'meta'}>{c.severity}</td><td>{c.subjectKind}</td><td>{c.subjectTitle}</td><td>{c.message}</td>
+          <td><span className={c.severity === 'blocker' ? 'status-blocked' : 'status-warning'}>{c.severity}</span></td><td>{c.subjectKind}</td><td>{c.subjectTitle}</td><td>{c.message}</td>
         </tr>
       ))}</tbody>
-    </table>
+    </ScrollTable>
   );
 
 type Credit = { readonly id: string; readonly personName: string; readonly role: string; readonly note: string | null };
@@ -36,7 +36,7 @@ export const Credits = ({ credits, back }: { credits: readonly Credit[]; back: s
           <input type="hidden" name="creditId" value={c.id} />
           <input type="hidden" name="back" value={back} />
           <input name="reason" placeholder="why" required size={10} aria-label="retract reason" />
-          <button className="px-1 text-xs">Retract</button>
+          <button className="btn-quiet">Retract</button>
         </form>
       </li>
     ))}
@@ -64,7 +64,7 @@ type Task = {
 /** Tasks with their target, due date, status and the move form (open ↔ done / cancelled). */
 export const Tasks = ({ tasks, back, showTarget = true }: { tasks: readonly Task[]; back: string; showTarget?: boolean }) =>
   tasks.length === 0 ? <p className="meta">no tasks</p> : (
-    <table>
+    <ScrollTable label="Tasks">
       <tbody>{tasks.map((t) => (
         <tr key={t.id}>
           <td>{t.title}</td>
@@ -79,12 +79,12 @@ export const Tasks = ({ tasks, back, showTarget = true }: { tasks: readonly Task
                 {['open', 'done', 'cancelled'].filter((s) => s !== t.status).map((s) => <option key={s}>{s}</option>)}
               </select>
               <input name="note" placeholder="note" size={10} aria-label="note" />
-              <button className="px-1 text-xs">Move</button>
+              <button className="btn-quiet">Move</button>
             </form>
           </td>
         </tr>
       ))}</tbody>
-    </table>
+    </ScrollTable>
   );
 
 /** A new task, optionally on one song or release. */
