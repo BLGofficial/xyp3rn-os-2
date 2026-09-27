@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { bestSample, offsetFromSample, SYNC_EVERY_MS, sofiaParts, STALE_AFTER_MS, syncState } from './clock.ts';
+import { bestSample, offsetFromSample, SYNC_EVERY_MS, sofiaParts, sofiaStamp, STALE_AFTER_MS, syncState } from './clock.ts';
 
 // AOS-04 Plan B, Task 3 (design §19): Sofia time from the IANA zone (never a fixed offset), the server-time
 // offset estimate, and the sync state the clock may claim.
@@ -33,6 +33,14 @@ describe('sofiaParts', () => {
       expect(r.stderr).toBe('');
       expect(JSON.parse(r.stdout)).toEqual(sofiaParts(at('2026-07-15T12:00:00Z')));
     }
+  });
+});
+
+describe('sofiaStamp (event timestamps, §19)', () => {
+  it('renders an instant as Sofia date, time and offset, across the DST change', () => {
+    expect(sofiaStamp(at('2026-09-27T15:36:57Z'))).toBe('2026-09-27 18:36:57 +03:00');
+    expect(sofiaStamp(at('2026-01-15T12:00:00Z'))).toBe('2026-01-15 14:00:00 +02:00');
+    expect(sofiaStamp(at('2026-12-31T22:30:00Z'))).toBe('2027-01-01 00:30:00 +02:00');
   });
 });
 
