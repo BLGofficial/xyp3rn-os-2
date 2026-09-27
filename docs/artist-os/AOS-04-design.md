@@ -1,6 +1,7 @@
 # AOS-04 — Research mode: design
 
 Status: the five decisions below were made by the operator in conversation (2026-09-26), recorded here as R1–R5. Everything else is the default stated here, open to review.
+Plans: A = [AOS-04-plan.md](AOS-04-plan.md) (§§1–11, 17), built; B (Mercury shell) and C (graph, index, sphere) to follow.
 Source: [PLAN.md](PLAN.md) §2E and §5 Phase 4; gaps G12 (specialists can't run) and G13 (research not linked to songs, styles or decisions) in [AOS-00-baseline.md](AOS-00-baseline.md); conflict C7. Built on AOS-03 (PR #15, merged), on branch `claude/aos-04`.
 
 **Interface extension, 2026-09-26:** the operator requested the premium spherical graph interface specified in §§12–21, using three supplied layout images and the Jarvis prompt pack as references. This extends the interface brief across Command Center, Studio and Research. R1–R5 and the Research data/approval contracts remain authoritative. These sections specify work to build; they do not claim that the interface, file index or integrations already exist. The original gap analysis above and below describes the design baseline, not a fresh runtime audit.
@@ -99,7 +100,7 @@ All three are set at insert and immutable after (the existing lifecycle-column U
 
 - `approval_item_type` gains `research_finding` (the rollback cannot drop an enum value, as in Phase 14).
 - `xyp_decide_finding(p_finding_id uuid, p_decision text, p_approver text, p_reason text)`: `SECURITY DEFINER`, the shape of `xyp_decide_artifact`. It inserts one pre-decided `approval_queue` row (`item_type research_finding`, status approved or rejected, `decided_by`, `decision_reason`). Decision, approver and reason are required. EXECUTE: `service_role` only.
-- View `current_finding_decisions`: the latest decision per finding.
+- View `current_finding_decisions`: the one decision per finding (final, `approval_queue_item_key`; a better finding comes from a new run).
 - View `findings_library`: accepted findings with their claim, topic, value, model tag, confidence, run, brief, targets, evidence count, and canonical status (none / candidate pending / promoted / rejected).
 
 **Grants:** `xyp_web` SELECT on the research chain (`research_*`, `contradictions`, `knowledge_candidates`), the new tables and views.
@@ -130,7 +131,7 @@ The human CLI paths (`pnpm research observation` / `cite`) keep working; `quote`
 
 `runResearch` (changed):
 
-- Takes the brief: `{ projectSlug, question, intendedUse, urls, specialists?, links? }`, inserts the question, its links and the run (with `expires_at`) in one transaction, then selects.
+- Takes the brief: `{ projectSlug, question, intendedUse, urls, specialists?, links? }`, inserts the question, its links and the run (with `expires_at`) in one transaction (song targets are linked afterwards through `link_song`, a Records agent run, A1), then selects.
 - Selection: the brief's `specialists` if set (each `reason: owner`), else the keyword selection. The workflow's specialist steps get the brief as input.
 - After the specialist steps succeed, it runs **synthesis** (`research-intelligence/synthesis/synthesize.ts`, deterministic, as `xyp_research`):
   - Groups the run's evidence by (`claim_topic`, canonical JSON of `claim_value`, `model_tag`); evidence without a topic is listed, not synthesized.
@@ -141,7 +142,7 @@ The human CLI paths (`pnpm research observation` / `cite`) keep working; `quote`
 
 ## 7. Approval (R3)
 
-- **Accept / reject into the library:** `xyp_decide_finding`, with a required reason. The latest decision is current; a finding can be re-decided. No canonical table is touched.
+- **Accept / reject into the library:** `xyp_decide_finding`, with a required reason. One decision per finding, final (`approval_queue_item_key`); a better finding comes from a new run. No canonical table is touched.
 - **Promote:** only for a finding whose current decision is `accept` (op layer). The form takes kind (`canonical_prompt` | `module`), target slug, title, body, domain. The op calls `proposeCandidate`, then `runGate`, and shows the outcome (promoted is impossible here: D2 queues every candidate; rejected with reasons; or pending).
 - **Decide the pending approval:** the existing `decideQueueItem`, which re-runs the gate on approve and embeds the promotion (as `pnpm gate decide` does).
 - The approver is `XYP_OWNER`, else `owner`, as for artifacts.
@@ -155,7 +156,7 @@ Apply the shared shell, source-backed sphere, visual tokens, typography, motion 
   - question, intended use, URLs (one per line);
   - link targets: song, recipe / tag set / lyric lineage, workflow (from the checked-in workflow files; the sha256 is computed on submit), decision key;
   - the specialist preview (the keyword selection with scores and matched terms, as tick boxes).
-  - Submit runs the sweep, `openResearch`, then `after(() => executeResearch(runId))`, and redirects to the run.
+  - Submit runs the sweep, `openResearch`, then `executeResearch(runId)` started without awaiting (R5 on Next 14.2; §12.3), and redirects to the run.
 - **`/research/runs/[id]` (the workbench):**
   - Status; refreshes itself every few seconds while `running`.
   - The brief and its targets; the selection (scores, matched terms, owner picks).
@@ -228,6 +229,7 @@ The edit target is `xyp3rn-os-2-aos04`, not its neighboring `xyp3rn-os-2` checko
 - `sources` plus `source_texts` already back Vault files; the file loader exposes checksum, MIME type, size, stored text and producing run. Reuse these identities and the authorized `/vault/files/[id]` path.
 - The neighboring checkout has a Mercury SVG shell and projection. Its renderer draws ownership spokes without consuming the projection's recorded relationship edges; its projection is bounded and does not enumerate every file. It is a design/code reference, not evidence that this checkout has those features. Do not wholesale copy its app or its Next.js version.
 - This checkout's `apps/web/package.json` pins Next.js `14.2.35`; R5 requests `after()`. Resolve and verify framework support before implementing R5. This document preserves the decision and flags the compatibility gap rather than silently choosing a different execution model.
+  **Resolved 2026-09-26 (operator):** a detached promise in the `next start` process; no Next upgrade. The run seals itself on every path, and the boot sweep (`instrumentation.ts`) seals what a stopped server left running.
 
 ## 13. Layout and information architecture
 

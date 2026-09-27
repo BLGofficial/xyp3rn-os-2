@@ -451,3 +451,25 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **`suno_submissions.formula_artifact_id`** holds a package since AOS-03. The rename is deferred (every Phase 9/13 reader uses the name).
 - **A take's audio isn't linked to its song:** the take is the song's through its package. The song's Files list doesn't show it; the Studio section does.
 - **Forms keep typed values after a write** (F39): the take upload form keeps the chosen file. A second submit of the same file to the same attempt is refused ("already a take").
+
+**F42. Research mode (AOS-04).** DECIDED (operator, 2026-09-26; design `docs/artist-os/AOS-04-design.md`, plan A `docs/artist-os/AOS-04-plan.md`).
+- **R1:** the 20 specialists run on the OpenRouter free route, `openrouter:nvidia/nemotron-3-ultra-550b-a55b:free` (frontmatter, swappable per agent).
+- **R2:** research links are brief-level and typed: a song through `song_links` (A1), a lineage root, a workflow (name + spec sha256) or an ARCHITECTURE decision through `research_links`. Findings inherit targets through run → brief.
+- **R3:** two approval tiers. The owner accepts or rejects a finding into the Findings Library (`xyp_decide_finding`; not canonical). Only an accepted finding can be promoted: candidate → Promotion Gate → the owner's approval (D2).
+- **R4:** one shared grounded-evidence program for all 20. Passages are the brief's URLs first, then retrieved canonical rows that trace to an ingested source, within 24 000 chars. One model call; every claim quotes a passage verbatim, and the DB checks the quote before the write. No sources, no model call. Deterministic synthesis by (topic, value, model tag).
+- **R5 on Next 14.2 (no upgrade):** the server action awaits `openResearch`, then starts `executeResearch` without awaiting it; the run seals itself on every path. A run a stopped server left running is sealed `abandoned` by the sweep, at boot (`instrumentation.ts`) and before every new brief.
+- **One decision per finding**, final, as for an artifact version (`approval_queue_item_key`); a better finding comes from a new run.
+- **The gate** (PLAN §5 Phase 4): a canonical row promoted from research chains back through its candidate, finding and evidence to the verbatim quote and the page text it was checked against; nothing reaches a canonical table without the owner's approval. Shown by `tests/aos-04/brief-to-canonical.test.ts`, the CLIs and the browser (`docs/proofs/AOS-04-research.txt`).
+
+**F43. Open after AOS-04.**
+- **Owner signals as passages** (a recipe's tested notes, a take's keep/change ratings): AOS-07.
+- **Model-proposed URLs or web search:** needs a search provider; not configured. The brief's URLs are the only external sources.
+- **A server stopped mid-run** leaves the run `running` until its deadline (up to `n × 30 min`).
+- **Findings are insert-only:** a better finding comes from a new run.
+- **Decision keys** cover ARCHITECTURE `F<n>` entries only, not the baseline's C/D or the phases' A/S/R tables.
+- **Intra-run disagreements** are shown side by side, not recorded as `contradictions` rows (the engine checks candidates and canonical rows only).
+- **Legacy sources without text can't back a new quote:** `research_sources` dedups by content across runs, so a page registered before AOS-04 (text null) keeps null, and a quote from it is refused.
+- **Ingested-source quotes depend on the canonical body:** a quote citing an ingested document is checked against the canonical rows quoting that source. Restoring such evidence into a database without those rows would be refused by the same check (read from the trigger; no test exercises it).
+- **A gate-promoted row has no source,** so a later specialist sees it as context, not a citable passage; its provenance is the candidate → finding → evidence chain.
+- **No live specialist run in the proof environment:** no `OPENROUTER_API_KEY` there. The live path is proven up to the model call (a real page fetched and kept); the model's part is proven with the FAKE MODEL.
+- **Plans B and C** (the Mercury shell; the graph, file index and sphere, design §§12–21) are not built.
