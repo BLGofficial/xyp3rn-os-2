@@ -30,7 +30,10 @@ import { FAKE_KEYS, fakeModel } from '../../../tests/helpers/fake-llm.ts';
 // → pending → approve → promoted → the song's Research section → a brief with no specialist picked is refused
 // → a brief no specialist matches runs in the background and ends success. AOS-04 Plan B: the Sofia clock
 // synced to /api/time, the four metric cards, aria-current, reduced motion, the drawer at 1024 px, no sideways
-// scroll at 390 px, and (with a screenshot dir) four viewports + 200% zoom. Prints one line per checked step;
+// scroll at 390 px, and (with a screenshot dir) four viewports + 200% zoom. AOS-04 Plan C1: the boot scan indexed
+// this checkout; /system shows its counts; search finds a file past the first page; the viewer opens it by opaque id
+// and escapes markup; Why connected? names file and line; a workflow step, a retracted link, the research chain and
+// a finding's inherited targets; the domain filter and the Creative lens. Prints one line per checked step;
 // exits 1 on the first failure.
 
 const PORT = 3199;
@@ -231,6 +234,7 @@ try {
   await recipeForm.locator('button').click();
   await page.waitForURL(/\/studio\/recipes\/[0-9a-f-]{36}$/);
   check((await page.textContent('h1')) === '[FIXTURE] Night drive' && (await page.textContent('pre'))?.includes('sodium-lit synths') === true, 'a style recipe is written (x3lius-studio-editor) as v1, a draft');
+  const recipeLineageId = page.url().split('/').pop()!;
   await page.fill('form:has(button[value=approve]) input[name=reason]', 'the house sound');
   await approveIn(page, page.locator('form:has(button[value=approve])'), 'td .status-approved');
   check(true, 'the owner approves the recipe v1');
@@ -386,7 +390,81 @@ try {
   const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
   check(!(await page.isVisible('dialog[open]')) && focused === 'Open navigation', 'Escape closes the drawer and focus returns to its button');
 
-  const narrow = [`/`, `/research`, `/research/runs/${opened.researchRunId}`, `/research/library`, `/songs/${songId}`, `/studio/packages/${packageId}`, `/studio`, `/vault`, `/releases`];
+  // AOS-04 Plan C1: the file index and the graph. next start scanned this checkout into the smoke's database at
+  // boot; the journey's songs, lineages and research are live rows of the same graph.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let bootScan: { id: string; status: string; counts: { eligible: number; indexed: number; failed: number } } | undefined;
+  for (const until = Date.now() + 60_000; Date.now() < until; await new Promise((r) => setTimeout(r, 250))) {
+    [bootScan] = await db.sql<{ id: string; status: string; counts: { eligible: number; indexed: number; failed: number } }[]>`
+      select id, status, counts from index_scans where trigger = 'boot' and status <> 'running' order by started_at desc limit 1`;
+    if (bootScan) break;
+  }
+  check(bootScan?.status === 'success', `next start scanned the checkout at boot (scan ${bootScan?.id ?? 'none'}: ${bootScan?.status ?? 'not finished'})`);
+  const bc = bootScan!.counts;
+  await page.goto(`${BASE}/system`);
+  const scanLine = await page.textContent('[data-scan-counts]');
+  check(scanLine?.includes(`eligible ${bc.eligible} · indexed ${bc.indexed} · failed ${bc.failed}`) === true, `/system shows the scan's counts as index_scans holds them (${scanLine})`);
+
+  await page.goto(`${BASE}/search?q=instrumentation-node`);
+  const hitItem = page.locator('[data-search-group=file] li', { hasText: 'apps/web/instrumentation-node.ts' }).first();
+  check((await hitItem.count()) === 1, '/search finds apps/web/instrumentation-node.ts in the whole index');
+  await hitItem.locator('a:text("Open")').click();
+  await page.waitForURL(/\/index\/files\/[0-9a-f-]{36}$/);
+  const viewed = await page.textContent('main');
+  check(viewed?.includes('(verified on open)') === true && (await page.textContent('pre'))?.includes("from './lib/server'") === true, 'the viewer opens it by its opaque index id, checksum verified, with its contents');
+
+  await page.goto(`${BASE}/?node=${encodeURIComponent('file:repo/apps/web/instrumentation-node.ts')}`);
+  const importRow = page.locator('[data-inspector] li', { hasText: 'apps/web/lib/server.ts' }).first();
+  await importRow.locator('summary').click();
+  const why = await importRow.textContent();
+  check(why?.includes('imports') === true && why.includes('Declared in apps/web/instrumentation-node.ts:1'), `the inspector's Why connected? names the import's file and line (${why?.replace(/\s+/g, ' ').trim()})`);
+
+  await page.goto(`${BASE}/node?id=${encodeURIComponent('workflow_step:retrieve-and-summarize#summarize')}`);
+  const step = (await page.textContent('[data-inspector]'))?.replace(/\s+/g, ' ') ?? '';
+  check(step.includes('step uses agent') && step.includes('extractive-summarizer') && step.includes('depends on') && step.includes('retrieve-and-summarize · retrieve'),
+    'a workflow step shows the agent it uses and the step it depends on');
+
+  const recipeLink = await dispatch(seedDeps, 'records-songs', { link: { songId, artifactId: recipeLineageId, role: 'recipe' } });
+  await dispatch(seedDeps, 'records-songs', { unlink: { linkId: (recipeLink.output as { linkId: string }).linkId, reason: '[FIXTURE] not this recipe' } });
+  await page.goto(`${BASE}/node?id=${encodeURIComponent(`songs:${songId}`)}`);
+  const lyricRow = await page.locator(`[data-inspector] tr:has(a[href="/vault/lineages/${lineageId}"])`).first().textContent();
+  const songInspector = await page.textContent('[data-inspector]');
+  check(lyricRow?.includes('linked to') === true && songInspector?.includes('[FIXTURE] not this recipe') === true
+    && (await page.locator(`[data-inspector] tr:has(a[href="/vault/lineages/${recipeLineageId}"])`).count()) === 0,
+  'the song is linked to its lyrics; the retracted recipe link is in history with its reason, not in its connections');
+
+  const [ev] = await db.sql<{ evidence: string; finding: string }[]>`
+    select e.id as evidence, f.id as finding from research_evidence e join research_findings f on f.research_run_id = e.research_run_id where e.research_run_id = ${opened.researchRunId}`;
+  await page.goto(`${BASE}/node?id=${encodeURIComponent(`research_evidence:${ev!.evidence}`)}`);
+  const quoteRow = page.locator('[data-inspector] tr', { hasText: 'quotes' }).first();
+  await quoteRow.locator('summary').click();
+  const runRow = await page.locator(`[data-inspector] tr:has(a[href="/research/runs/${opened.researchRunId}"])`).first().textContent();
+  check((await quoteRow.textContent())?.includes('Put the vocal descriptor first.') === true && runRow?.includes('produced by') === true,
+    'evidence → the research source it quotes (the quote as proof) and the run that produced it');
+  await page.goto(`${BASE}/node?id=${encodeURIComponent(`research_findings:${ev!.finding}`)}`);
+  const finding = (await page.textContent('[data-inspector]'))?.replace(/\s+/g, ' ') ?? '';
+  check(finding.includes('Inherited from brief') && finding.includes('F41') && finding.includes('[FIXTURE] Night City') && finding.includes('supported by'),
+    "a finding shows its evidence, and its targets (F41, the song) only as inherited from the brief");
+
+  await page.goto(`${BASE}/?domain=RECORDS`);
+  const rows = await page.locator('[aria-label="Graph entities"] tbody tr').allTextContents();
+  check(rows.length > 0 && rows.every((r) => r.includes('Records') && !r.includes('Core')), `/?domain=RECORDS lists only Records-owned entities (${rows.length} on page 1)`);
+  const songCount = (await db.sql<{ n: number }[]>`select count(*)::int as n from songs`)[0]!.n;
+  await page.goto(`${BASE}/?lens=creative`);
+  const songsGroup = (await page.textContent('[data-lens-group=songs]'))?.replace(/\s+/g, ' ') ?? '';
+  check(new RegExp(`^\\s*Songs\\s*${songCount}(?!\\d)`).test(songsGroup), `the Creative lens's Songs group counts the journey's songs (${songsGroup.trim()} = ${songCount})`);
+
+  const bad = await page.goto(`${BASE}/index/files/not-a-uuid`);
+  check(bad?.status() === 404, '/index/files/not-a-uuid is 404: the viewer takes an index id, never a path');
+  const [layout] = await db.sql<{ id: string }[]>`select id from indexed_files where root = 'repo' and path = 'apps/web/app/layout.tsx'`;
+  await page.goto(`${BASE}/index/files/${layout!.id}`);
+  check((await page.locator('pre script').count()) === 0 && (await page.textContent('pre'))?.includes('<script') === true, "layout.tsx's <script> renders as text in the viewer, never as an element");
+  const raw = await page.request.get(`${BASE}/index/files/${layout!.id}/raw`);
+  check(raw.headers()['content-type']?.startsWith('text/plain') === true && raw.headers()['content-security-policy']?.startsWith('sandbox') === true && raw.headers()['x-content-type-options'] === 'nosniff',
+    'the raw route serves text/plain with nosniff and a sandbox CSP');
+
+  const narrow = [`/`, `/research`, `/research/runs/${opened.researchRunId}`, `/research/library`, `/songs/${songId}`, `/studio/packages/${packageId}`, `/studio`, `/vault`, `/releases`,
+    `/search?q=night`, '/system', `/node?id=${encodeURIComponent(`songs:${songId}`)}`, `/?node=${encodeURIComponent('file:repo/apps/web/instrumentation-node.ts')}`, `/index/files/${layout!.id}`, '/?lens=creative'];
   await page.setViewportSize({ width: 390, height: 844 });
   const wide: string[] = [];
   for (const path of narrow) {
@@ -398,7 +476,8 @@ try {
 
   if (shots) {
     const views = [[1920, 1080], [1440, 900], [1024, 768], [390, 844]] as const;
-    const pages = [['command', '/'], ['research', '/research'], ['run', `/research/runs/${opened.researchRunId}`], ['library', '/research/library']] as const;
+    const pages = [['command', '/'], ['research', '/research'], ['run', `/research/runs/${opened.researchRunId}`], ['library', '/research/library'],
+      ['inspector', `/?node=${encodeURIComponent('file:repo/apps/web/instrumentation-node.ts')}`], ['search', '/search?q=night'], ['system', '/system']] as const;
     for (const [w, h] of views) {
       await page.setViewportSize({ width: w, height: h });
       for (const [name, path] of pages) {

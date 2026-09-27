@@ -60,6 +60,33 @@ const RELATION_IN: Readonly<Record<string, string>> = {
 export const relationWord = (c: { relation: string; direction: 'out' | 'in' }) =>
   (c.direction === 'out' ? RELATION_OUT : RELATION_IN)[c.relation] ?? `${c.relation}${c.direction === 'in' ? ' (incoming)' : ''}`;
 
+const Why = ({ c }: { c: Conn }) => (
+  <details>
+    <summary>{c.verification === 'earlier-revision' ? <span className="status-warning">Earlier revision</span> : 'Why connected?'}</summary>
+    <p className="meta mt-1">
+      {c.origin === 'index' ? 'Declared in ' : 'Recorded in '}<code className="break-all">{c.provenance}</code>
+      {c.revision ? <> at revision <code>{c.revision.slice(0, 12)}…</code></> : null}
+    </p>
+    {c.detail ? <p className="quote mt-1">{c.detail}</p> : null}
+    {c.note ? <p className="meta mt-1">{c.note}</p> : null}
+  </details>
+);
+
+/** The rail's narrow form of Connections: one item per connection, its proof folded underneath. */
+export const ConnectionList = ({ label, connections, limit, more }: { label: string; connections: readonly Conn[]; limit?: number; more?: string }) => (
+  <ul aria-label={label} className="mt-1 flex flex-col divide-y divide-line">
+    {(limit ? connections.slice(0, limit) : connections).map((c) => (
+      <li key={`${c.direction}:${c.id}`} className="py-2 text-sm">
+        <span className="meta">{relationWord(c)}</span>{' '}
+        <NodeLink node={c.other} /> <DomainChip domain={c.other.ownerDomain} />
+        <Why c={c} />
+      </li>
+    ))}
+    {connections.length === 0 && <li className="meta py-2">none</li>}
+    {limit && connections.length > limit && <li className="meta py-2">{connections.length - limit} more: {more ? <a href={more}>see them all</a> : 'open the full detail'}</li>}
+  </ul>
+);
+
 /** Every connection with its proof: the row or file line, the revision, and what the edge carries (a quote, a specifier). */
 export const Connections = ({ label, connections, limit, more }: { label: string; connections: readonly Conn[]; limit?: number; more?: string }) => (
   <ScrollTable label={label}>
@@ -69,17 +96,7 @@ export const Connections = ({ label, connections, limit, more }: { label: string
         <tr key={`${c.direction}:${c.id}`}>
           <td>{relationWord(c)}</td>
           <td><NodeLink node={c.other} /> <DomainChip domain={c.other.ownerDomain} /></td>
-          <td>
-            <details>
-              <summary>{c.verification === 'earlier-revision' ? <span className="status-warning">Earlier revision</span> : 'Why connected?'}</summary>
-              <p className="meta mt-1">
-                {c.origin === 'index' ? 'Declared in ' : 'Recorded in '}<code className="break-all">{c.provenance}</code>
-                {c.revision ? <> at revision <code>{c.revision.slice(0, 12)}…</code></> : null}
-              </p>
-              {c.detail ? <p className="quote mt-1">{c.detail}</p> : null}
-              {c.note ? <p className="meta mt-1">{c.note}</p> : null}
-            </details>
-          </td>
+          <td><Why c={c} /></td>
         </tr>
       ))}
       {connections.length === 0 && <tr><td colSpan={3} className="meta">none</td></tr>}
@@ -88,6 +105,11 @@ export const Connections = ({ label, connections, limit, more }: { label: string
   </ScrollTable>
 );
 
+
+const OWNERSHIP_WORD: Readonly<Record<string, string>> = {
+  frontmatter: 'registered (agent frontmatter)', manifest: 'registered (module manifest)', 'domain-path': 'by its domain directory',
+  shared: 'none (no registration or domain directory)', taxonomy: 'the taxonomy', record: 'recorded on the row', 'owner-table': 'the table\'s owning domain',
+};
 
 type Detail = {
   readonly node: Node & { readonly ownershipBasis: string; readonly sourceRef: string; readonly revision: string | null; readonly asOf: string };
@@ -108,8 +130,8 @@ export const Inspector = ({ d, limit, headingLevel = 2 }: { d: Detail; limit?: n
   return (
     <section className="card" aria-labelledby="inspector-h" data-inspector={n.id}>
       <p className="meta">{kindWord(n.kind)} · {BACKING_WORD[n.backing] ?? n.backing}</p>
-      <H id="inspector-h" className="mt-1 break-words">{n.title}</H>
-      <p className="mt-2 flex flex-wrap items-center gap-2"><Availability value={n.availability} /> <DomainChip domain={n.ownerDomain} /> <span className="meta">owner by {n.ownershipBasis}</span></p>
+      <H id="inspector-h" className="mt-1 break-words font-display text-[20px] font-semibold normal-case tracking-normal text-ink-1">{n.title}</H>
+      <p className="mt-2 flex flex-wrap items-center gap-2"><Availability value={n.availability} /> <DomainChip domain={n.ownerDomain} /> <span className="meta">ownership: {OWNERSHIP_WORD[n.ownershipBasis] ?? n.ownershipBasis}</span></p>
       <dl className="mt-3 grid gap-1 text-sm">
         <div><dt className="meta inline">Source </dt><dd className="inline"><code className="break-all">{n.sourceRef}</code></dd></div>
         <div><dt className="meta inline">Revision </dt><dd className="inline">{n.revision ? <code title={n.revision}>{n.revision.length > 16 ? `${n.revision.slice(0, 12)}…` : n.revision}</code> : '—'}</dd></div>
@@ -120,9 +142,13 @@ export const Inspector = ({ d, limit, headingLevel = 2 }: { d: Detail; limit?: n
         {headingLevel === 2 ? <a href={full}>Full detail</a> : <a href={`/?node=${encodeURIComponent(n.id)}`}>Back to graph</a>}
       </p>
       <h3 className="mt-4 text-sm font-semibold">Connections out ({d.outgoing.length})</h3>
-      <Connections label={`Connections from ${n.title}`} connections={d.outgoing} {...(limit ? { limit, more: full } : {})} />
+      {limit
+        ? <ConnectionList label={`Connections from ${n.title}`} connections={d.outgoing} limit={limit} more={full} />
+        : <Connections label={`Connections from ${n.title}`} connections={d.outgoing} />}
       <h3 className="mt-4 text-sm font-semibold">Connections in ({d.incoming.length})</h3>
-      <Connections label={`Connections to ${n.title}`} connections={d.incoming} {...(limit ? { limit, more: full } : {})} />
+      {limit
+        ? <ConnectionList label={`Connections to ${n.title}`} connections={d.incoming} limit={limit} more={full} />
+        : <Connections label={`Connections to ${n.title}`} connections={d.incoming} />}
       {d.inherited.length > 0 && (
         <>
           <h3 className="mt-4 text-sm font-semibold">Inherited from brief</h3>
@@ -157,8 +183,29 @@ export const Inspector = ({ d, limit, headingLevel = 2 }: { d: Detail; limit?: n
   );
 };
 
-/** The graph as a list (the sphere's accessible equivalent): each row inspects on Command and opens its source. */
+/**
+ * The graph as a list (the sphere's accessible equivalent): each row inspects on Command and opens its source.
+ * Below 960 px it is a stacked list whose items open the full-page detail (the rail would sit below the page).
+ */
 export const GraphList = ({ nodes, inspect }: { nodes: readonly Node[]; inspect: (id: string) => string }) => (
+  <>
+    <ul aria-label="Graph entities (compact)" className="flex flex-col divide-y divide-line md:hidden">
+      {nodes.map((n) => (
+        <li key={n.id} className="py-2">
+          <a href={`/node?id=${encodeURIComponent(n.id)}`} className="break-words">{n.title}</a>
+          <div className="meta mt-1 flex flex-wrap items-center gap-2">
+            <span>{kindWord(n.kind)} · {BACKING_WORD[n.backing] ?? n.backing}</span> <DomainChip domain={n.ownerDomain} /> <Availability value={n.availability} />
+            <a href={n.href}>Open</a>
+          </div>
+        </li>
+      ))}
+      {nodes.length === 0 && <li className="meta py-2">no entity matches this filter</li>}
+    </ul>
+    <div className="hidden md:block"><GraphTable nodes={nodes} inspect={inspect} /></div>
+  </>
+);
+
+const GraphTable = ({ nodes, inspect }: { nodes: readonly Node[]; inspect: (id: string) => string }) => (
   <ScrollTable label="Graph entities">
     <thead><tr><th>Kind</th><th>Title</th><th>Domain</th><th>Backing</th><th>Availability</th><th /></tr></thead>
     <tbody>
