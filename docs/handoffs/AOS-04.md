@@ -70,7 +70,7 @@ HANDOFF — AOS-04 Plan B (the Mercury shell) complete; Plan C (graph, file inde
     - on the workbench: outcome words (Completed, No sources, Declined, Failed, Timed out), elapsed time from recorded timestamps, the selected evidence with its provenance path, and a refresh that pauses while anything is typed;
     - library filters by target and topic, with separate acceptance and canonical badges.
   - **Every table** sits in a labelled scroll region, so no page scrolls sideways at 390 px.
-- **Numbers:** tests (the real count, from `pnpm test`, is in the proof's gates section); 3 font dependencies; no migration; no new agent, tool or capability.
+- **Numbers:** 1359 tests (up from 1322 after Plan A), all passing; 3 font dependencies; no migration; no new agent, tool or capability. Gates: typecheck, the suite, `agents:validate`, the migration round trip, `web:build`, `web:smoke`.
 - **Changed on purpose:**
   - timestamps render in Sofia time with the offset (UTC on hover), not UTC;
   - Records red is no longer a generic accent;

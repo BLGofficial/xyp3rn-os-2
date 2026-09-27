@@ -78,3 +78,9 @@ Screenshots: 13-{command,research,run,library}-{1920x1080,1440x900,1024x768,390x
 (first run of the 390 px check: six pages scrolled sideways, all from tables; fixed by labelled table scroll regions)
 
 ## 5. The gates
+pnpm typecheck                       exit 0
+pnpm test                            Test Files 102 passed (102) · Tests 1359 passed (1359) — up from 1322 after Plan A
+pnpm agents:validate                 validateAll(): 0 failure(s)
+db:down, db:up, db:down, db:up       rolled back / applied 20260926100000, twice, every command exit 0 (no migration in Plan B)
+pnpm web:build                       ok
+node apps/web/e2e/smoke.ts           smoke: all checks passed (every AOS-01–04 line and the Plan B lines)
