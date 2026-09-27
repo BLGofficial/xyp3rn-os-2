@@ -255,7 +255,9 @@ describe('search (§16)', () => {
 
   it('matches % and _ literally, never names an excluded file, and returns no group for no match', async () => {
     expect((await search(db.sql, '%')).groups.flatMap((g) => g.hits.map((h) => h.id))).toEqual(['file:repo/docs/100%-sure.md']);
-    expect((await search(db.sql, 'e_c')).groups).toEqual([]);
+    // '_' unescaped would match the brief's "descriptor"; escaped, nothing holds 'descr_ptor' literally.
+    expect((await search(db.sql, 'descr_ptor')).groups).toEqual([]);
+    expect((await search(db.sql, 'descriptor')).groups.map((g) => g.kind)).toContain('research_brief');
     expect((await search(db.sql, 'snake_')).groups.flatMap((g) => g.hits.map((h) => h.id))).toEqual(['file:repo/docs/snake_case.md']);
     expect((await search(db.sql, '.env')).groups).toEqual([]);
     expect((await search(db.sql, 'no such thing anywhere')).groups).toEqual([]);

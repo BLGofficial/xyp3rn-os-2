@@ -37,13 +37,13 @@ export type NodeFilter = {
   readonly page?: number | undefined; readonly perPage?: number | undefined;
 };
 
-type NodeRow = {
+export type NodeRow = {
   id: string; kind: string; title: string; owner_domain: string | null; ownership_basis: string; backing: string; source_ref: string;
   revision: string | null; availability: string; as_of: Date; path: string | null; file_id: string | null;
 };
 type EdgeRow = { id: string; relation: string; from_id: string; to_id: string; provenance: string; revision: string | null; detail: string | null; origin: string };
 
-const toNode = (r: NodeRow): GraphNode => ({
+export const toNode = (r: NodeRow): GraphNode => ({
   id: r.id, kind: r.kind, title: r.title, ownerDomain: r.owner_domain as Domain | null, ownershipBasis: r.ownership_basis,
   backing: r.backing as GraphNode['backing'], sourceRef: r.source_ref, revision: r.revision, availability: r.availability,
   asOf: r.as_of.toISOString(), path: r.path, fileId: r.file_id,
@@ -54,7 +54,7 @@ const toEdge = (r: EdgeRow): GraphEdge => ({
 });
 
 // A file node carries its indexed_files id: the viewer takes that opaque id, never a path.
-const NODES = (tx: postgres.TransactionSql) => tx`
+export const NODES = (tx: postgres.TransactionSql) => tx`
   select n.id, n.kind, n.title, n.owner_domain::text, n.ownership_basis, n.backing, n.source_ref, n.revision, n.availability, n.as_of, n.path,
          f.id as file_id
   from graph_nodes n

@@ -1,5 +1,6 @@
 import type { Sql } from '../../../core/db/client.ts';
 import * as p from '../../../knowledge/knowledge-graph/projection.ts';
+import { searchIndex } from '../../../knowledge/knowledge-graph/search.ts';
 import { asWeb } from './loaders.ts';
 
 /**
@@ -65,4 +66,20 @@ export const lensGroups = (sql: Sql) =>
   asWeb(sql, async (tx) => {
     const l = await p.lensGroups(tx);
     return { anchor: l.anchor ? withHref(l.anchor) : null, groups: l.groups };
+  });
+
+/**
+ * Global search (§16): groups by kind with totals. A hit's `href` focuses it on the graph (its neighbourhood loads
+ * first); `destination` opens its own page.
+ */
+export const search = (sql: Sql, q: string) =>
+  asWeb(sql, async (tx) => {
+    const r = await searchIndex(tx, q);
+    return {
+      ...r,
+      groups: r.groups.map((g) => ({
+        ...g,
+        hits: g.hits.map((n) => ({ ...n, domain: n.ownerDomain, href: `/?node=${encodeURIComponent(n.id)}`, destination: hrefOf(n) })),
+      })),
+    };
   });

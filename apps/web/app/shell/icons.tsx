@@ -16,6 +16,15 @@ const paths = {
   close: 'M6 6l12 12M18 6 6 18',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4-4',
   owner: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0',
+  // The six domains (§14.2): linked hexagon, book, lens, music note, circuit, shield; plus System and the graph.
+  hexagon: 'M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9zM12 8v8M8.5 10l7 4M15.5 10l-7 4',
+  book: 'M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h9',
+  note: 'M9 18V5l10-2v13M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3zm10-2a3 3 0 1 1-3-3 3 3 0 0 1 3 3z',
+  circuit: 'M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4',
+  shield: 'M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z',
+  shared: 'M8 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm8 6a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM10.5 10.5l3 3',
+  system: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1',
+  graph: 'M6 6a2 2 0 1 0 0 .1M18 8a2 2 0 1 0 0 .1M12 18a2 2 0 1 0 0 .1M7.7 7l8.6 1M7 8l4 8.5M17 10l-4 6.5',
 } as const;
 
 export type IconName = keyof typeof paths;
