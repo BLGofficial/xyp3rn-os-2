@@ -49,3 +49,34 @@ HANDOFF — Artist OS AOS-04 Plan A (Research mode) complete; Plans B and C (Mer
   1. **Plan B:** the Mercury shell (design §§13–14): tokens, layout, the Research screens re-skinned. **Plan C:** the graph, file index and sphere (§§15–16, 18–21).
   2. **A live run:** with `OPENROUTER_API_KEY` set, `pnpm research ask` on a real brief, to see the free route's quote fidelity (the DB check will decline paraphrases; expect some).
   3. Then **AOS-05** (Whisper and Kokoro).
+
+---
+
+HANDOFF — AOS-04 Plan B (the Mercury shell) complete; Plan C (graph, file index, sphere) next
+
+- **Built** (plan `docs/artist-os/AOS-04-plan-B.md`, decisions M1–M3 in ARCHITECTURE F44; proof `docs/proofs/AOS-04-mercury.txt`):
+  - **Tokens and base layer (M1):** `apps/web/lib/tokens.ts` feeds Tailwind and a contrast test. `globals.css` restyles every page through the shared classes: headings, tables, controls at 44 px, the 2 px focus ring, reduced motion. Status is its own channel (word + glyph + colour); "Accepted in library" has its own colour, never the promoted green.
+  - **Fonts (M2):** Inter, Space Grotesk and IBM Plex Mono from pinned `@fontsource` packages, with `FONT-NOTICES.md` and the Cyrillic fallback pinned by a test.
+  - **The Sofia clock:** `lib/clock.ts` (IANA zone, offset estimate, sync state), `/api/time`, and the client clock in the top bar. Every `<Time>` renders Sofia time with its offset.
+  - **Shell loaders:** the metric strip (exact definitions, one as-of time, per-card savepoints so a failed card reads "unavailable"), the system pulse (what was checked; provider keys Configured / Not configured), recent activity.
+  - **The shell:**
+    - a top bar with Vault search, clock and identity;
+    - the left rail, with `aria-current` and Analytics listed as not built;
+    - a modal `<dialog>` drawer below 1280 px (only when JS is present);
+    - the `WithRail` right-rail slot.
+  - **Command:** the metric strip, then the existing sections, with pulse and activity in the right rail.
+  - **Research (§17):**
+    - list filters by latest-run status and by target, and a New brief action;
+    - on the workbench: outcome words (Completed, No sources, Declined, Failed, Timed out), elapsed time from recorded timestamps, the selected evidence with its provenance path, and a refresh that pauses while anything is typed;
+    - library filters by target and topic, with separate acceptance and canonical badges.
+  - **Every table** sits in a labelled scroll region, so no page scrolls sideways at 390 px.
+- **Numbers:** tests (the real count, from `pnpm test`, is in the proof's gates section); 3 font dependencies; no migration; no new agent, tool or capability.
+- **Changed on purpose:**
+  - timestamps render in Sofia time with the offset (UTC on hover), not UTC;
+  - Records red is no longer a generic accent;
+  - the smoke's pending-approval check is scoped to the finding card, since the provenance path repeats the status.
+- **Found and fixed on the way:**
+  - the fonts test first imported the `.mjs` Tailwind config statically, which typecheck refused; a commit landed with typecheck red and the next commit fixed it;
+  - the first 390 px run found six pages scrolling sideways, all from tables.
+- **Open** (F45): global search and domain filters wait on Plan C; no performance numbers; 200% zoom approximated; forms still keep typed values (F39); Plan C not built.
+- **Next:** Plan C, written and reviewed before code, as Plan B was. The live `pnpm research ask` still waits on `OPENROUTER_API_KEY`.

@@ -86,7 +86,8 @@ The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md))
   - the 20 specialists run one grounded-evidence program on the OpenRouter free route; every claim quotes its passage verbatim, checked by the DB against the kept page text;
   - synthesis into findings; the owner accepts findings into the Findings Library, and promotes accepted ones to canonical through the Promotion Gate;
   - `/research` (briefs, preview, new brief), the run workbench, `/research/library`, and Research sections on songs, recipes and tag sets; runs execute in the background of `next start`.
-- [ ] AOS-04 Plans B and C: the Mercury shell, then the graph, file index and sphere (design §§12–21).
+- [x] AOS-04 Plan B: the Mercury shell ([plan](docs/artist-os/AOS-04-plan-B.md), [proof](docs/proofs/AOS-04-mercury.txt)): graphite/mercury tokens across the whole app, locally hosted fonts, the three-column shell with a drawer below 1280 px, the metric strip with its definitions, the system pulse and recent activity, the Sofia clock synced to the server, and Research recomposed per §17.
+- [ ] AOS-04 Plan C: the graph, file index and sphere (design §§15–16, 18–21).
 
 ## Build status (Agentic OS build guide)
 

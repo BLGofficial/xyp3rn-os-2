@@ -473,3 +473,26 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **A gate-promoted row has no source,** so a later specialist sees it as context, not a citable passage; its provenance is the candidate → finding → evidence chain.
 - **No live specialist run in the proof environment:** no `OPENROUTER_API_KEY` there. The live path is proven up to the model call (a real page fetched and kept); the model's part is proven with the FAKE MODEL.
 - **Plans B and C** (the Mercury shell; the graph, file index and sphere, design §§12–21) are not built.
+
+**F44. The Mercury shell (AOS-04 Plan B).** DECIDED (operator, 2026-09-27; plan `docs/artist-os/AOS-04-plan-B.md`, design §§13–14, 17, 19).
+- **M1:** the whole app moves to Mercury (graphite surfaces, mercury accents, the status channel apart from domain colour). It supersedes AOS-01's brutalism. The AOS-01 colour names map onto the new tokens, so every page restyles through the shared classes.
+- **M2:** fonts come from pinned `@fontsource` packages (Inter, Space Grotesk, IBM Plex Mono; OFL-1.1), bundled by the Next build, with no runtime CDN. Space Grotesk has no Cyrillic, so headings fall back to Inter for those glyphs.
+- **M3:** the plan was reviewed before code and stacked on the AOS-04 branch.
+- **Tokens** live in `apps/web/lib/tokens.ts`. Canonical domain hues stay in taxonomy; the brighter label variants are presentation only. Contrast floors are pinned by a test.
+- **Metric strip definitions:**
+  - Active songs = `idea`, `writing`, `producing` or `releasing`;
+  - Running workflows = `workflow_runs` running (research runs beside);
+  - Vault = stored files (lineages beside, counted once);
+  - Open research briefs = question status `open`.
+  - A failed card reads "unavailable", never 0.
+- **The clock** formats with `Europe/Sofia` and claims "Server-synced" only within ten minutes of a successful `/api/time` sample; otherwise "Device time · not verified" or "stale". Event timestamps render in Sofia time with the offset in force.
+- **The system pulse** reports what was checked. A provider key is "Configured" or "Not configured", never reachable or healthy.
+
+**F45. Open after AOS-04 Plan B.**
+- **Global search and domain filters** wait on Plan C's index; the top bar searches the Vault and says so.
+- **No performance numbers:** §18's frame-rate, INP, LCP and CLS targets are Plan C's (the sphere).
+- **200% zoom** is approximated by a 960×540 viewport at device scale 2, not measured under a real browser zoom.
+- **The neighbouring checkout's Mercury SVG shell** was not used (§12.3); this shell is built here from the design.
+- **Forms still keep typed values after a write** (F39). The run page's refresh pauses while anything is typed, so it never erases a reason.
+- **Plan C** (graph, file index, sphere, inspector, answers) is not built.
+
