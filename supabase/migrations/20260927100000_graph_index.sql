@@ -2,7 +2,7 @@
 -- - the file index        index_scans (one row per scan, sealed once it leaves running), indexed_files (one row per
 --                         root + path; a rename is a new row, the old one goes missing), index_nodes and index_edges
 --                         (what files declare: agents, workflows and steps, decisions; imports, links, step agents;
---                         an edge with no target is a diagnostic), index_vault_status (Vault bytes present or not)
+--                         an edge with no target is a diagnostic), index_vault_status (Vault bytes present, missing, or corrupt on a full check)
 -- - xyp_indexer           writes the index tables and nothing else; reads four columns of sources for the Vault check
 -- - the graph (read model) graph_nodes, graph_edge_candidates, graph_edges, graph_diagnostics, graph_link_history:
 --                         security_invoker views over the index and the live records. Every edge carries its proof (a
@@ -80,7 +80,7 @@ create table if not exists public.indexed_files (
   constraint indexed_files_owner_check check ((ownership_basis = 'shared') = (owner_domain is null)),
   constraint indexed_files_status_check check (status in ('present', 'missing', 'unreadable')),
   constraint indexed_files_error_check check ((status = 'unreadable') = (error is not null)),
-  constraint indexed_files_hash_check check (status = 'unreadable' or sha256 is not null)
+  constraint indexed_files_hash_check check (status <> 'present' or sha256 is not null)
 );
 
 create table if not exists public.index_nodes (
@@ -126,7 +126,7 @@ create table if not exists public.index_vault_status (
   status     text not null,
   checked_at timestamptz not null,
   scan_id    uuid not null references public.index_scans (id) on delete restrict,
-  constraint index_vault_status_status_check check (status in ('present', 'missing', 'size-mismatch'))
+  constraint index_vault_status_status_check check (status in ('present', 'missing', 'corrupt'))
 );
 
 -- ─── the graph (read model) ─────────────────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ union all
 select 'sources:' || s.id, case when s.storage is null then 'source' else 'vault_file' end, coalesce(s.metadata->>'filename', s.title, s.uri),
        'KNOWLEDGE', 'owner-table', case when s.storage is null then 'record' else 'file' end, 'sources:' || s.id, s.checksum_sha256,
        case when s.storage is null then 'present'
-            else coalesce(case v.status when 'present' then 'present' when 'missing' then 'missing' when 'size-mismatch' then 'unavailable' end, 'unchecked') end,
+            else coalesce(case v.status when 'present' then 'present' when 'missing' then 'missing' when 'corrupt' then 'unavailable' end, 'unchecked') end,
        coalesce(v.checked_at, s.created_at), null
 from public.sources s left join public.index_vault_status v on v.source_id = s.id
 union all

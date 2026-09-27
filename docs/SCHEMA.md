@@ -511,7 +511,7 @@ Migration `20260927100000_graph_index.sql` (+ rollback). Plan: `docs/artist-os/A
   - `indexed_files`: one row per `(root, path)` (23505). The path is relative and `/`-separated, with no `.`/`..` segment, backslash, drive letter, empty segment or control character (23514). `sha256` may be null only when the file is `unreadable` (and then `error` is set). Ownership: `owner_domain` + `ownership_basis` (`frontmatter` | `manifest` | `domain-path` | `shared`; shared exactly when there is no owner). A rename is a new row; the old one becomes `missing`.
   - `index_nodes`: what files declare (`agent`, `workflow`, `workflow_step`, `decision`); the id is `<kind>:<name>`, with its file, line and revision.
   - `index_edges`: file-derived relations with their file, line and the reference as written (`detail`). A null `to_id` is an unresolved reference.
-  - `index_vault_status`: a Vault source's bytes `present`, `missing` or `size-mismatch`, per scan.
+  - `index_vault_status`: a Vault source's bytes `present`, `missing` or `corrupt` (they no longer hash to the checksum; checked on a full scan), per scan.
 - **The graph views** (`security_invoker`, read as `xyp_web`):
   - `graph_nodes`: the six domains (from `xyp_domain`, backed by configuration), declared nodes, indexed files, and the live records (modules at their current version, canonical prompts, sources, lineages and versions, songs, takes, tracks, releases, runs, research rows, candidates, approvals). `backing` is `file` only for stored bytes; a Vault file nobody has checked reads `unchecked`.
   - `graph_edge_candidates`: every relation the index or a row proves, with its `provenance` (`<path>:<line>`, `<table>:<uuid>`, `<table>:<uuid>#<column>` or `ownership:<basis>:<path>`).
