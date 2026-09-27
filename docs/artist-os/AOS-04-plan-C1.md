@@ -474,3 +474,14 @@ Every node carries:
 - **Freshness:** Saved vs Indexed; "Saved; indexing failed"; a scan failure sealed and shown.
 - **Accessibility:** keyboard search → inspect → source; the list as the sphere's equivalent (C2 keeps them in sync).
 - **Still open for C2:** Visual (sphere), Answers, the rest of Accessibility/performance (graph/list parity with the sphere, the WebGL-loss question, which S2 removes, and the measured numbers).
+
+## As built (2026-09-28)
+
+Built as planned, with these differences (each in its commit, recorded in ARCHITECTURE F46/F47 and the proof):
+- **Grants are tighter than the plan's table:** `xyp_indexer` has SELECT/INSERT/UPDATE on scans, files and Vault status (a sealed scan refuses updates; a file goes missing, never away) and SELECT/INSERT/DELETE on declared nodes and edges (replaced per file).
+- **The Vault check** records `present`, `missing` or `corrupt`: the store verifies bytes by hash, not size, and `corrupt` is found on a full scan.
+- **Only a present file must carry a checksum:** an unreadable file that then disappears has none.
+- **Bulk writes** go through `unnest()` over text arrays cast in the select: postgres.js turned a `'true'` string into `false` in a `boolean[]` parameter (caught by the scan test), and Next's TypeScript could not type its row helper.
+- **A decision's title leads with its number** (`F41 · Open after AOS-03`), so lists, search and inherited targets say which decision it is.
+- **The unreadable-file case** is an injected read error in the tests: they run as root here, where mode 000 doesn't stop a read.
+- **The UI at small widths:** the rail's connections are a stacked list, and below 960 px the Graph list is stacked items that open the full-page detail.

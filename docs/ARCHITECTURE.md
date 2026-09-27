@@ -496,3 +496,34 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **Forms still keep typed values after a write** (F39). The run page's refresh pauses while anything is typed, so it never erases a reason.
 - **Plan C** (graph, file index, sphere, inspector, answers) is not built.
 
+**F46. The graph and file index (AOS-04 Plan C1).** DECIDED (operator, 2026-09-27; plan `docs/artist-os/AOS-04-plan-C1.md`, design §§13.1–13.2, 15, 16, 20).
+- **S1:** Plan C is split. C1 is the data: file index, graph projection, search, List view, inspector, domain filters. C2 is the visuals: the sphere, motion, the answering command bar, performance numbers.
+- **S2:** the sphere (C2) is in-house SVG, with no new dependency; it is its own fallback.
+- **S3:** the file index lives in DB tables with scan runs, written by `xyp_indexer` (writes only the index) and read by `xyp_web`.
+- **S4:** answers (C2) are extractive, from `retrieve-and-summarize`, so no key is needed.
+- **Owner:** KNOWLEDGE, as the reserved `knowledge-graph` component (`knowledge/knowledge-graph/`). The index is a derived read model: its rollback drops rows without refusing.
+- **Two halves of one graph:** what files declare (agents, workflows and steps, ARCHITECTURE decisions, imports, Markdown links) is parsed at scan time and pinned to the file's checksum; what the database records is read live. `graph_nodes` / `graph_edges` union them; an edge is drawn only when both endpoints are nodes, and every edge carries its provenance (`<path>:<line>`, `<table>:<uuid>`, `<table>:<uuid>#<column>`, `ownership:<basis>:<path>`). A reference to nothing, or to an entity the graph doesn't hold, is a diagnostic.
+- **Relations:** §15.3's (`owned_by`, `defined_by`, `imports`, `references`, `step_uses_agent`, `depends_on`, `linked_to`, `produced_by`, `derived_from`, `supported_by`, `quotes`, `proposed_as`, `approved_by`, `promoted_to`) plus `run_of`, `version_of`, `part_of`, `decides`, with the same rule (a row or a line as proof). `relations` predicates are copied, not renamed.
+- **The plan's choices, as built:**
+  1. a workflow's identity is its name and its revision the spec's sha256 (the file's checksum, which is what `workflow_runs.spec_sha256` hashes); a run of another revision reads "ran an earlier revision";
+  2. the scope is this checkout (root `repo`) and the Vault, nothing else;
+  3. exclusions are counted per rule, never named (`.env.example` included);
+  4. text up to 1 MiB is read; larger text and binaries are metadata only;
+  5. a repository file that changed since its scan is not shown (the viewer and raw route refuse with both checksums);
+  6. tools are not entities;
+  7. suggested relations are not built.
+- **Ownership:** registration (agent frontmatter under `agents/`, a manifest's `domain`), then the taxonomy's domain directory, else Shared/Unassigned. There is no seventh domain.
+- **Imports** are read with TypeScript 5.9's `preProcessFile` (`typescript-api`, an alias of the version `apps/web` already pins), because the root's TypeScript 7 has no JS API and the lighter options fail on `.tsx` or drop type-only imports.
+- **The viewer** takes an opaque `indexed_files` id, joins the stored path under the root's real path, refuses a path that resolves outside it or ends in a symlink, a vanished file and changed bytes, caps the preview, and serves raw bytes with `nosniff` and a sandbox CSP.
+- **Freshness:** `pnpm index scan [--full]`, a boot scan (not awaited) and the owner's Rescan on `/system`. Vault files show Saved and Indexed for Vault search separately; Index now runs the Vault index and reports "Saved; indexing failed: …" on failure.
+
+**F47. Open after AOS-04 Plan C1.**
+- **Plan C2** (the sphere, motion, camera focus, the answering command bar, performance numbers) is not built. The graph is a List view.
+- **Tools as entities:** agents' `tools` frontmatter would give real `uses_tool` edges; not built (§15.2 doesn't list tools).
+- **`.env.example`** is excluded with the credentials; a rule that proves an example holds no value would let it in.
+- **Extra roots** beyond this checkout need an explicit decision (§15.2 item 1).
+- **Windows case rules and junctions** are checked by string rules only: this host is Linux.
+- **A quick scan re-reads only changed files,** so an unchanged file's references are re-resolved (for instance against a newly added target) only on `--full`.
+- **A research run's workflow run** is recorded as `research-specialists`, a plan generated at run time with no definition file, so its `run_of` edge is a dangling diagnostic, not a guessed workflow.
+- **Suggested relations** (title mentions, similarity) are not built.
+

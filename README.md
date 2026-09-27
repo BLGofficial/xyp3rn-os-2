@@ -30,6 +30,7 @@ pnpm research <cmd> '<json>'    # 6C engines by hand: observation, cite, finding
 pnpm research ask '{"projectSlug":"...","question":"...","intendedUse":"...","urls":["https://..."],"songId"?:"<uuid>"}'   # AOS-04: a brief, run live (OPENROUTER_API_KEY)
 pnpm research decide <findingId> accept|reject "<reason>"   # AOS-04: the Findings Library (never canonical)
 pnpm research promote '{"findingId":"...","proposed_kind":"canonical_prompt","target_slug":"...","title":"...","body":"...","domain":"RECORDS"}'   # AOS-04: an accepted finding → the gate → pnpm gate decide
+pnpm index scan [--full]   # AOS-04 C1: index this checkout and check the Vault's bytes; pnpm index status for the last scan
 pnpm dispatch x3lius-lyrics '{"request":"..."}'   # Phase 8 Creative agent (also x3lius-songwriting, x3lius-composition); needs the key for its model's provider
 pnpm workflow records/x3lius/song-to-suno.workflow.yaml '{"request":"...","sunoModel":"v5"}'   # Phase 9: brief → Suno-ready prompt artifact
 pnpm dispatch x3lius-studio-editor '{"recipeFrom":{"artifactId":"<formula id>"}}'       # Phase 9 formula → a draft style recipe (AOS-03: a formula is no longer submitted)
@@ -87,7 +88,8 @@ The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md))
   - synthesis into findings; the owner accepts findings into the Findings Library, and promotes accepted ones to canonical through the Promotion Gate;
   - `/research` (briefs, preview, new brief), the run workbench, `/research/library`, and Research sections on songs, recipes and tag sets; runs execute in the background of `next start`.
 - [x] AOS-04 Plan B: the Mercury shell ([plan](docs/artist-os/AOS-04-plan-B.md), [proof](docs/proofs/AOS-04-mercury.txt)): graphite/mercury tokens across the whole app, locally hosted fonts, the three-column shell with a drawer below 1280 px, the metric strip with its definitions, the system pulse and recent activity, the Sofia clock synced to the server, and Research recomposed per §17.
-- [ ] AOS-04 Plan C: the graph, file index and sphere (design §§15–16, 18–21).
+- [x] AOS-04 Plan C1: the graph and file index ([plan](docs/artist-os/AOS-04-plan-C1.md), [proof](docs/proofs/AOS-04-graph-index.txt)): a scanned index of this checkout and the Vault (`pnpm index scan | status`, a boot scan, Rescan on /system), agents, workflows, decisions, imports and links as source-backed entities and edges, the live records beside them, search everything, a Graph list with domain filters and the Creative lens, an inspector whose every connection says why it exists, and a safe viewer for repository files.
+- [ ] AOS-04 Plan C2: the sphere, motion, answers and performance numbers (design §§15.1, 16, 18).
 
 ## Build status (Agentic OS build guide)
 
