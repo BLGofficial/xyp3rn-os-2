@@ -502,6 +502,27 @@ Migration `20260926100000_research_mode.sql` (+ rollback). Design: `docs/artist-
 - **Export:** `research_links`, `research_link_retractions`, `research_sources`, `research_evidence`, `research_findings`, `research_finding_evidence` and `contradictions` join `xyp-vault-export/v1`. A brief reached through `song_links` brings its links, runs, evidence (sources by FK), findings, contradictions and the owner's decisions. Knowledge candidates stay out. A re-link is ordered after the retraction that freed it.
 - **Rollback:** refuses while the owner has decided a finding, a brief has a link, evidence carries a quote, a source keeps text, or a brief carries an intended use, URLs or a pick. Then it drops the views, the decision function, the link tables and guard, the quote trigger, the columns and helpers, and the policies and grants it added on older tables. The enum value stays.
 
+## AOS-04 Plan C1 additions: the file index and the graph views
+
+Migration `20260927100000_graph_index.sql` (+ rollback). Plan: `docs/artist-os/AOS-04-plan-C1.md` (decisions S1–S4, ARCHITECTURE F46).
+
+- **The file index** (derived: a scan rebuilds it):
+  - `index_scans`: one row per scan (`trigger` `cli` | `boot` | `owner`, `roots`, `counts`). Sealed once it leaves `running` (55000); `error` is set exactly when the status is `error`, and a success carries its counts.
+  - `indexed_files`: one row per `(root, path)` (23505). The path is relative and `/`-separated, with no `.`/`..` segment, backslash, drive letter, empty segment or control character (23514). `sha256` may be null only when the file is `unreadable` (and then `error` is set). Ownership: `owner_domain` + `ownership_basis` (`frontmatter` | `manifest` | `domain-path` | `shared`; shared exactly when there is no owner). A rename is a new row; the old one becomes `missing`.
+  - `index_nodes`: what files declare (`agent`, `workflow`, `workflow_step`, `decision`); the id is `<kind>:<name>`, with its file, line and revision.
+  - `index_edges`: file-derived relations with their file, line and the reference as written (`detail`). A null `to_id` is an unresolved reference.
+  - `index_vault_status`: a Vault source's bytes `present`, `missing` or `size-mismatch`, per scan.
+- **The graph views** (`security_invoker`, read as `xyp_web`):
+  - `graph_nodes`: the six domains (from `xyp_domain`, backed by configuration), declared nodes, indexed files, and the live records (modules at their current version, canonical prompts, sources, lineages and versions, songs, takes, tracks, releases, runs, research rows, candidates, approvals). `backing` is `file` only for stored bytes; a Vault file nobody has checked reads `unchecked`.
+  - `graph_edge_candidates`: every relation the index or a row proves, with its `provenance` (`<path>:<line>`, `<table>:<uuid>`, `<table>:<uuid>#<column>` or `ownership:<basis>:<path>`).
+  - `graph_edges`: the candidates whose endpoints are both nodes. `graph_diagnostics`: the rest (`unresolved` or `dangling`).
+  - `graph_link_history`: retracted song and research links with their reason.
+- **Roles:**
+  - `xyp_indexer` (new): SELECT/INSERT/UPDATE on `index_scans`, `indexed_files` and `index_vault_status`; SELECT/INSERT/DELETE on `index_nodes` and `index_edges` (a changed file's declarations are replaced); SELECT on four columns of `sources` (`id`, `checksum_sha256`, `byte_size`, `storage`). Nothing else (42501).
+  - `xyp_web`: SELECT on the index tables and views, and on `relations` (new).
+  - `service_role`: SELECT only (G20). `anon` and `authenticated` get nothing.
+- **Rollback:** drops the views, tables and trigger function, and the policies and grants on `sources` and `relations`. No refusal: nothing it drops is owner data. The role stays (cluster-wide).
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

@@ -134,8 +134,8 @@ describe('the graph views', () => {
     const codeFile = await indexFile(scanId, 'records/fixture-graph.ts', { owner: 'RECORDS', basis: 'domain-path' });
     await indexFile(scanId, 'core/fixture-dep.ts', { owner: 'CORE', basis: 'domain-path' });
     await asCommitted(db.sql, 'xyp_indexer', async (tx) => {
-      await tx`insert into index_nodes (id, kind, title, owner_domain, file_id, line, revision, scan_id)
-               values ('agent:fixture-graph', 'agent', 'fixture-graph', 'RECORDS', ${agentFile}, 1, ${sha('agents/fixture-graph.agent.md')}, ${scanId})`;
+      await tx`insert into index_nodes (id, kind, title, owner_domain, ownership_basis, file_id, line, revision, scan_id)
+               values ('agent:fixture-graph', 'agent', 'fixture-graph', 'RECORDS', 'frontmatter', ${agentFile}, 1, ${sha('agents/fixture-graph.agent.md')}, ${scanId})`;
       await tx`insert into index_edges (relation, from_id, to_id, file_id, line, detail, revision, scan_id) values
                ('defined_by', 'agent:fixture-graph', 'file:repo/agents/fixture-graph.agent.md', ${agentFile}, 1, 'agents/fixture-graph.agent.md', ${sha('agents/fixture-graph.agent.md')}, ${scanId}),
                ('imports', 'file:repo/records/fixture-graph.ts', 'file:repo/core/fixture-dep.ts', ${codeFile}, 3, '../core/fixture-dep.ts', ${sha('records/fixture-graph.ts')}, ${scanId}),
@@ -208,9 +208,9 @@ describe('the rollback', () => {
         expect(await migrateDown(r.sql, plan(), 1)).toEqual([MIGRATION]);
         const [gone] = await r.sql<{ n: number }[]>`select count(*)::int as n from pg_class where relname in ('graph_nodes', 'indexed_files') and relnamespace = 'public'::regnamespace`;
         expect(gone!.n).toBe(0);
-        // The role is cluster-wide and stays (as xyp_tasks does); it loses the schema with the objects.
-        const [role] = await r.sql<{ usage: boolean }[]>`select has_schema_privilege('xyp_indexer', 'public', 'usage') as usage`;
-        expect(role!.usage).toBe(false);
+        // The role is cluster-wide and stays (as xyp_tasks does); it loses what the migration granted it.
+        const [role] = await r.sql<{ reads: boolean }[]>`select has_column_privilege('xyp_indexer', 'public.sources', 'checksum_sha256', 'select') as reads`;
+        expect(role!.reads).toBe(false);
         expect(await migrateUp(r.sql, plan())).toEqual([MIGRATION]);
       }
       const [back] = await r.sql<{ n: number }[]>`select count(*)::int as n from graph_nodes`;
