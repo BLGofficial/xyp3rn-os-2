@@ -223,6 +223,9 @@ describe('the scan writes what files declare', () => {
     ]);
     const [agent] = await db.sql<{ owner_domain: string }[]>`select owner_domain::text from graph_nodes where id = 'agent:fixture-retriever'`;
     expect(agent).toEqual({ owner_domain: 'CORE' });
+    // Stored as a JSON object, not a JSON string holding one.
+    const [detail] = await db.sql<{ t: string; cls: string }[]>`select jsonb_typeof(detail) as t, detail->>'class' as cls from index_nodes where id = 'agent:fixture-retriever'`;
+    expect(detail).toEqual({ t: 'object', cls: 'Knowledge' });
   });
 
   it('replaces a changed file\'s declarations and drops a vanished file\'s', async () => {
