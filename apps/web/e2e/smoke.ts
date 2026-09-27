@@ -28,7 +28,9 @@ import { FAKE_KEYS, fakeModel } from '../../../tests/helpers/fake-llm.ts';
 // to completion in this process (FAKE MODEL, stubbed page; the server has no key) and linked to the song →
 // /research lists it → the run page shows the quote → accept → the library shows canonical: none → promote
 // → pending → approve → promoted → the song's Research section → a brief with no specialist picked is refused
-// → a brief no specialist matches runs in the background and ends success. Prints one line per checked step;
+// → a brief no specialist matches runs in the background and ends success. AOS-04 Plan B: the Sofia clock
+// synced to /api/time, the four metric cards, aria-current, reduced motion, the drawer at 1024 px, no sideways
+// scroll at 390 px, and (with a screenshot dir) four viewports + 200% zoom. Prints one line per checked step;
 // exits 1 on the first failure.
 
 const PORT = 3199;
@@ -348,6 +350,71 @@ try {
   }
   check((await page.locator('p.meta .status-success').count()) === 1, 'a brief no specialist matches opens, runs in the background of next start, and ends success with no specialist selected');
   await shot(page, '12-research-empty');
+
+  // AOS-04 Plan B: the Mercury shell. The clock, the metric strip, navigation, the drawer, 390 px, reduced motion.
+  await page.goto(`${BASE}/`);
+  await page.waitForSelector('[data-sync="server-synced"]', { timeout: 15_000 });
+  const clock = (await page.textContent('header')) ?? '';
+  check(clock.includes('Sofia, BG') && /\d{2}:\d{2}:\d{2}/.test(clock) && clock.includes('Server-synced'), 'the top bar shows the Sofia clock, synced to the server (Server-synced)');
+  const t = await page.request.get(`${BASE}/api/time`);
+  const epoch = ((await t.json()) as { epochMs: number }).epochMs;
+  check(t.status() === 200 && Math.abs(epoch - Date.now()) < 60_000 && (await fetch(`${BASE}/api/time`)).status === 401, '/api/time answers the session with the server clock, and nobody else (401)');
+  const cards = page.locator('[data-metric]');
+  check((await cards.count()) === 4, 'the metric strip has four cards');
+  for (let i = 0; i < 4; i++) {
+    const text = (await cards.nth(i).textContent()) ?? '';
+    check(text.includes('source:') && (await cards.nth(i).locator('time').count()) > 0 && !/unavailable/.test(text), `metric card ${i + 1} names its source and as-of time (${text.slice(0, 40)}…)`);
+  }
+  const [active] = await db.sql<{ n: number }[]>`select count(*)::int as n from current_songs where status::text in ('idea', 'writing', 'producing', 'releasing')`;
+  const shown = Number(((await page.textContent('[data-metric="activeSongs"] p.num')) ?? '').trim().split(/\s/)[0]);
+  check(shown === active!.n, `Active songs shows what the database holds at that moment (${shown} = ${active!.n})`);
+  check((await page.textContent('nav[aria-label="Primary"] a[aria-current="page"]'))?.trim() === 'Command', 'the rail marks the current page (aria-current)');
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const duration = await page.$eval('nav[aria-label="Primary"] a', (a) => getComputedStyle(a).transitionDuration);
+  check(duration === '0s', `with reduced motion, transitions are off (${duration})`);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto(`${BASE}/research`);
+  check(!(await page.isVisible('nav[aria-label="Primary"]')), 'at 1024 px the rail is folded away');
+  await page.click('button[aria-label="Open navigation"]');
+  await page.waitForSelector('dialog[open]');
+  check((await page.locator('dialog[open] a[aria-current="page"]').textContent())?.trim() === 'Research', 'the drawer opens with the current page marked');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog[open]', { state: 'detached' }).catch(() => undefined);
+  const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  check(!(await page.isVisible('dialog[open]')) && focused === 'Open navigation', 'Escape closes the drawer and focus returns to its button');
+
+  const narrow = [`/`, `/research`, `/research/runs/${opened.researchRunId}`, `/research/library`, `/songs/${songId}`, `/studio/packages/${packageId}`, `/studio`, `/vault`, `/releases`];
+  await page.setViewportSize({ width: 390, height: 844 });
+  const wide: string[] = [];
+  for (const path of narrow) {
+    await page.goto(`${BASE}${path}`);
+    const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+    if (sw! > iw!) wide.push(`${path} (${sw} > ${iw})`);
+  }
+  check(wide.length === 0, `at 390 px no page scrolls sideways (${wide.join(', ') || narrow.length + ' pages'})`);
+
+  if (shots) {
+    const views = [[1920, 1080], [1440, 900], [1024, 768], [390, 844]] as const;
+    const pages = [['command', '/'], ['research', '/research'], ['run', `/research/runs/${opened.researchRunId}`], ['library', '/research/library']] as const;
+    for (const [w, h] of views) {
+      await page.setViewportSize({ width: w, height: h });
+      for (const [name, path] of pages) {
+        await page.goto(`${BASE}${path}`);
+        await shot(page, `13-${name}-${w}x${h}`);
+      }
+    }
+    // 200% zoom, approximated by a 960×540 CSS viewport at device scale 2 (the pixels of a 1920×1080 screen).
+    const zoom = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 2, storageState: await page.context().storageState() });
+    const zp = await zoom.newPage();
+    for (const [name, path] of pages) {
+      await zp.goto(`${BASE}${path}`);
+      await shot(zp, `13-${name}-200pct`);
+    }
+    await zoom.close();
+  }
   console.log('smoke: all checks passed');
 } catch (e) {
   console.error((e as Error).message);
