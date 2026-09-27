@@ -34,7 +34,8 @@ beforeAll(async () => {
   }
   // Workflow runs: one running, one finished.
   for (const status of ['running', 'success'] as const) {
-    await db.sql`insert into workflow_runs (workflow_name, spec_sha256, spec, input, status) values ('[FIXTURE] flow', ${'a'.repeat(64)}, '{}', '{}', ${status})`;
+    await db.sql`insert into workflow_runs (workflow_name, spec_sha256, spec, input, status, completed_at)
+                 values ('[FIXTURE] flow', ${'a'.repeat(64)}, '{}', '{}', ${status}, ${status === 'running' ? null : new Date()})`;
   }
   // A research run left open (running) and its brief (open).
   await openResearch(deps, { projectSlug: 'shell', question: '[FIXTURE] What should we eat tonight?' });
