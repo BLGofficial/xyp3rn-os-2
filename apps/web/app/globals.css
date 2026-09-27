@@ -50,8 +50,11 @@
   border-color: currentColor;
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
-.status-approved, .status-success, .status-released, .status-done, .status-live, .status-promoted, .status-accepted { color: theme('colors.ok'); }
-.status-approved::before, .status-success::before, .status-released::before, .status-done::before, .status-live::before, .status-promoted::before, .status-accepted::before { content: '✓' / ''; }
+.status-approved, .status-success, .status-released, .status-done, .status-live, .status-promoted { color: theme('colors.ok'); }
+.status-approved::before, .status-success::before, .status-released::before, .status-done::before, .status-live::before, .status-promoted::before { content: '✓' / ''; }
+/* Accepted in the Findings Library is not canonical (§15.4): its own colour, never the promoted green. */
+.status-accepted { color: theme('colors.info'); }
+.status-accepted::before { content: '◆' / ''; }
 .status-scheduled, .status-candidate, .status-pending_approval, .status-proposed, .status-warning { color: theme('colors.warn'); }
 .status-scheduled::before, .status-candidate::before, .status-pending_approval::before, .status-proposed::before, .status-warning::before { content: '!' / ''; }
 .status-error, .status-rejected, .status-blocked, .status-failed { color: theme('colors.fail'); }

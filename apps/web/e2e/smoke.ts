@@ -315,7 +315,7 @@ try {
   await submit(page, promote, 'article .status-candidate');
   check(true, 'promoting it makes a candidate (the gate queues it for the owner)');
   await page.goto(`${BASE}/research/runs/${opened.researchRunId}`);
-  check((await page.locator('.status-pending_approval').count()) === 1, 'the run page shows the canonical approval pending');
+  check((await page.locator('article .status-pending_approval').count()) === 1, 'the run page shows the canonical approval pending on the finding');
   await page.fill('form:has(button[value=approve]) input[name=reason]', 'make it canonical');
   await approveIn(page, page.locator('form:has(button[value=approve])'), '.status-promoted');
   await page.goto(`${BASE}/research/library`);

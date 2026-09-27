@@ -110,9 +110,26 @@ export const ApprovalForm = ({ approvalId, back }: { approvalId: string; back: s
   </form>
 );
 
-// Refreshes a running run's page without a client framework. A meta refresh would reset a half-typed
-// reason, so the run page renders this only while nothing on it takes input (running, no finding yet).
+// The run page's no-JS fallback for RunRefresh (a meta refresh, rendered inside <noscript> only while the
+// run is running and has no finding yet, so it can't reset a half-typed reason).
 export const AutoRefresh = ({ seconds }: { seconds: number }) => <meta httpEquiv="refresh" content={String(seconds)} />;
+
+/** The workbench's words for how a specialist's step ended (§17); each is also a status class. */
+export const OUTCOME: Readonly<Record<string, { readonly word: string; readonly cls: string }>> = {
+  running: { word: 'Running', cls: 'status-running' },
+  completed: { word: 'Completed', cls: 'status-success' },
+  'no-sources': { word: 'No sources', cls: 'status-none' },
+  declined: { word: 'Declined', cls: 'status-warning' },
+  failed: { word: 'Failed', cls: 'status-failed' },
+  'timed-out': { word: 'Timed out', cls: 'status-failed' },
+};
+
+/** Elapsed time from recorded timestamps: `1 h 02 min`, `3 min 05 s`, `12 s`. */
+export const elapsed = (ms: number): string => {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const [h, m, sec] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60];
+  return h > 0 ? `${h} h ${String(m).padStart(2, '0')} min` : m > 0 ? `${m} min ${String(sec).padStart(2, '0')} s` : `${sec} s`;
+};
 
 type ResearchOf = {
   readonly briefs: readonly { questionId: string; question: string; latestRun: { id: string; status: string } | null }[];
