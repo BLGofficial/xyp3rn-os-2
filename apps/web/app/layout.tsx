@@ -1,3 +1,4 @@
+import './fonts.css';
 import './globals.css';
 import { logout } from './actions';
 
