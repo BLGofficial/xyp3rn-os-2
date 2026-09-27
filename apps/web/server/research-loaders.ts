@@ -38,15 +38,21 @@ export type FindingRow = {
   readonly decision: { readonly decision: 'accept' | 'reject'; readonly by: string; readonly at: string; readonly reason: string } | null;
   readonly candidates: readonly { readonly id: string; readonly status: string; readonly approvalId: string | null; readonly approvalStatus: string | null }[];
 };
+/** How a specialist's step ended, in words the workbench keeps apart (§17). */
+export type Outcome = 'running' | 'completed' | 'no-sources' | 'declined' | 'failed' | 'timed-out';
 export type AgentOutcome = {
-  readonly specialist: string; readonly status: string; readonly error: string | null; readonly declined: readonly { readonly claim?: string; readonly reason: string }[];
-  readonly failedUrls: readonly { readonly url: string; readonly reason: string }[]; readonly passages: number | null;
+  readonly specialist: string; readonly status: string; readonly outcome: Outcome; readonly error: string | null;
+  readonly declined: readonly { readonly claim?: string; readonly reason: string }[];
+  readonly failedUrls: readonly { readonly url: string; readonly reason: string }[]; readonly passages: number | null; readonly evidenceCount: number;
 };
 export type RunDetail = {
   readonly run: {
     readonly id: string; readonly status: string; readonly error: string | null; readonly createdAt: string; readonly completedAt: string | null;
     readonly expiresAt: string; readonly selection: unknown; readonly selected: readonly string[];
+    /** From the recorded start to the recorded end, or to `asOf` while running; never an estimate. */
+    readonly elapsedMs: number;
   };
+  readonly asOf: string;
   readonly brief: BriefRow; readonly outcomes: readonly AgentOutcome[]; readonly evidence: readonly EvidenceRow[];
   readonly topics: readonly { readonly topic: string; readonly findings: readonly FindingRow[] }[]; readonly unsynthesized: readonly EvidenceRow[];
 };
@@ -108,9 +114,17 @@ const rosterOf = (registry: AgentRegistry) =>
  * @param registry - the agent registry (the specialists and their scopes)
  * @returns the Research index
  */
-export const researchIndex = (sql: Sql, registry: AgentRegistry) =>
+export type BriefFilter = { readonly status?: string; readonly kind?: string; readonly target?: string };
+
+export const researchIndex = (sql: Sql, registry: AgentRegistry, filter: BriefFilter = {}) =>
   asWeb(sql, async (tx) => {
-    const briefs = await briefsOf(tx, tx`true`);
+    // The latest run's status and a live target, both optional (§17's list filters).
+    const briefs = await briefsOf(tx, tx`
+      (${filter.status ?? null}::text is null or r.status::text = ${filter.status ?? null})
+      and (${filter.kind ?? null}::text is null and ${filter.target ?? null}::text is null
+           or exists (select from research_targets t where t.question_id = q.id
+                       and (${filter.kind ?? null}::text is null or t.kind = ${filter.kind ?? null})
+                       and (${filter.target ?? null}::text is null or t.target = ${filter.target ?? null})))`);
     const songs = await tx<{ id: string; title: string }[]>`select id, title from current_songs order by title, id`;
     const lineages = await tx<{ id: string; name: string | null; schema_id: string }[]>`
       select a.id, a.body->>'name' as name, a.schema_id from creative_artifacts a
@@ -139,7 +153,7 @@ export const previewSelection = (registry: AgentRegistry, question: string): Sel
 
 type RunDb = {
   id: string; question_id: string; status: string; error_detail: string | null; created_at: Date; completed_at: Date | null; expires_at: Date;
-  selection: unknown; selected: string[];
+  selection: unknown; selected: string[]; as_of: Date;
 };
 type EvidenceDb = {
   id: string; specialist: string; claim: string; quote: string | null; claim_topic: string | null; claim_value: unknown; model_tag: string; confidence: string;
@@ -149,7 +163,18 @@ type FindingDb = {
   id: string; claim: string; claim_topic: string; claim_value: unknown; model_tag: string; confidence: string; evidence_ids: string[];
   decision: 'accept' | 'reject' | null; decided_by: string | null; decided_at: Date | null; decision_reason: string | null;
 };
-type OutcomeDb = { agent_name: string; status: string; error_detail: string | null; result: { declined?: AgentOutcome['declined']; failedUrls?: AgentOutcome['failedUrls']; passages?: number } | null };
+type OutcomeDb = {
+  agent_name: string; status: string; error_detail: string | null;
+  result: { declined?: AgentOutcome['declined']; failedUrls?: AgentOutcome['failedUrls']; passages?: number; evidenceIds?: string[] } | null;
+};
+
+// A dispatch timeout is recorded as `timeout after <n>ms` (core/orchestrator/dispatch.ts).
+const outcomeOf = (o: OutcomeDb): Outcome =>
+  o.status === 'pending' ? 'running'
+    : o.status === 'error' ? (o.error_detail?.startsWith('timeout after') ? 'timed-out' : 'failed')
+      : o.result?.passages === 0 ? 'no-sources'
+        : (o.result?.evidenceIds?.length ?? 0) === 0 && (o.result?.declined?.length ?? 0) > 0 ? 'declined'
+          : 'completed';
 
 /**
  * /research/runs/[id]: the run workbench.
@@ -161,7 +186,7 @@ export const runDetail = async (sql: Sql, runId: string): Promise<RunDetail | nu
   if (!UUID.test(runId)) return null;
   return asWeb(sql, async (tx) => {
     const [r] = await tx<RunDb[]>`
-      select id, question_id, status::text, error_detail, created_at, completed_at, expires_at, selection, selected_specialists as selected
+      select id, question_id, status::text, error_detail, created_at, completed_at, expires_at, selection, selected_specialists as selected, now() as as_of
       from research_runs where id = ${runId}`;
     if (!r) return null;
     const [brief] = await briefsOf(tx, tx`q.id = ${r.question_id}`, 1);
@@ -204,13 +229,15 @@ export const runDetail = async (sql: Sql, runId: string): Promise<RunDetail | nu
     return {
       run: {
         id: r.id, status: r.status, error: r.error_detail, createdAt: r.created_at.toISOString(), completedAt: iso(r.completed_at), expiresAt: r.expires_at.toISOString(),
-        selection: r.selection, selected: r.selected,
+        selection: r.selection, selected: r.selected, elapsedMs: (r.completed_at ?? r.as_of).getTime() - r.created_at.getTime(),
       },
+      asOf: r.as_of.toISOString(),
       brief: brief!,
       // A specialist still running shows as agent_runs 'pending'.
       outcomes: outcomes.map((o) => ({
-        specialist: o.agent_name, status: o.status === 'pending' ? 'running' : o.status, error: o.error_detail,
+        specialist: o.agent_name, status: o.status === 'pending' ? 'running' : o.status, outcome: outcomeOf(o), error: o.error_detail,
         declined: o.result?.declined ?? [], failedUrls: o.result?.failedUrls ?? [], passages: o.result?.passages ?? null,
+        evidenceCount: o.result?.evidenceIds?.length ?? 0,
       })),
       evidence,
       topics,
@@ -249,15 +276,16 @@ const libraryOf = async (tx: postgres.TransactionSql, where: postgres.PendingQue
 /**
  * /research/library: the findings the owner accepted, optionally only those whose brief links a target.
  * @param sql - the app's pool
- * @param filter - `kind` (song | lineage | workflow | decision) and/or `target` (its id, name@sha or key)
+ * @param filter - `kind` (song | lineage | workflow | decision) and/or `target` (its id, name@sha or key); `topic` (exact)
  * @returns the library rows, newest decision first
  */
-export const library = (sql: Sql, filter: { readonly kind?: string; readonly target?: string } = {}) =>
-  asWeb(sql, (tx) => libraryOf(tx, filter.kind || filter.target
-    ? tx`exists (select from research_targets t where t.question_id = fl.question_id
-                  and (${filter.kind ?? null}::text is null or t.kind = ${filter.kind ?? null})
-                  and (${filter.target ?? null}::text is null or t.target = ${filter.target ?? null}))`
-    : tx`true`));
+export const library = (sql: Sql, filter: { readonly kind?: string; readonly target?: string; readonly topic?: string } = {}) =>
+  asWeb(sql, (tx) => libraryOf(tx, tx`
+    (${filter.topic ?? null}::text is null or fl.claim_topic = ${filter.topic ?? null})
+    and (${filter.kind ?? null}::text is null and ${filter.target ?? null}::text is null
+         or exists (select from research_targets t where t.question_id = fl.question_id
+                     and (${filter.kind ?? null}::text is null or t.kind = ${filter.kind ?? null})
+                     and (${filter.target ?? null}::text is null or t.target = ${filter.target ?? null})))`));
 
 /**
  * The Research section of a song page or a recipe/tag set page: the briefs that link it and their library findings.
