@@ -1,10 +1,12 @@
+import { sofiaStamp } from '../lib/clock.ts';
+
 // Small presentational pieces shared by the screens. Server components only.
 
 export const ErrorBanner = ({ error }: { error?: string | string[] | undefined }) =>
   typeof error === 'string' && error !== '' ? <p className="error" role="alert">{error}</p> : null;
 
-/** Every figure shows its time: UTC, to the second. */
-export const Time = ({ at }: { at: string | null }) => (at ? <time dateTime={at}>{at.replace('T', ' ').slice(0, 19)}Z</time> : <span>—</span>);
+/** Every figure shows its time, to the second: Sofia wall time with its offset (§19); UTC on hover. */
+export const Time = ({ at }: { at: string | null }) => (at ? <time dateTime={at} title={`UTC ${at}`}>{sofiaStamp(Date.parse(at))}</time> : <span>—</span>);
 
 export const Status = ({ status }: { status: string }) => <span className={`status-${status}`}>{status}</span>;
 

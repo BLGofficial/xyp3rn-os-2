@@ -61,6 +61,15 @@
 .status-none, .status-cancelled, .status-unknown { color: theme('colors.unknown'); }
 .status-none::before, .status-cancelled::before, .status-unknown::before { content: '○' / ''; }
 .status-cancelled { text-decoration: line-through; }
+/* The system pulse's states (shell-loaders pulse): what was checked, never more. */
+.status-ok { color: theme('colors.ok'); }
+.status-ok::before { content: '✓' / ''; }
+.status-configured { color: theme('colors.info'); }
+.status-configured::before { content: '•' / ''; }
+.status-not-configured { color: theme('colors.unknown'); }
+.status-not-configured::before { content: '○' / ''; }
+.status-unavailable { color: theme('colors.warn'); }
+.status-unavailable::before { content: '!' / ''; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation: none !important; scroll-behavior: auto !important; }

@@ -32,6 +32,19 @@ export const sofiaParts = (epochMs: number): SofiaParts => {
   };
 };
 
+const YMD = new Intl.DateTimeFormat('en-CA', { timeZone: SOFIA_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+
+/**
+ * An event's timestamp in Sofia time (§19): `YYYY-MM-DD HH:mm:ss +HH:MM`, the offset being the one in force
+ * at that instant. Shared by the server-rendered <Time> and the clock.
+ * @param epochMs - an instant
+ * @returns the Sofia wall time with its UTC offset
+ */
+export const sofiaStamp = (epochMs: number): string => {
+  const p = sofiaParts(epochMs);
+  return `${YMD.format(new Date(epochMs))} ${p.time} ${p.offset.replace(/^GMT/, '') || '+00:00'}`;
+};
+
 export type Sample = { readonly offsetMs: number; readonly rttMs: number };
 
 /**

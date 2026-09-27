@@ -98,7 +98,7 @@ export const pulse = async (sql: Sql, env: Readonly<Record<string, string | unde
   const rows: PulseRow[] = [];
   try {
     const [t] = await asWeb(sql, (tx) => tx<{ now: Date }[]>`select now()`);
-    rows.push({ label: 'Database', state: 'ok', detail: `answered a query at ${t!.now.toISOString()}`, asOf: t!.now.toISOString() });
+    rows.push({ label: 'Database', state: 'ok', detail: 'answered a query', asOf: t!.now.toISOString() });
   } catch (e) {
     rows.push({ label: 'Database', state: 'unavailable', detail: message(e), asOf: now() });
   }
