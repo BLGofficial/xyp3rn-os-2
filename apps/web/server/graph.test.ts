@@ -15,7 +15,7 @@ import { createLocalVaultStore } from '../../../knowledge/source-registry/vault-
 import { createTestDb, REPO_ROOT, type TestDb } from '../../../tests/helpers/db.ts';
 import { FAKE_KEYS, fakeModel } from '../../../tests/helpers/fake-llm.ts';
 import { asCommitted, insertRun } from '../../../tests/helpers/records-fixture.ts';
-import { coverage, lensGroups, listNodes, neighbourhood, nodeDetail } from './graph-loaders.ts';
+import { coverage, lensGroups, listNodes, neighbourhood, nodeDetail, search } from './graph-loaders.ts';
 import { songCreate, songLink, songUnlink } from './ops.ts';
 import { runDetail } from './research-loaders.ts';
 import { startBrief } from './research-ops.ts';
@@ -220,6 +220,46 @@ describe('neighbourhood, coverage and the creative lens', () => {
     expect(l.anchor).toBeNull();
     const songs = await all({ lens: 'creative', group: 'songs' });
     expect(songs.map((n) => n.id)).toEqual([`songs:${songId}`]);
+  });
+});
+
+describe('search (§16)', () => {
+  beforeAll(async () => {
+    for (let i = 0; i < 60; i++) put(`docs/filler-${String(i).padStart(2, '0')}.md`, `[FIXTURE] filler ${i}\n`);
+    put('zz/deep/needle-file.ts', 'export const needle = 1;\n');
+    put('docs/100%-sure.md', '[FIXTURE]\n');
+    put('docs/snake_case.md', '[FIXTURE]\n');
+    put('.env', 'SECRET=[FIXTURE]\n');
+    expect((await scanRoots(db.sql, { roots: [{ id: 'repo', dir: root }], trigger: 'cli', store: createLocalVaultStore(vaultDir) })).status).toBe('success');
+  }, 60_000);
+
+  it('searches the whole index, not a page of it', async () => {
+    const first = await listNodes(db.sql, { perPage: 50 });
+    expect(first.nodes.map((n) => n.id)).not.toContain('file:repo/zz/deep/needle-file.ts');
+    const r = await search(db.sql, 'needle');
+    expect(r.groups).toEqual([expect.objectContaining({ kind: 'file', total: 1, hits: [expect.objectContaining({ id: 'file:repo/zz/deep/needle-file.ts', path: 'zz/deep/needle-file.ts', domain: null, revision: sha('export const needle = 1;\n') })] })]);
+    expect(r.groups[0]!.hits[0]!.href).toMatch(/^\/\?node=/);
+  });
+
+  it('groups results by type with totals, capped per group', async () => {
+    const r = await search(db.sql, 'fixture');
+    const kinds = r.groups.map((g) => g.kind);
+    expect(kinds).toEqual(expect.arrayContaining(['agent', 'file', 'workflow', 'song']));
+    const files = r.groups.find((g) => g.kind === 'file')!;
+    expect(files.hits.length).toBeLessThanOrEqual(8);
+    expect(files.total).toBeGreaterThanOrEqual(files.hits.length);
+    const filler = await search(db.sql, 'filler');
+    expect(filler.groups[0]).toMatchObject({ kind: 'file', total: 60 });
+    expect(filler.groups[0]!.hits).toHaveLength(8);
+  });
+
+  it('matches % and _ literally, never names an excluded file, and returns no group for no match', async () => {
+    expect((await search(db.sql, '%')).groups.flatMap((g) => g.hits.map((h) => h.id))).toEqual(['file:repo/docs/100%-sure.md']);
+    expect((await search(db.sql, 'e_c')).groups).toEqual([]);
+    expect((await search(db.sql, 'snake_')).groups.flatMap((g) => g.hits.map((h) => h.id))).toEqual(['file:repo/docs/snake_case.md']);
+    expect((await search(db.sql, '.env')).groups).toEqual([]);
+    expect((await search(db.sql, 'no such thing anywhere')).groups).toEqual([]);
+    expect((await search(db.sql, '   ')).groups).toEqual([]);
   });
 });
 
