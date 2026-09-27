@@ -145,6 +145,11 @@ describe('loaders: read as xyp_web, read only', () => {
 // AOS-04 Plan C1 Task 9 (§15.2 item 5): a Vault file is Saved the moment its row exists and Indexed for Vault
 // search once vault_embeddings holds it. A fake 384-d embedder stands in for the model (marked [FAKE] by its name).
 describe('Saved vs Indexed', () => {
+  let fileId: string;
+  beforeAll(async () => {
+    const [f] = await uploadFiles(deps, [{ name: 'saved-vs-indexed.md', bytes: enc('# [FIXTURE] saved vs indexed\n') }], {});
+    fileId = f!.file.sourceId;
+  });
   const fake = { model: '[FAKE] test-embedder', embed: async (texts: readonly string[]) => texts.map(() => ({ vector: Array.from({ length: 384 }, (_, i) => (i === 0 ? 1 : 0)), tokens: 1, truncated: false })) };
 
   it('is saved and not indexed until the Vault index runs, then indexed with its model and time', async () => {

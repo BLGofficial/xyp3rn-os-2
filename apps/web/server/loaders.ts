@@ -88,6 +88,8 @@ export type FileDetail = FileRow & {
   readonly sha256: string; readonly mimeType: string | null; readonly byteSize: number | null; readonly filename: string | null;
   readonly text: string | null; readonly extractor: string | null; readonly uri: string;
   readonly run: { readonly id: string; readonly agentName: string; readonly status: string; readonly createdAt: string } | null;
+  /** Indexed for Vault search (AOS-04 Plan C1): the latest vault_embeddings row's model and time, or null when not yet. */
+  readonly indexed: { readonly model: string; readonly at: string } | null;
 };
 
 /**
@@ -103,12 +105,15 @@ export const fileDetail = (sql: Sql, id: string): Promise<FileDetail | null> =>
       id: string; title: string; media_class: string; language: string | null; created_at: Date; checksum_sha256: string; mime_type: string | null;
       byte_size: string | null; metadata: { filename?: string }; uri: string; text: string | null; extractor: string | null; tags: string[];
       run_id: string | null; agent_name: string | null; run_status: string | null; run_created_at: Date | null;
+      indexed_model: string | null; indexed_at: Date | null;
     }[]>`
       select s.id, s.title, s.media_class, s.language, s.created_at, s.checksum_sha256, s.mime_type, s.byte_size::text, s.metadata, s.uri,
              t.text, t.extractor,
              array(select g.slug from source_tags st join tags g on g.id = st.tag_id where st.source_id = s.id order by g.slug) as tags,
-             r.id as run_id, r.agent_name, r.status::text as run_status, r.created_at as run_created_at
+             r.id as run_id, r.agent_name, r.status::text as run_status, r.created_at as run_created_at,
+             v.model as indexed_model, v.updated_at as indexed_at
       from sources s left join source_texts t on t.source_id = s.id left join agent_runs r on r.id = s.agent_run_id
+      left join lateral (select model, updated_at from vault_embeddings v where v.entity_kind = 'source' and v.entity_id = s.id order by updated_at desc limit 1) v on true
       where s.id = ${id} and s.storage is not null`;
     if (!r) return null;
     const songs = await songsByTarget(tx, [r.id]);
@@ -117,6 +122,7 @@ export const fileDetail = (sql: Sql, id: string): Promise<FileDetail | null> =>
       sha256: r.checksum_sha256, mimeType: r.mime_type, byteSize: r.byte_size === null ? null : Number(r.byte_size), filename: r.metadata.filename ?? null,
       text: r.text, extractor: r.extractor, uri: r.uri,
       run: r.run_id ? { id: r.run_id, agentName: r.agent_name!, status: r.run_status!, createdAt: r.run_created_at!.toISOString() } : null,
+      indexed: r.indexed_model ? { model: r.indexed_model, at: r.indexed_at!.toISOString() } : null,
     };
   });
 

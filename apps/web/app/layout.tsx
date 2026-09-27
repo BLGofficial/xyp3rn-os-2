@@ -8,7 +8,7 @@ import { SofiaClock } from './shell/sofia-clock';
 
 export const metadata = { title: 'XYP3RN Mercury · Artist OS' };
 
-// The Mercury shell (AOS-04 design §13): top bar (mark, Vault search, Sofia clock, identity), the left rail
+// The Mercury shell (AOS-04 design §13): top bar (mark, search everything, Sofia clock, identity), the left rail
 // (a drawer below 1280 px), and the page. A page adds its own right rail with <WithRail>. The inline script
 // marks JS as available before first paint, so the rail only collapses into the drawer when the drawer works.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -30,11 +30,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span className="text-[11px] uppercase tracking-[0.08em] text-ink-3">Mercury</span>
               </span>
             </a>
-            <form action="/vault" method="get" role="search" className="mx-auto hidden w-full max-w-xl md:block">
+            <form action="/search" method="get" role="search" className="mx-auto hidden w-full max-w-xl md:block">
               <label className="relative block">
-                <span className="sr-only">Search the Vault</span>
+                <span className="sr-only">Search everything</span>
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"><Icon name="search" className="h-4 w-4" /></span>
-                <input name="q" type="search" placeholder="Search the Vault: lyrics, notes, findings…" title="Searches the Creative Vault. Search across every file arrives with the Plan C index." className="w-full pl-9" />
+                <input name="q" type="search" placeholder="Search everything: files, songs, agents, decisions…" title="Searches the whole index by title and path. The Vault page keeps its own search of Vault contents." className="w-full pl-9" />
               </label>
             </form>
             <div className="ml-auto flex items-center gap-4">

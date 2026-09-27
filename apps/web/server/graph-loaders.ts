@@ -83,3 +83,19 @@ export const search = (sql: Sql, q: string) =>
       })),
     };
   });
+
+/**
+ * @param sql - the app's pool
+ * @param limit - how many
+ * @returns the references that prove nothing (unresolved) or point at no node (dangling), by where they are
+ */
+export const diagnostics = (sql: Sql, limit = 200) =>
+  asWeb(sql, async (tx) => (await tx<{ id: string; problem: string; relation: string; from_id: string | null; to_id: string | null; detail: string | null; source_ref: string }[]>`
+    select id, problem, relation, from_id, to_id, detail, source_ref from graph_diagnostics order by source_ref, id limit ${limit}`).map((d) => ({
+    id: d.id, problem: d.problem, relation: d.relation, fromId: d.from_id, toId: d.to_id, detail: d.detail, sourceRef: d.source_ref,
+  })));
+
+/** @returns indexed files the last scans could not read, with the error each one gave */
+export const unreadableFiles = (sql: Sql) =>
+  asWeb(sql, async (tx) => (await tx<{ id: string; path: string; error: string; indexed_at: Date }[]>`
+    select id, path, error, indexed_at from indexed_files where status = 'unreadable' order by path`).map((f) => ({ id: f.id, path: f.path, error: f.error, indexedAt: f.indexed_at.toISOString() })));

@@ -1,5 +1,6 @@
 import type { Domain } from '../../../core/contracts/taxonomy.ts';
-import { Icon, type IconName } from './shell/icons';
+import { DOMAIN_STYLE } from './shell/domains';
+import { Icon } from './shell/icons';
 import { ScrollTable, Time } from './ui';
 
 // The graph's shared pieces (AOS-04 Plan C1, design §13–16): domain chips (colour + label + icon, never colour
@@ -13,17 +14,6 @@ type Node = {
 type Conn = {
   readonly id: string; readonly relation: string; readonly direction: 'out' | 'in'; readonly other: Node; readonly provenance: string;
   readonly revision: string | null; readonly detail: string | null; readonly origin: string; readonly verification: string; readonly note: string | null;
-};
-
-/** Literal class names (Tailwind scans source): canonical hue for the rim, the bright variant for the label. */
-export const DOMAIN_STYLE: Readonly<Record<Domain | 'shared', { readonly label: string; readonly cls: string; readonly icon: IconName }>> = {
-  CORE: { label: 'Core', cls: 'border-core text-core-label', icon: 'hexagon' },
-  KNOWLEDGE: { label: 'Knowledge', cls: 'border-knowledge text-knowledge-label', icon: 'book' },
-  RESEARCH_INTELLIGENCE: { label: 'Research Intelligence', cls: 'border-research text-research-label', icon: 'research' },
-  RECORDS: { label: 'Records', cls: 'border-records text-records-label', icon: 'note' },
-  TECH: { label: 'Tech', cls: 'border-tech text-tech-label', icon: 'circuit' },
-  GOVERNANCE: { label: 'Governance', cls: 'border-governance text-governance-label', icon: 'shield' },
-  shared: { label: 'Shared/Unassigned', cls: 'border-control text-ink-2', icon: 'shared' },
 };
 
 export const DomainChip = ({ domain }: { domain: Domain | null }) => {
@@ -71,11 +61,11 @@ export const relationWord = (c: { relation: string; direction: 'out' | 'in' }) =
   (c.direction === 'out' ? RELATION_OUT : RELATION_IN)[c.relation] ?? `${c.relation}${c.direction === 'in' ? ' (incoming)' : ''}`;
 
 /** Every connection with its proof: the row or file line, the revision, and what the edge carries (a quote, a specifier). */
-export const Connections = ({ label, connections }: { label: string; connections: readonly Conn[] }) => (
+export const Connections = ({ label, connections, limit, more }: { label: string; connections: readonly Conn[]; limit?: number; more?: string }) => (
   <ScrollTable label={label}>
     <thead><tr><th>Relation</th><th>Connected to</th><th>Why connected?</th></tr></thead>
     <tbody>
-      {connections.map((c) => (
+      {(limit ? connections.slice(0, limit) : connections).map((c) => (
         <tr key={`${c.direction}:${c.id}`}>
           <td>{relationWord(c)}</td>
           <td><NodeLink node={c.other} /> <DomainChip domain={c.other.ownerDomain} /></td>
@@ -93,8 +83,109 @@ export const Connections = ({ label, connections }: { label: string; connections
         </tr>
       ))}
       {connections.length === 0 && <tr><td colSpan={3} className="meta">none</td></tr>}
+      {limit && connections.length > limit && <tr><td colSpan={3} className="meta">{connections.length - limit} more: {more ? <a href={more}>see them all</a> : 'open the full detail'}</td></tr>}
     </tbody>
   </ScrollTable>
 );
 
-export { Time };
+
+type Detail = {
+  readonly node: Node & { readonly ownershipBasis: string; readonly sourceRef: string; readonly revision: string | null; readonly asOf: string };
+  readonly outgoing: readonly Conn[]; readonly incoming: readonly Conn[];
+  readonly inherited: readonly { readonly label: string; readonly brief: Node; readonly targetId: string; readonly target: Node | null }[];
+  readonly history: readonly { readonly linkTable: string; readonly linkId: string; readonly toId: string; readonly fromId: string; readonly reason: string; readonly linkedAt: string; readonly retractedAt: string }[];
+  readonly diagnostics: readonly { readonly id: string; readonly problem: string; readonly relation: string; readonly detail: string | null; readonly sourceRef: string }[];
+};
+
+/**
+ * The inspector (§16): what the node is, where it comes from, and every connection with its proof. In the right
+ * rail on Command (`limit` caps the lists there) and full width on /node.
+ */
+export const Inspector = ({ d, limit, headingLevel = 2 }: { d: Detail; limit?: number; headingLevel?: 1 | 2 }) => {
+  const n = d.node;
+  const full = `/node?id=${encodeURIComponent(n.id)}`;
+  const H = headingLevel === 1 ? 'h1' : 'h2';
+  return (
+    <section className="card" aria-labelledby="inspector-h" data-inspector={n.id}>
+      <p className="meta">{kindWord(n.kind)} · {BACKING_WORD[n.backing] ?? n.backing}</p>
+      <H id="inspector-h" className="mt-1 break-words">{n.title}</H>
+      <p className="mt-2 flex flex-wrap items-center gap-2"><Availability value={n.availability} /> <DomainChip domain={n.ownerDomain} /> <span className="meta">owner by {n.ownershipBasis}</span></p>
+      <dl className="mt-3 grid gap-1 text-sm">
+        <div><dt className="meta inline">Source </dt><dd className="inline"><code className="break-all">{n.sourceRef}</code></dd></div>
+        <div><dt className="meta inline">Revision </dt><dd className="inline">{n.revision ? <code title={n.revision}>{n.revision.length > 16 ? `${n.revision.slice(0, 12)}…` : n.revision}</code> : '—'}</dd></div>
+        <div><dt className="meta inline">As of </dt><dd className="inline"><Time at={n.asOf} /></dd></div>
+      </dl>
+      <p className="mt-3 flex flex-wrap gap-3 text-sm">
+        <a href={n.href}>Open source</a>
+        {headingLevel === 2 ? <a href={full}>Full detail</a> : <a href={`/?node=${encodeURIComponent(n.id)}`}>Back to graph</a>}
+      </p>
+      <h3 className="mt-4 text-sm font-semibold">Connections out ({d.outgoing.length})</h3>
+      <Connections label={`Connections from ${n.title}`} connections={d.outgoing} {...(limit ? { limit, more: full } : {})} />
+      <h3 className="mt-4 text-sm font-semibold">Connections in ({d.incoming.length})</h3>
+      <Connections label={`Connections to ${n.title}`} connections={d.incoming} {...(limit ? { limit, more: full } : {})} />
+      {d.inherited.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-semibold">Inherited from brief</h3>
+          <ul className="mt-1 flex flex-col gap-1 text-sm">
+            {d.inherited.map((i) => (
+              <li key={i.targetId}>{i.target ? <NodeLink node={i.target} /> : <code>{i.targetId}</code>} <span className="meta">{i.label}: <a href={i.brief.href}>{i.brief.title}</a></span></li>
+            ))}
+          </ul>
+        </>
+      )}
+      {d.history.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-semibold">Unlinked (history)</h3>
+          <ul className="mt-1 flex flex-col gap-1 text-sm">
+            {d.history.map((h) => (
+              <li key={h.linkId}><code className="break-all">{h.fromId === n.id ? h.toId : h.fromId}</code> <span className="meta">linked <Time at={h.linkedAt} />, unlinked <Time at={h.retractedAt} />: {h.reason}</span></li>
+            ))}
+          </ul>
+        </>
+      )}
+      {d.diagnostics.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-semibold">Diagnostics</h3>
+          <ul className="mt-1 flex flex-col gap-1 text-sm">
+            {d.diagnostics.map((x) => (
+              <li key={x.id}><span className="status-warning">{x.problem}</span> {x.relation} <code className="break-all">{x.detail}</code> <span className="meta">at {x.sourceRef}</span></li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+};
+
+/** The graph as a list (the sphere's accessible equivalent): each row inspects on Command and opens its source. */
+export const GraphList = ({ nodes, inspect }: { nodes: readonly Node[]; inspect: (id: string) => string }) => (
+  <ScrollTable label="Graph entities">
+    <thead><tr><th>Kind</th><th>Title</th><th>Domain</th><th>Backing</th><th>Availability</th><th /></tr></thead>
+    <tbody>
+      {nodes.map((n) => (
+        <tr key={n.id}>
+          <td className="meta">{kindWord(n.kind)}</td>
+          <td className="break-all"><a href={inspect(n.id)} aria-label={`Inspect ${n.title}`}>{n.title}</a></td>
+          <td><DomainChip domain={n.ownerDomain} /></td>
+          <td>{BACKING_WORD[n.backing] ?? n.backing}</td>
+          <td><Availability value={n.availability} /></td>
+          <td><a href={n.href} className="text-sm" aria-label={`Open ${n.title}`}>Open</a></td>
+        </tr>
+      ))}
+      {nodes.length === 0 && <tr><td colSpan={6} className="meta">no entity matches this filter</td></tr>}
+    </tbody>
+  </ScrollTable>
+);
+
+export const Pager = ({ page, perPage, total, at }: { page: number; perPage: number; total: number; at: (page: number) => string }) => {
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  return (
+    <nav aria-label="Graph pages" className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+      {page > 1 ? <a href={at(page - 1)}>← Previous</a> : <span className="meta">← Previous</span>}
+      <span className="meta">page {page} of {pages} · {total} entities</span>
+      {page < pages ? <a href={at(page + 1)}>Next →</a> : <span className="meta">Next →</span>}
+    </nav>
+  );
+};
+
+export const LENS_HINT = 'The same entities as the System lens, grouped for the X3LIUS Music System. A group counts real members only.';
