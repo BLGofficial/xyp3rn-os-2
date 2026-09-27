@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import config from '../tailwind.config.mjs';
 
 // AOS-04 Plan B, Task 2 (design §14.3, decision M2): the three families are locally hosted from pinned OFL
 // packages, with font-display swap, Latin + Cyrillic where the family has it, a verified fallback where it
@@ -49,8 +49,10 @@ describe('the app wiring', () => {
     expect(css).not.toMatch(/https?:\/\//);
   });
 
-  it('the stacks are Inter for UI, Space Grotesk then Inter for headings (the Cyrillic fallback), Plex Mono for figures', () => {
-    const ff = (config as { theme: { extend: { fontFamily: Record<string, string[]> } } }).theme.extend.fontFamily;
+  it('the stacks are Inter for UI, Space Grotesk then Inter for headings (the Cyrillic fallback), Plex Mono for figures', async () => {
+    // A runtime import: the .mjs config has no type declarations.
+    const config = (await import(pathToFileURL(join(WEB, 'tailwind.config.mjs')).href)) as { default: { theme: { extend: { fontFamily: Record<string, string[]> } } } };
+    const ff = config.default.theme.extend.fontFamily;
     expect(ff.sans![0]).toBe('"Inter Variable"');
     expect(ff.display!.slice(0, 2)).toEqual(['"Space Grotesk Variable"', '"Inter Variable"']);
     expect(ff.mono![0]).toBe('"IBM Plex Mono"');
