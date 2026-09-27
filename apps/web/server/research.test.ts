@@ -107,6 +107,8 @@ describe('research ops and loaders (AOS-04 §8)', () => {
   it('filters the library by target; researchFor(song | lineage) lists the brief and its findings', async () => {
     expect(await library(db.sql, { kind: 'song', target: songId })).toHaveLength(1);
     expect(await library(db.sql, { kind: 'decision', target: 'F1' })).toHaveLength(0);
+    expect(await library(db.sql, { topic: 'suno.vocal-descriptor-position' })).toHaveLength(1);
+    expect(await library(db.sql, { topic: 'suno.meta-tag-position' })).toHaveLength(0);
     for (const t of [{ songId }, { lineageId: recipeLineageId }]) {
       const r = await researchFor(db.sql, t);
       expect(r.briefs.map((b) => b.latestRun?.id)).toEqual([runId]);
