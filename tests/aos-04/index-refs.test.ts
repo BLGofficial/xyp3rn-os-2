@@ -167,7 +167,8 @@ describe('the real repository (read-only)', () => {
       const d = declaredOf({ rootId: 'repo', rel, text: await readFile(join(dir, f), 'utf8'), owner: ownerOf(rel, null), files: new Set() });
       for (const n of d.nodes) declared.push({ name: n.id.slice('agent:'.length), domain: n.ownerDomain });
     }
-    expect(declared).toEqual(registry.agents.map((a) => ({ name: a.name, domain: a.domain })).sort((a, b) => a.name.localeCompare(b.name)));
+    const byName = (x: { name: string }, y: { name: string }) => x.name.localeCompare(y.name);
+    expect(declared.sort(byName)).toEqual(registry.agents.map((a) => ({ name: a.name, domain: a.domain })).sort(byName));
   });
 
   it('parses every workflow file into a workflow node with at least one step', async () => {

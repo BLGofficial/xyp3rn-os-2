@@ -4,6 +4,7 @@ import { join, sep } from 'node:path';
 import type postgres from 'postgres';
 import type { Sql } from '../../core/db/client.ts';
 import type { VaultStore } from '../source-registry/vault-store.ts';
+import { declaredOf, type DeclaredEdge, type DeclaredNode } from './declared.ts';
 import { declaredOwner, excludedBy, isText, mimeOf, ownerOf, TEXT_LIMIT, validIndexPath } from './scope.ts';
 
 /**
@@ -105,16 +106,79 @@ const walk = async (
   }
 };
 
-const insertRows = async (tx: postgres.TransactionSql, rows: readonly Row[]) => {
+const insertRows = async (tx: postgres.TransactionSql, rows: readonly Row[]): Promise<Map<string, string>> => {
+  const ids = new Map<string, string>();
   // Chunked: Postgres takes at most 65 535 parameters per statement.
   for (let i = 0; i < rows.length; i += 1000) {
     const chunk = rows.slice(i, i + 1000);
-    await tx`
+    const written = await tx<{ id: string; path: string }[]>`
       insert into indexed_files ${tx(chunk as Row[], 'root', 'path', 'sha256', 'size_bytes', 'mime', 'mtime', 'text_indexed', 'owner_domain', 'ownership_basis', 'status', 'error', 'first_scan_id', 'last_scan_id', 'indexed_at')}
       on conflict (root, path) do update set
         sha256 = excluded.sha256, size_bytes = excluded.size_bytes, mime = excluded.mime, mtime = excluded.mtime,
         text_indexed = excluded.text_indexed, owner_domain = excluded.owner_domain, ownership_basis = excluded.ownership_basis,
-        status = excluded.status, error = excluded.error, last_scan_id = excluded.last_scan_id, indexed_at = excluded.indexed_at`;
+        status = excluded.status, error = excluded.error, last_scan_id = excluded.last_scan_id, indexed_at = excluded.indexed_at
+      returning id, path`;
+    for (const w of written) ids.set(w.path, w.id);
+  }
+  return ids;
+};
+
+type NodeRow = { id: string; kind: string; title: string; owner_domain: string | null; ownership_basis: string; file_id: string; line: number; revision: string; scan_id: string; detail: postgres.JSONValue };
+type EdgeRow = { relation: string; from_id: string; to_id: string | null; file_id: string; line: number; detail: string; revision: string; scan_id: string };
+type Changed = { readonly rel: string; readonly text: string; readonly sha256: string; readonly owner: ReturnType<typeof ownerOf> };
+
+/**
+ * Replaces the declarations of every file read this scan (and of every file gone missing or unreadable), then
+ * writes the new ones. An id another file already declares stays with that file (the first path, sorted, on a
+ * tie in this scan); the loser gets a `declares` diagnostic and none of that unit's nodes or edges.
+ */
+const writeDeclared = async (
+  tx: postgres.TransactionSql, rootId: string, scanId: string, fileIds: ReadonlyMap<string, string>, stale: readonly string[],
+  changed: readonly Changed[], files: ReadonlySet<string>,
+) => {
+  if (stale.length > 0) {
+    await tx`delete from index_edges where file_id = any(${stale}::uuid[])`;
+    await tx`delete from index_nodes where file_id = any(${stale}::uuid[])`;
+  }
+  const byFile = [...changed].sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0)).map((c) => ({ c, d: declaredOf({ rootId, rel: c.rel, text: c.text, owner: c.owner, files }) }));
+  const wanted = byFile.flatMap(({ d }) => d.nodes.map((n) => n.id));
+  const taken = new Map((await tx<{ id: string; path: string }[]>`
+    select n.id, f.path from index_nodes n join indexed_files f on f.id = n.file_id where n.id = any(${wanted})`).map((r) => [r.id, r.path]));
+  const nodes: (DeclaredNode & { fileId: string; sha256: string })[] = [];
+  const edges: (DeclaredEdge & { fileId: string; sha256: string })[] = [];
+  for (const { c, d } of byFile) {
+    const fileId = fileIds.get(c.rel)!;
+    const dropped = new Set<string>();
+    for (const n of d.nodes) {
+      // A workflow's steps go with it: a duplicate workflow drops its whole unit.
+      const unit = n.kind === 'workflow_step' ? `workflow:${n.id.slice('workflow_step:'.length, n.id.indexOf('#'))}` : n.id;
+      if (dropped.has(unit)) {
+        dropped.add(n.id);
+        continue;
+      }
+      const owner = taken.get(n.id);
+      if (owner !== undefined) {
+        dropped.add(n.id);
+        edges.push({ relation: 'declares', fromId: `file:${rootId}/${c.rel}`, toId: null, line: n.line, detail: `duplicate ${n.id} (declared in ${owner})`, fileId, sha256: c.sha256 });
+        continue;
+      }
+      taken.set(n.id, c.rel);
+      nodes.push({ ...n, fileId, sha256: c.sha256 });
+    }
+    for (const e of d.edges) if (!dropped.has(e.fromId)) edges.push({ ...e, fileId, sha256: c.sha256 });
+  }
+  for (let i = 0; i < nodes.length; i += 1000) {
+    const chunk: NodeRow[] = nodes.slice(i, i + 1000).map((n) => ({
+      id: n.id, kind: n.kind, title: n.title, owner_domain: n.ownerDomain, ownership_basis: n.basis, file_id: n.fileId, line: n.line,
+      revision: n.revision, scan_id: scanId, detail: n.detail as postgres.JSONValue,
+    }));
+    await tx`insert into index_nodes ${tx(chunk, 'id', 'kind', 'title', 'owner_domain', 'ownership_basis', 'file_id', 'line', 'revision', 'scan_id', 'detail')}`;
+  }
+  for (let i = 0; i < edges.length; i += 1000) {
+    const chunk: EdgeRow[] = edges.slice(i, i + 1000).map((e) => ({
+      relation: e.relation, from_id: e.fromId, to_id: e.toId, file_id: e.fileId, line: e.line, detail: e.detail, revision: e.sha256, scan_id: scanId,
+    }));
+    await tx`insert into index_edges ${tx(chunk, 'relation', 'from_id', 'to_id', 'file_id', 'line', 'detail', 'revision', 'scan_id')}`;
   }
 };
 
@@ -149,6 +213,8 @@ export const scanRoots = async (sql: Sql, o: ScanOptions): Promise<ScanResult> =
           select id, path, size_bytes::text, mtime, status from indexed_files where root = ${root.id}`).map((r) => [r.path, r]));
         const rows: Row[] = [];
         const unchanged: string[] = [];
+        const changed: Changed[] = [];
+        const files = new Set(found.files.map((f) => f.rel).filter(validIndexPath));
         for (const f of found.files) {
           counts.eligible++;
           if (!validIndexPath(f.rel)) {
@@ -156,7 +222,8 @@ export const scanRoots = async (sql: Sql, o: ScanOptions): Promise<ScanResult> =
             counts.failed++;
             continue;
           }
-          const mtime = new Date(Math.trunc(f.mtimeMs));
+          // Rounded, not truncated: a preserved mtime comes back through float seconds (utimes), a hair either side.
+          const mtime = new Date(Math.round(f.mtimeMs));
           const p = prev.get(f.rel);
           if (!o.full && p && p.status === 'present' && Number(p.size_bytes) === f.size && p.mtime.getTime() === mtime.getTime()) {
             unchanged.push(p.id);
@@ -176,14 +243,20 @@ export const scanRoots = async (sql: Sql, o: ScanOptions): Promise<ScanResult> =
           }
           const mime = mimeOf(f.rel);
           const textIndexed = bytes.length <= TEXT_LIMIT && isText(bytes, mime);
-          const owner = ownerOf(f.rel, textIndexed ? declaredOwner(f.rel, new TextDecoder().decode(bytes)) : null);
-          rows.push({ ...base, sha256: sha256(bytes), mime, text_indexed: textIndexed, owner_domain: owner.domain, ownership_basis: owner.basis, status: 'present', error: null });
+          const text = textIndexed ? new TextDecoder().decode(bytes) : null;
+          const owner = ownerOf(f.rel, text === null ? null : declaredOwner(f.rel, text));
+          const hash = sha256(bytes);
+          rows.push({ ...base, sha256: hash, mime, text_indexed: textIndexed, owner_domain: owner.domain, ownership_basis: owner.basis, status: 'present', error: null });
+          if (text !== null) changed.push({ rel: f.rel, text, sha256: hash, owner });
           counts.indexed++;
         }
-        await insertRows(tx, rows);
+        const fileIds = await insertRows(tx, rows);
         if (unchanged.length > 0) await tx`update indexed_files set last_scan_id = ${scanId} where id = any(${unchanged}::uuid[])`;
         // Seen before, not now: gone (or renamed, which is a new path). Never deleted: history stays inspectable.
-        await tx`update indexed_files set status = 'missing', error = null where root = ${root.id} and last_scan_id <> ${scanId} and status <> 'missing'`;
+        const gone = await tx<{ id: string }[]>`
+          update indexed_files set status = 'missing', error = null where root = ${root.id} and last_scan_id <> ${scanId} and status <> 'missing' returning id`;
+        // Every file written this scan (read, or now unreadable) and every file now missing loses its old declarations.
+        await writeDeclared(tx, root.id, scanId, fileIds, [...fileIds.values(), ...gone.map((g) => g.id)], changed, files);
         const [m] = await tx<{ n: number }[]>`select count(*)::int as n from indexed_files where root = ${root.id} and status = 'missing'`;
         counts.missing += m!.n;
       }

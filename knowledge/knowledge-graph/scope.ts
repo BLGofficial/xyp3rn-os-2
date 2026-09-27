@@ -65,7 +65,8 @@ export type Ownership = { readonly domain: Domain | null; readonly basis: Basis 
  */
 export const declaredOwner = (rel: string, text: string): { readonly domain: Domain; readonly basis: 'frontmatter' | 'manifest' } | null => {
   try {
-    if (rel.endsWith('.agent.md')) {
+    // The registry's rule: agents/<name>.agent.md (templates, `_`, register nothing).
+    if (/^agents\/(?!_)[^/]+\.agent\.md$/.test(rel)) {
       const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
       const domain = fm ? (parseYaml(fm[1]!) as { domain?: unknown } | null)?.domain : undefined;
       return isDomain(domain) ? { domain, basis: 'frontmatter' } : null;
