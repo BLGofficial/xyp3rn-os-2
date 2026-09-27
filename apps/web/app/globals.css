@@ -2,37 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/* XYP3RN Mercury (AOS-04 design §14): tokens come from lib/tokens.ts through tailwind.config.mjs. */
+
 @layer base {
-  html { @apply bg-ink text-paper font-mono; }
-  a { @apply underline decoration-rule underline-offset-4 hover:decoration-records; }
-  h1 { @apply text-2xl font-bold uppercase tracking-tight; }
-  h2 { @apply mt-8 mb-2 border-b-2 border-paper pb-1 text-sm font-bold uppercase tracking-widest; }
+  html { @apply bg-canvas font-sans text-ink-1 antialiased; font-size: 15.5px; line-height: 1.55; }
+  body { @apply min-h-screen bg-canvas; }
+  a { @apply text-mercury underline decoration-control underline-offset-4 transition-colors duration-150 hover:decoration-mercury; }
+  h1 { @apply font-display text-[28px] font-semibold leading-tight tracking-tight text-ink-1 lg:text-[32px]; }
+  /* The one uppercase style: short 12 px section labels (§14.3). */
+  h2 { @apply mb-3 mt-10 border-b border-line pb-2 text-xs font-semibold uppercase tracking-[0.08em] text-ink-2; }
+  h3 { @apply font-display text-base font-semibold text-ink-1; }
   table { @apply w-full border-collapse text-sm; }
-  th { @apply border-b-2 border-paper py-1 pr-4 text-left text-xs uppercase tracking-widest; }
-  td { @apply border-b border-rule py-1 pr-4 align-top; }
-  input, select, textarea { @apply border-2 border-paper bg-ink px-2 py-1 text-paper; }
-  button { @apply border-2 border-paper bg-paper px-3 py-1 font-bold uppercase text-ink hover:bg-records hover:border-records; }
-  pre { @apply whitespace-pre-wrap border-l-4 border-rule pl-3 text-sm; }
+  th { @apply border-b border-line py-2 pr-4 text-left text-xs font-medium uppercase tracking-[0.08em] text-ink-3; }
+  td { @apply border-b border-line py-2 pr-4 align-top; }
+  tbody tr { @apply transition-colors duration-150 hover:bg-hover; }
+  input, select, textarea { @apply min-h-[44px] rounded-control border border-control bg-canvas px-3 py-2 text-ink-1 placeholder:text-ink-3; }
+  input[type='checkbox'], input[type='radio'] { @apply min-h-0 accent-mercury; }
+  select[multiple] { @apply min-h-[88px]; }
+  button { @apply min-h-[44px] rounded-control border border-mercury bg-mercury px-4 py-2 text-sm font-medium text-canvas transition-colors duration-150 hover:border-ink-1 hover:bg-ink-1 disabled:cursor-not-allowed disabled:opacity-60; }
+  button[value='reject'] { @apply border-control bg-transparent text-ink-1 hover:bg-hover; }
+  pre { @apply whitespace-pre-wrap rounded-control border border-line bg-canvas p-3 font-mono text-sm; }
+  code { @apply font-mono text-[0.92em] text-ink-2; }
+  time { font-variant-numeric: tabular-nums; }
+  fieldset { @apply rounded-control; }
+  legend { @apply text-xs uppercase tracking-[0.08em] text-ink-3; }
+  :focus-visible { outline: 2px solid theme('colors.focus'); outline-offset: 3px; }
 }
 
 @layer components {
-  .meta { @apply text-xs text-zinc-400; }
-  .tag { @apply mr-1 inline-block border border-rule px-1 text-xs; }
-  .error { @apply my-4 border-2 border-records p-2 text-records; }
-  .field { @apply flex flex-col gap-1 text-xs uppercase tracking-widest; }
-  .card { @apply border-2 border-rule p-3; }
-  .quote { @apply border-l-4 border-records pl-3 text-sm; }
+  .meta { @apply text-[12.5px] leading-relaxed text-ink-3; }
+  .tag { @apply mb-1 mr-1 inline-block rounded-full border border-line bg-hover px-2 py-0.5 text-xs text-ink-2; }
+  .error { @apply my-4 rounded-control border border-fail bg-fail/10 p-3 text-fail; }
+  .field { @apply flex flex-col gap-1 text-[13px] text-ink-2; }
+  .panel { @apply rounded-panel border border-line shadow-panel; background: linear-gradient(180deg, #111B2A 0%, theme('colors.surface') 100%); }
+  .card { @apply rounded-panel border border-line p-5 shadow-panel; background: linear-gradient(180deg, #111B2A 0%, theme('colors.surface') 100%); }
+  .quote { @apply max-w-[72ch] border-l-2 border-mercury/60 pl-3 text-base leading-relaxed text-ink-1; }
+  .num { font-variant-numeric: tabular-nums; }
+  /* A wide table scrolls inside its own labelled region, never the page (§13.3). */
+  .table-scroll { @apply max-w-full overflow-x-auto; }
 }
 
-/* Outside @layer on purpose: the pages build these names as `status-${status}`, which Tailwind's
-   content scan can't see, so a layered rule would be purged from the build. */
-.status-approved { @apply bg-records px-1 text-ink; }
-.status-rejected { @apply border border-zinc-500 px-1 text-zinc-400 line-through; }
-.status-draft, .status-pending, .status-open { @apply border border-paper px-1; }
-.status-scheduled { @apply border border-records px-1 text-records; }
-.status-released, .status-done, .status-live, .status-success { @apply bg-paper px-1 text-ink; }
-.status-cancelled, .status-error { @apply border border-zinc-500 px-1 text-zinc-400 line-through; }
-/* AOS-04: a research run in progress, the Findings Library, and canonical candidates. */
-.status-running, .status-candidate, .status-pending_approval { @apply border border-records px-1 text-records; }
-.status-accepted, .status-promoted { @apply bg-records px-1 text-ink; }
-.status-none, .status-blocked { @apply border border-zinc-500 px-1 text-zinc-400; }
+/* Status (§14.2): its own colour channel, always a word plus a glyph; Records red is never a status.
+   Outside @layer on purpose: pages build these names as `status-${status}`, which Tailwind's content scan
+   can't see, so a layered rule would be purged. The glyph's alt text is empty: the word carries the meaning. */
+[class^='status-'], [class*=' status-'] {
+  @apply inline-flex items-center gap-1 rounded-full border px-2 py-px text-xs font-medium;
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.status-approved, .status-success, .status-released, .status-done, .status-live, .status-promoted, .status-accepted { color: theme('colors.ok'); }
+.status-approved::before, .status-success::before, .status-released::before, .status-done::before, .status-live::before, .status-promoted::before, .status-accepted::before { content: '✓' / ''; }
+.status-scheduled, .status-candidate, .status-pending_approval, .status-proposed, .status-warning { color: theme('colors.warn'); }
+.status-scheduled::before, .status-candidate::before, .status-pending_approval::before, .status-proposed::before, .status-warning::before { content: '!' / ''; }
+.status-error, .status-rejected, .status-blocked, .status-failed { color: theme('colors.fail'); }
+.status-error::before, .status-rejected::before, .status-blocked::before, .status-failed::before { content: '✕' / ''; }
+.status-draft, .status-pending, .status-open, .status-running { color: theme('colors.info'); }
+.status-draft::before, .status-pending::before, .status-open::before, .status-running::before { content: '•' / ''; }
+.status-none, .status-cancelled, .status-unknown { color: theme('colors.unknown'); }
+.status-none::before, .status-cancelled::before, .status-unknown::before { content: '○' / ''; }
+.status-cancelled { text-decoration: line-through; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation: none !important; scroll-behavior: auto !important; }
+}
