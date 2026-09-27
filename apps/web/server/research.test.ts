@@ -154,3 +154,50 @@ describe('research ops and loaders (AOS-04 §8)', () => {
     expect(await runDetail(db.sql, 'not-a-uuid')).toBeNull();
   });
 });
+
+describe('the §17 workbench and list (AOS-04 Plan B, Task 7)', () => {
+  let outcomesRun: string;
+  beforeAll(async () => {
+    // A run whose five specialists ended five different ways, then sealed 90 s after it opened.
+    const opened = await openResearch(deps, { projectSlug: 'web', question: '[FIXTURE] five ways to end', intendedUse: '[FIXTURE] u', specialists: ['suno-researcher'], targets: [{ kind: 'decision', decisionKey: 'F40' }] });
+    outcomesRun = opened.researchRunId;
+    const step = (agent: string, status: 'success' | 'error', result: unknown, error: string | null) => db.sql`
+      insert into agent_runs (agent_name, class, domain, input, output, status, error_detail, research_run_id, completed_at)
+      values (${agent}, 'Research', 'RESEARCH_INTELLIGENCE', '{}', ${db.sql.json({ result, logs: [] } as never)}, ${status}, ${error}, ${outcomesRun}, now())`;
+    const done = (evidenceIds: string[], declined: { reason: string }[], passages: number) => ({ status: passages === 0 ? 'no-sources' : 'done', evidenceIds, declined, failedUrls: [], passages });
+    await step('suno-researcher', 'success', done(['00000000-0000-0000-0000-000000000001'], [], 1), null);
+    await step('genre-style-researcher', 'success', done([], [{ reason: 'no sources: the brief lists no URL' }], 0), null);
+    await step('prompt-engineering-researcher', 'success', done([], [{ reason: 'research_evidence: quote not found verbatim' }], 2), null);
+    await step('evaluation-researcher', 'error', null, 'LLM runner unavailable: OPENROUTER_API_KEY is not set');
+    await step('voice-cloning-researcher', 'error', null, 'timeout after 1800000ms');
+    await db.sql`update research_runs set status = 'error', error_detail = '[FIXTURE] specialist step failed', completed_at = created_at + interval '90 seconds' where id = ${outcomesRun}`;
+  });
+
+  it('names each specialist\'s outcome: completed, no sources, declined, failed, timed out', async () => {
+    const d = (await runDetail(db.sql, outcomesRun))!;
+    expect(Object.fromEntries(d.outcomes.map((o) => [o.specialist, o.outcome]))).toEqual({
+      'suno-researcher': 'completed', 'genre-style-researcher': 'no-sources', 'prompt-engineering-researcher': 'declined',
+      'evaluation-researcher': 'failed', 'voice-cloning-researcher': 'timed-out',
+    });
+    expect(d.outcomes.find((o) => o.specialist === 'suno-researcher')!.evidenceCount).toBe(1);
+  });
+
+  it('reports elapsed time from the recorded start and end, never an estimate', async () => {
+    const d = (await runDetail(db.sql, outcomesRun))!;
+    expect(d.run.elapsedMs).toBe(90_000);
+    // A running run's elapsed time runs to the moment it was read.
+    const live = await openResearch(deps, { projectSlug: 'web', question: '[FIXTURE] still open', intendedUse: '[FIXTURE] u', specialists: ['suno-researcher'] });
+    const l = (await runDetail(db.sql, live.researchRunId))!;
+    expect(l.run.status).toBe('running');
+    expect(l.run.elapsedMs).toBe(Date.parse(l.asOf) - Date.parse(l.run.createdAt));
+  });
+
+  it('filters the brief list by latest-run status and by target', async () => {
+    const byStatus = await researchIndex(db.sql, deps.registry, { status: 'error' });
+    expect(byStatus.briefs.map((b) => b.question)).toContain('[FIXTURE] five ways to end');
+    expect(byStatus.briefs.every((b) => b.latestRun?.status === 'error')).toBe(true);
+    const byTarget = await researchIndex(db.sql, deps.registry, { kind: 'decision', target: 'F40' });
+    expect(byTarget.briefs.map((b) => b.question)).toEqual(['[FIXTURE] five ways to end']);
+    expect((await researchIndex(db.sql, deps.registry, { kind: 'decision', target: 'F1' })).briefs).toEqual([]);
+  });
+});
