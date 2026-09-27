@@ -3,10 +3,18 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
+import { createAgentRegistry } from '../../../core/agent-registry/registry.ts';
 import { databaseUrl } from '../../../core/db/client.ts';
+import { createLlmRunner } from '../../../core/llm/runner.ts';
+import { dispatch } from '../../../core/orchestrator/dispatch.ts';
+import { HANDLERS } from '../../../core/runtime/handlers.ts';
+import { LLM_PROGRAMS } from '../../../core/runtime/programs.ts';
+import { createRuntimeTools } from '../../../core/runtime/tools.ts';
 import { loadEmbedder } from '../../../knowledge/vector-retrieval/embedder.ts';
 import { embedVault } from '../../../knowledge/vector-retrieval/pipeline.ts';
+import { executeResearch, openResearch } from '../../../research-intelligence/entrypoint.ts';
 import { createTestDb, REPO_ROOT } from '../../../tests/helpers/db.ts';
+import { FAKE_KEYS, fakeModel } from '../../../tests/helpers/fake-llm.ts';
 
 // AOS-01/AOS-02 proof: the UI end to end in a real browser, against `next start` (run `pnpm --filter
 // @xyp3rn/web build` first) on a throwaway migrated database and a temporary Vault store.
@@ -16,8 +24,14 @@ import { createTestDb, REPO_ROOT } from '../../../tests/helpers/db.ts';
 // from the song → splits, credit, ISRC, UPC, artwork → schedule → delivery → released → platform
 // link → task → the dashboard shows it released with nothing blocking. AOS-03: a style recipe → approve
 // → the default tag set → an edit with cues → approve → the song builds a Suno package → hand off →
-// upload Suno's audio as the take → rate it → the export and /studio show it traced. Prints one line
-// per checked step; exits 1 on the first failure.
+// upload Suno's audio as the take → rate it → the export and /studio show it traced. AOS-04: a brief run
+// to completion in this process (FAKE MODEL, stubbed page; the server has no key) and linked to the song →
+// /research lists it → the run page shows the quote → accept → the library shows canonical: none → promote
+// → pending → approve → promoted → the song's Research section → a brief with no specialist picked is refused
+// → a brief no specialist matches runs in the background and ends success. AOS-04 Plan B: the Sofia clock
+// synced to /api/time, the four metric cards, aria-current, reduced motion, the drawer at 1024 px, no sideways
+// scroll at 390 px, and (with a screenshot dir) four viewports + 200% zoom. Prints one line per checked step;
+// exits 1 on the first failure.
 
 const PORT = 3199;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -259,6 +273,148 @@ try {
   await page.goto(`${BASE}/studio`);
   const attemptRow = await page.locator(`tr:has(a[href="/studio/packages/${packageId}"])`).first().textContent();
   check(attemptRow?.includes('yes') === true && attemptRow.includes('[FIXTURE] Night City'), `the attempt is listed on /studio, traced (${attemptRow})`);
+
+  // AOS-04: Research. The seeded run is the specialists' part (FAKE MODEL here, never in the server).
+  const PAGE = '<html><head><title>[FIXTURE] Suno style order</title></head><body><p>[FIXTURE] Put the vocal descriptor first.</p></body></html>';
+  const model = fakeModel({
+    override: (schema) => ('claims' in ((schema.properties ?? {}) as object)
+      ? { claims: [{ passage: 1, quote: 'Put the vocal descriptor first.', claim: '[FAKE] the vocal descriptor goes first', claim_topic: 'suno.vocal-descriptor-position', claim_value: '"first"', model_tag: 'suno-v5', confidence: 0.6, confidence_inputs: { basis: '[FAKE] one page', directness: 'direct' } }], declined: [] }
+      : undefined),
+  });
+  const seedDeps = {
+    sql: db.sql, registry: createAgentRegistry({ dir: join(REPO_ROOT, 'agents') }), handlers: HANDLERS,
+    tools: createRuntimeTools({ sql: db.sql, env: {}, fetch: async () => new Response(PAGE, { status: 200, headers: { 'content-type': 'text/html' } }) }),
+    llmRunner: createLlmRunner({ programs: LLM_PROGRAMS, env: FAKE_KEYS, fetch: model.fn }),
+  };
+  const QUESTION = '[FIXTURE] Where should the vocal descriptor go in a Suno style prompt?';
+  const opened = await openResearch(seedDeps, {
+    projectSlug: 'smoke', question: QUESTION, intendedUse: '[FIXTURE] the Night drive recipe order', urls: ['https://example.org/suno-style-order'],
+    specialists: ['suno-researcher'], targets: [{ kind: 'decision', decisionKey: 'F41' }],
+  }, { requireIntendedUse: true });
+  const linked = await dispatch(seedDeps, 'records-songs', { link: { songId, researchQuestionId: opened.questionId, role: 'research' } });
+  const seeded = await executeResearch(seedDeps, opened.researchRunId, { log: () => {} });
+  check(linked.status === 'success' && seeded.status === 'success', 'a brief linked to the song runs to completion (suno-researcher, FAKE MODEL, stubbed page)');
+
+  await page.goto(`${BASE}/research`);
+  const briefRow = await page.locator(`tr:has(a[href="/research/runs/${opened.researchRunId}"])`).first().textContent();
+  check(briefRow?.includes('song: [FIXTURE] Night City') === true && briefRow.includes('decision: F41') && briefRow.includes('success'), `/research lists the brief with its targets and run (${briefRow})`);
+  await page.click(`a[href="/research/runs/${opened.researchRunId}"]`);
+  await page.waitForURL(`${BASE}/research/runs/${opened.researchRunId}`);
+  const runBody = (await page.textContent('body')) ?? '';
+  check(runBody.includes('suno.vocal-descriptor-position') && runBody.includes('“Put the vocal descriptor first.”') && runBody.includes('1 of 1 specialists finished'),
+    'the run page shows the finding by topic, with the verbatim quote and its source');
+  await shot(page, '10-research-run');
+  await page.fill('form:has(button[value=accept]) input[name=reason]', 'matches the studio notes');
+  await page.click('form:has(button[value=accept]) button[value=accept]');
+  await page.waitForSelector('.status-accepted, p.error');
+  check(!(await page.$('p.error')) && (await page.textContent('body'))?.includes('by owner (smoke)') === true, 'the owner accepts the finding into the Findings Library');
+
+  await page.goto(`${BASE}/research/library`);
+  check((await page.locator('article .status-none').count()) === 1, 'the library lists it with canonical: none (accepted is not canonical)');
+  const promote = page.locator('form:has(input[name=targetSlug])');
+  await promote.locator('input[name=title]').fill('Lead the style prompt with the vocal descriptor');
+  await promote.locator('textarea[name=body]').fill('Put the vocal descriptor first in a Suno style prompt.');
+  await submit(page, promote, 'article .status-candidate');
+  check(true, 'promoting it makes a candidate (the gate queues it for the owner)');
+  await page.goto(`${BASE}/research/runs/${opened.researchRunId}`);
+  check((await page.locator('article .status-pending_approval').count()) === 1, 'the run page shows the canonical approval pending on the finding');
+  await page.fill('form:has(button[value=approve]) input[name=reason]', 'make it canonical');
+  await approveIn(page, page.locator('form:has(button[value=approve])'), '.status-promoted');
+  await page.goto(`${BASE}/research/library`);
+  check((await page.locator('article .status-promoted').count()) === 1, 'the owner approves: the library shows canonical: promoted');
+  await shot(page, '11-research-library');
+
+  await page.goto(`${BASE}/songs/${songId}`);
+  check((await page.locator(`a[href="/research/runs/${opened.researchRunId}"]`).count()) > 0, 'the song\'s Research section links the brief and its finding');
+
+  await page.goto(`${BASE}/research`);
+  const briefForm = page.locator('form:has(textarea[name=intendedUse])');
+  await briefForm.locator('textarea[name=question]').fill('[FIXTURE] How loud should the master be?');
+  await briefForm.locator('textarea[name=intendedUse]').fill('[FIXTURE] mastering target');
+  await briefForm.locator('input[name=override]').check();
+  await briefForm.locator('button[type=submit]').click();
+  await page.waitForSelector('p.error');
+  check((await page.textContent('p.error'))?.includes('specialists: pick at least one') === true, 'a brief with the override ticked and nobody picked is refused, naming the field');
+
+  const emptyForm = page.locator('form:has(textarea[name=intendedUse])');
+  await emptyForm.locator('textarea[name=question]').fill('[FIXTURE] What should we eat tonight?');
+  await emptyForm.locator('textarea[name=intendedUse]').fill('[FIXTURE] dinner');
+  // F39: the refused form keeps what was typed and ticked, the override included.
+  await emptyForm.locator('input[name=override]').uncheck();
+  await emptyForm.locator('button[type=submit]').click();
+  await page.waitForURL(/\/research\/runs\/[0-9a-f-]{36}$/);
+  for (let i = 0; !(await page.textContent('body'))?.includes('no specialist selected') || (await page.locator('.status-running').count()) > 0; i++) {
+    if (i > 20) throw new Error(`FAILED: the empty brief's run never ended: ${await page.textContent('body')}`);
+    await new Promise((r) => setTimeout(r, 500));
+    await page.reload();
+  }
+  check((await page.locator('p.meta .status-success').count()) === 1, 'a brief no specialist matches opens, runs in the background of next start, and ends success with no specialist selected');
+  await shot(page, '12-research-empty');
+
+  // AOS-04 Plan B: the Mercury shell. The clock, the metric strip, navigation, the drawer, 390 px, reduced motion.
+  await page.goto(`${BASE}/`);
+  await page.waitForSelector('[data-sync="server-synced"]', { timeout: 15_000 });
+  const clock = (await page.textContent('header')) ?? '';
+  check(clock.includes('Sofia, BG') && /\d{2}:\d{2}:\d{2}/.test(clock) && clock.includes('Server-synced'), 'the top bar shows the Sofia clock, synced to the server (Server-synced)');
+  const t = await page.request.get(`${BASE}/api/time`);
+  const epoch = ((await t.json()) as { epochMs: number }).epochMs;
+  check(t.status() === 200 && Math.abs(epoch - Date.now()) < 60_000 && (await fetch(`${BASE}/api/time`)).status === 401, '/api/time answers the session with the server clock, and nobody else (401)');
+  const cards = page.locator('[data-metric]');
+  check((await cards.count()) === 4, 'the metric strip has four cards');
+  for (let i = 0; i < 4; i++) {
+    const text = (await cards.nth(i).textContent()) ?? '';
+    check(text.includes('source:') && (await cards.nth(i).locator('time').count()) > 0 && !/unavailable/.test(text), `metric card ${i + 1} names its source and as-of time (${text.slice(0, 40)}…)`);
+  }
+  const [active] = await db.sql<{ n: number }[]>`select count(*)::int as n from current_songs where status::text in ('idea', 'writing', 'producing', 'releasing')`;
+  const shown = Number(((await page.textContent('[data-metric="activeSongs"] p.num')) ?? '').trim().split(/\s/)[0]);
+  check(shown === active!.n, `Active songs shows what the database holds at that moment (${shown} = ${active!.n})`);
+  check((await page.textContent('nav[aria-label="Primary"] a[aria-current="page"]'))?.trim() === 'Command', 'the rail marks the current page (aria-current)');
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const duration = await page.$eval('nav[aria-label="Primary"] a', (a) => getComputedStyle(a).transitionDuration);
+  check(duration === '0s', `with reduced motion, transitions are off (${duration})`);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto(`${BASE}/research`);
+  check(!(await page.isVisible('nav[aria-label="Primary"]')), 'at 1024 px the rail is folded away');
+  await page.click('button[aria-label="Open navigation"]');
+  await page.waitForSelector('dialog[open]');
+  check((await page.locator('dialog[open] a[aria-current="page"]').textContent())?.trim() === 'Research', 'the drawer opens with the current page marked');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog[open]', { state: 'detached' }).catch(() => undefined);
+  const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  check(!(await page.isVisible('dialog[open]')) && focused === 'Open navigation', 'Escape closes the drawer and focus returns to its button');
+
+  const narrow = [`/`, `/research`, `/research/runs/${opened.researchRunId}`, `/research/library`, `/songs/${songId}`, `/studio/packages/${packageId}`, `/studio`, `/vault`, `/releases`];
+  await page.setViewportSize({ width: 390, height: 844 });
+  const wide: string[] = [];
+  for (const path of narrow) {
+    await page.goto(`${BASE}${path}`);
+    const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+    if (sw! > iw!) wide.push(`${path} (${sw} > ${iw})`);
+  }
+  check(wide.length === 0, `at 390 px no page scrolls sideways (${wide.join(', ') || narrow.length + ' pages'})`);
+
+  if (shots) {
+    const views = [[1920, 1080], [1440, 900], [1024, 768], [390, 844]] as const;
+    const pages = [['command', '/'], ['research', '/research'], ['run', `/research/runs/${opened.researchRunId}`], ['library', '/research/library']] as const;
+    for (const [w, h] of views) {
+      await page.setViewportSize({ width: w, height: h });
+      for (const [name, path] of pages) {
+        await page.goto(`${BASE}${path}`);
+        await shot(page, `13-${name}-${w}x${h}`);
+      }
+    }
+    // 200% zoom, approximated by a 960×540 CSS viewport at device scale 2 (the pixels of a 1920×1080 screen).
+    const zoom = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 2, storageState: await page.context().storageState() });
+    const zp = await zoom.newPage();
+    for (const [name, path] of pages) {
+      await zp.goto(`${BASE}${path}`);
+      await shot(zp, `13-${name}-200pct`);
+    }
+    await zoom.close();
+  }
   console.log('smoke: all checks passed');
 } catch (e) {
   console.error((e as Error).message);

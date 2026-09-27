@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { lineDiff } from '../../../../lib/diff';
 import { loaders, runtime } from '../../../../lib/server';
 import { decideVersion, editVersion } from '../../../actions';
-import { ErrorBanner, first, SongLinks, Status, Time } from '../../../ui';
+import { ErrorBanner, first, ScrollTable, SongLinks, Status, Time } from '../../../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +20,7 @@ export default async function Lineage({ params, searchParams }: { params: { id: 
       <ErrorBanner error={searchParams.error} />
 
       <h2>Versions</h2>
-      <table>
+      <ScrollTable label="Versions">
         <thead><tr><th>V</th><th>Status</th><th>By</th><th>Written</th><th>Decision</th><th>Decide</th></tr></thead>
         <tbody>
           {l.versions.map((v) => (
@@ -44,7 +44,7 @@ export default async function Lineage({ params, searchParams }: { params: { id: 
             </tr>
           ))}
         </tbody>
-      </table>
+      </ScrollTable>
 
       <h2>v{b.version}</h2>
       <pre>{b.sheet}</pre>
@@ -58,7 +58,7 @@ export default async function Lineage({ params, searchParams }: { params: { id: 
             <button type="submit">Compare</button>
           </form>
           <pre>{lineDiff(a.sheet.split('\n'), b.sheet.split('\n')).map((d, i) => (
-            <div key={i} className={d.op === '+' ? 'text-records' : d.op === '-' ? 'text-zinc-500 line-through' : ''}>{d.op} {d.line}</div>
+            <div key={i} className={d.op === '+' ? 'text-ok' : d.op === '-' ? 'text-ink-3 line-through' : ''}>{d.op} {d.line}</div>
           ))}</pre>
         </>
       )}

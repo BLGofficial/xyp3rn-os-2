@@ -1,6 +1,6 @@
 import { runtime, studioLoaders } from '../../lib/server';
 import { defaultTagSetAction } from '../studio-actions';
-import { ErrorBanner, Time } from '../ui';
+import { ErrorBanner, ScrollTable, Time } from '../ui';
 import { RecipeForm, TagSetForm } from './studio-ui';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ export default async function Studio({ searchParams }: { searchParams: Record<st
       <ErrorBanner error={searchParams.error} />
 
       <h2>Style recipes</h2>
-      <table>
+      <ScrollTable label="Style recipes">
         <thead><tr><th>Recipe</th><th>Latest</th><th>Approved</th><th>Packages</th><th>Updated</th></tr></thead>
         <tbody>
           {s.recipes.map((r) => (
@@ -30,12 +30,12 @@ export default async function Studio({ searchParams }: { searchParams: Record<st
           ))}
           {s.recipes.length === 0 && <tr><td colSpan={5} className="meta">no recipe yet</td></tr>}
         </tbody>
-      </table>
+      </ScrollTable>
       <h2>New style recipe</h2>
       <RecipeForm back="/studio" />
 
       <h2>Meta-tag sets</h2>
-      <table>
+      <ScrollTable label="Meta-tag sets">
         <thead><tr><th>Tag set</th><th>Latest</th><th>Approved</th><th>Packages</th><th>Updated</th></tr></thead>
         <tbody>
           {s.tagSets.map((t) => (
@@ -47,7 +47,7 @@ export default async function Studio({ searchParams }: { searchParams: Record<st
           ))}
           {s.tagSets.length === 0 && <tr><td colSpan={5} className="meta">no tag set yet</td></tr>}
         </tbody>
-      </table>
+      </ScrollTable>
       <form action={defaultTagSetAction} className="mt-2">
         <button type="submit">Create the default tag set (the code labels)</button>
       </form>
@@ -55,7 +55,7 @@ export default async function Studio({ searchParams }: { searchParams: Record<st
       <TagSetForm back="/studio" kinds={sl.tagKinds()} />
 
       <h2>Recent attempts</h2>
-      <table>
+      <ScrollTable label="Recent attempts">
         <thead><tr><th>At</th><th>Song</th><th>Package</th><th>Model</th><th>Adapter</th><th>Takes</th><th>Traced</th></tr></thead>
         <tbody>
           {s.attempts.map((a) => (
@@ -69,7 +69,7 @@ export default async function Studio({ searchParams }: { searchParams: Record<st
           ))}
           {s.attempts.length === 0 && <tr><td colSpan={7} className="meta">no attempt yet</td></tr>}
         </tbody>
-      </table>
+      </ScrollTable>
     </section>
   );
 }

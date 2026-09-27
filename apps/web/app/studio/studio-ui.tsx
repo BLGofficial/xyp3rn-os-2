@@ -1,6 +1,6 @@
 import type { StudioVersionRow } from '../../server/studio-loaders';
 import { decideStudioVersion, recipeAction, tagSetAction } from '../studio-actions';
-import { Status, Time } from '../ui';
+import { ScrollTable, Status, Time } from '../ui';
 
 // Studio's shared pieces (AOS-03 §6). Server components only.
 
@@ -8,7 +8,7 @@ type Section = { readonly kind: string; readonly label: string; readonly numbere
 
 /** Every version of a recipe or tag set lineage, with the owner's decision on each draft. */
 export const VersionTable = ({ versions, approvedVersion, back }: { versions: readonly StudioVersionRow[]; approvedVersion: number | null; back: string }) => (
-  <table>
+  <ScrollTable label="Versions">
     <thead><tr><th>V</th><th>Status</th><th>By</th><th>Written</th><th>Decision</th><th>Decide</th></tr></thead>
     <tbody>
       {versions.map((v) => (
@@ -32,7 +32,7 @@ export const VersionTable = ({ versions, approvedVersion, back }: { versions: re
         </tr>
       ))}
     </tbody>
-  </table>
+  </ScrollTable>
 );
 
 type Recipe = { name?: string; style?: string; excludeStyles?: string[]; mood?: string[]; production?: string[]; notes?: string[] };
@@ -63,7 +63,7 @@ export const TagSetForm = ({ back, kinds, parentId, current }: { back: string; k
       <input type="hidden" name="back" value={back} />
       {parentId && <input type="hidden" name="parentId" value={parentId} />}
       <label className="field mb-2">Name<input name="name" required defaultValue={current?.name ?? ''} /></label>
-      <table>
+      <ScrollTable label="Tag set sections">
         <thead><tr><th>Tag</th><th>Kind</th><th>Label</th><th>Numbered</th><th>Cues (comma separated; each becomes a [tag])</th></tr></thead>
         <tbody>
           {kinds.map((k) => {
@@ -79,7 +79,7 @@ export const TagSetForm = ({ back, kinds, parentId, current }: { back: string; k
             );
           })}
         </tbody>
-      </table>
+      </ScrollTable>
       <label className="field my-2">Notes (one per line; never sent to Suno)<textarea name="notes" rows={2} defaultValue={(current?.notes ?? []).join('\n')} /></label>
       <button type="submit">{parentId ? 'Save as the next version' : 'Create tag set'}</button>
     </form>

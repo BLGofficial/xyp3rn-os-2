@@ -16,6 +16,8 @@ export type EvidenceInput = {
   readonly confidence_inputs?: unknown;
   readonly claim_topic?: unknown;
   readonly claim_value?: unknown;
+  /** The verbatim passage behind the claim (AOS-04); the DB checks it against the source. */
+  readonly quote?: unknown;
 };
 
 const nonEmpty = (v: unknown) => typeof v === 'string' && v.trim() !== '';
@@ -36,6 +38,7 @@ export const validateEvidence = (input: EvidenceInput): string[] => {
     errors.push('confidence_inputs must be a non-empty object showing how confidence was derived');
   }
   if ((input.claim_topic === undefined) !== (input.claim_value === undefined)) errors.push('claim_topic and claim_value must be given together');
+  if (input.quote !== undefined && input.quote !== null && !nonEmpty(input.quote)) errors.push('quote must be a non-empty string when given');
   return errors;
 };
 
@@ -55,12 +58,13 @@ export const writeEvidence = async (sql: Sql, ctx: EvidenceContext, input: Evide
   return asRole(sql, RESEARCH_ROLE, async (tx) => {
     const [row] = await tx<{ id: string }[]>`
       insert into research_evidence
-        (research_run_id, research_source_id, agent_run_id, specialist, claim, model_tag, confidence, confidence_inputs, claim_topic, claim_value)
+        (research_run_id, research_source_id, agent_run_id, specialist, claim, model_tag, confidence, confidence_inputs, claim_topic, claim_value, quote)
       values (${ctx.researchRunId}, ${input.research_source_id as string}, ${ctx.agentRunId}, ${ctx.specialist},
               ${input.claim as string}, ${input.model_tag as string}, ${input.confidence as number},
               ${tx.json(input.confidence_inputs as postgres.JSONValue)},
               ${(input.claim_topic as string | undefined) ?? null},
-              ${input.claim_value === undefined ? null : tx.json(input.claim_value as postgres.JSONValue)})
+              ${input.claim_value === undefined ? null : tx.json(input.claim_value as postgres.JSONValue)},
+              ${(input.quote as string | null | undefined) ?? null})
       returning id`;
     return row!.id;
   });

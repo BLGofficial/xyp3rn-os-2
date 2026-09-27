@@ -1,6 +1,6 @@
 import { loaders, runtime } from '../../lib/server';
 import { upload } from '../actions';
-import { ErrorBanner, Status, Time } from '../ui';
+import { ErrorBanner, ScrollTable, Status, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ export default async function Ingest({ searchParams }: { searchParams: Record<st
       <h1>Ingest</h1>
       <ErrorBanner error={searchParams.error} />
       <form action={upload} className="mt-4 flex flex-col gap-3">
-        <label className="field border-2 border-dashed border-paper p-6 text-center">
+        <label className="field rounded-panel border border-dashed border-control p-6 text-center">
           Drop files here, or choose
           <input type="file" name="files" multiple required className="mt-2 border-0" />
         </label>
@@ -29,26 +29,26 @@ export default async function Ingest({ searchParams }: { searchParams: Record<st
       <p>Not yet indexed for vault search: {status.backlog.artifact} artifact versions · {status.backlog.source} files · {status.backlog.research_finding} findings. <span className="meta">`pnpm embed` indexes them.</span></p>
 
       <h2>Recent Vault runs</h2>
-      <table>
+      <ScrollTable label="Recent Vault runs">
         <thead><tr><th>Agent</th><th>Status</th><th>ms</th><th>At</th><th>Run</th></tr></thead>
         <tbody>
           {status.runs.map((r) => (
             <tr key={r.id}>
               <td>{r.agentName}</td>
-              <td><Status status={r.status} />{r.error ? <div className="meta text-records">{r.error}</div> : null}</td>
+              <td><Status status={r.status} />{r.error ? <div className="meta text-fail">{r.error}</div> : null}</td>
               <td>{r.latencyMs ?? '—'}</td>
               <td className="meta"><Time at={r.createdAt} /></td>
               <td className="meta"><code>{r.id}</code></td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </ScrollTable>
 
       <h2>Knowledge ingestion runs (`pnpm ingest`)</h2>
-      <table>
+      <ScrollTable label="Knowledge ingestion runs">
         <thead><tr><th>Source</th><th>Status</th><th>Started</th></tr></thead>
         <tbody>{status.ingestionRuns.map((r) => <tr key={r.id}><td>{r.uri}</td><td><Status status={r.status} /></td><td className="meta"><Time at={r.startedAt} /></td></tr>)}</tbody>
-      </table>
+      </ScrollTable>
     </section>
   );
 }

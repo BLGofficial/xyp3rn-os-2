@@ -49,7 +49,7 @@ export const createRuntimeTools = (deps: {
     logMessageTool,
     createRetrieveContextTool(lazyLongTerm),
     createRetrieveClaimsTool(deps),
-    createFetchSourceTool(deps),
+    createFetchSourceTool(external),
     createWriteEvidenceTool(deps),
     createWriteArtifactTool({ sql: deps.sql, schemas: ARTIFACT_SCHEMAS }),
     createReadArtifactTool(deps),

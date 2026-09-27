@@ -1,0 +1,86 @@
+AOS-04 Plan B — the Mercury shell: proof (2026-09-27)
+Produced with the repo's own commands against the local Postgres. Unit and DB tests run on throwaway databases; the browser
+section drives the real UI (next start) in Chromium against another. Plan: docs/artist-os/AOS-04-plan-B.md (decisions M1–M3).
+================================================================================
+
+## 0. What is shown
+# - Whole-app re-skin (M1): Mercury tokens and base layer restyle every page; Command and Research recomposed (§13.1, §17).
+# - Locally hosted fonts (M2): three pinned OFL packages, 20 WOFF2 subsets bundled into .next/static/media; no runtime CDN.
+#   (The only Google Fonts host strings in the client bundle are Next's own font-optimisation constants, present before M2.)
+# - Contrast pinned by test, not eyeballed (section 1). The Sofia clock from the IANA zone, synced to /api/time (section 2).
+# - The metric strip: exact definitions, one as-of time, "unavailable" rather than 0 when a query fails (section 3).
+# - The browser: clock, metric cards, aria-current, reduced motion, the drawer's keyboard contract, no sideways scroll at
+#   390 px on nine pages, and screenshots at four viewports + 200% zoom (section 4).
+# - Not measured: frame rate, INP, LCP, CLS (§18's targets belong to Plan C's sphere). 200% zoom is approximated by a
+#   960×540 CSS viewport at device scale 2, not a browser zoom setting.
+
+## 1. Token contrast (WCAG 2.x, flat colours; apps/web/lib/tokens.test.ts pins every floor)
+                       canvas      ssRaised sHover
+primary                 18.17  16.74  14.80  12.90
+secondary               11.00  10.13   8.96   7.81
+muted                    7.70   7.09   6.27   5.47
+mercury                 15.56  14.34  12.67  11.05
+champagne               12.31  11.34  10.03   8.74
+success                 12.93  11.91  10.53   9.18
+warning                 13.67  12.59  11.13   9.71
+failure                 10.42   9.60   8.49   7.40
+info                    10.93  10.07   8.90   7.76
+unknown                 11.00  10.13   8.96   7.81
+CORE label              13.59  12.53  11.07   9.65
+KNOWLEDGE label         10.67   9.84   8.69   7.58
+RESEARCH_INTELLIGENCE label  13.67  12.59  11.13   9.71
+RECORDS label           10.42   9.60   8.49   7.40
+TECH label              12.93  11.91  10.53   9.18
+GOVERNANCE label        13.27  12.23  10.81   9.43
+border control           4.33   3.99   3.52   3.07
+focus ring              13.15  12.12  10.71   9.34
+border subtle            1.86   1.71   1.51   1.32
+Floors: text, status and domain labels ≥ 4.5 on every surface; control border, focus ring and canonical hues ≥ 3; the
+subtle border is decorative (< 3) and never the sole boundary of a control. Canonical Records red is 3.72 on the hover
+surface: a rim or chip colour, never label text (the bright variant is used for text).
+
+## 2. The Sofia clock (apps/web/lib/clock.test.ts)
+ ✓ winter: 2026-01-15T12:00:00Z → 14:00:00 GMT+02:00
+ ✓ summer: 2026-07-15T12:00:00Z → 15:00:00 GMT+03:00
+ ✓ the second before the spring jump: 2026-03-29T00:59:59Z → 02:59:59 GMT+02:00
+ ✓ the spring jump (03:00 never happens): 2026-03-29T01:00:00Z → 04:00:00 GMT+03:00
+ ✓ the autumn hour, first pass: 2026-10-25T00:30:00Z → 03:30:00 GMT+03:00
+ ✓ the autumn hour, repeated: 2026-10-25T01:30:00Z → 03:30:00 GMT+02:00
+ ✓ rolls the date at Sofia midnight, not UTC midnight
+ ✓ gives the same answer whatever the process timezone is (America/New_York, Asia/Tokyo, UTC)
+ ✓ event timestamps: 2026-09-27T15:36:57Z → 2026-09-27 18:36:57 +03:00 (every <Time> on every page)
+ ✓ estimates the offset from the round trip's midpoint; keeps the lowest round trip
+ ✓ claims server sync only after a successful sample, and marks it stale after ten minutes
+Live in the browser: "SOFIA, BG · 18:49:46 · Server-synced" at 15:49:46Z (section 4).
+
+## 3. The metric strip (apps/web/server/shell.test.ts, throwaway DB)
+ ✓ counts exactly what each definition says, with one as-of time for all four cards
+   fixture: songs 2 idea + 1 writing + 1 released + 1 archived → Active songs 3; workflow runs 1 running + 1 success →
+   Running workflows 1 (+ 1 research run); Vault 2 stored files (+ 1 lineage of 3 versions); Open briefs 1
+ ✓ a card whose query fails reads unavailable (null, with the error), and the others still render
+ ✓ the pulse reports Configured / Not configured for provider keys, never their values and never "connected"
+ ✓ recent activity lists the newest rows across kinds, newest first, each link a real route (or none)
+
+## 4. The browser (pnpm web:build && node apps/web/e2e/smoke.ts <dir>): the Plan B lines
+ok  the top bar shows the Sofia clock, synced to the server (Server-synced)
+ok  /api/time answers the session with the server clock, and nobody else (401)
+ok  the metric strip has four cards
+ok  metric card 1..4 names its source and as-of time
+ok  Active songs shows what the database holds at that moment
+ok  the rail marks the current page (aria-current)
+ok  with reduced motion, transitions are off (0s)
+ok  at 1024 px the rail is folded away
+ok  the drawer opens with the current page marked
+ok  Escape closes the drawer and focus returns to its button
+ok  at 390 px no page scrolls sideways (9 pages: /, /research, a run, the library, a song, a package, /studio, /vault, /releases)
+Every AOS-01/02/03/04 line before these passed in the same run.
+Screenshots: 13-{command,research,run,library}-{1920x1080,1440x900,1024x768,390x844,200pct}.png
+(first run of the 390 px check: six pages scrolled sideways, all from tables; fixed by labelled table scroll regions)
+
+## 5. The gates
+pnpm typecheck                       exit 0
+pnpm test                            Test Files 102 passed (102) · Tests 1359 passed (1359) — up from 1322 after Plan A
+pnpm agents:validate                 validateAll(): 0 failure(s)
+db:down, db:up, db:down, db:up       rolled back / applied 20260926100000, twice, every command exit 0 (no migration in Plan B)
+pnpm web:build                       ok
+node apps/web/e2e/smoke.ts           smoke: all checks passed (every AOS-01–04 line and the Plan B lines)

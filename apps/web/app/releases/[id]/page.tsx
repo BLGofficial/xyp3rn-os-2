@@ -4,7 +4,7 @@ import {
   artworkAction, codeAction, deliveryAction, linkAction, registerTrackAction, releaseAction, scheduleAction, splitsAction, unlinkAction,
 } from '../../catalog-actions';
 import { Checks, CreditForm, Credits, DELIVERY_STATUSES, PLATFORMS, TaskForm, Tasks } from '../../catalog-ui';
-import { ErrorBanner, SongLinks, Status, Time } from '../../ui';
+import { ErrorBanner, ScrollTable, SongLinks, Status, Time } from '../../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +19,7 @@ const Links = ({ links, releaseId }: { links: readonly Link[]; releaseId: string
           <input type="hidden" name="releaseId" value={releaseId} />
           <input type="hidden" name="linkId" value={l.id} />
           <input name="reason" placeholder="why" required size={10} aria-label="unlink reason" />
-          <button className="px-1 text-xs">Unlink</button>
+          <button className="btn-quiet">Unlink</button>
         </form>
       </li>
     ))}
@@ -62,7 +62,7 @@ export default async function Release({ params, searchParams }: { params: { id: 
 
       <h2>Tracks</h2>
       {d.tracks.map((t) => (
-        <article key={t.id} className="mb-6 border-2 border-rule p-3">
+        <article key={t.id} className="card mb-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h3 className="font-bold">{t.position}. {t.title}</h3>
             <span className="meta">
@@ -73,7 +73,7 @@ export default async function Release({ params, searchParams }: { params: { id: 
 
           <div className="mt-2 grid gap-4 md:grid-cols-2">
             <div>
-              <h4 className="text-xs uppercase tracking-widest">ISRC</h4>
+              <h4 className="text-xs uppercase tracking-[0.08em] text-ink-3">ISRC</h4>
               {t.isrc ? <code>{t.isrc}</code> : (
                 <form action={codeAction} className="flex gap-2">
                   <input type="hidden" name="releaseId" value={r.id} />
@@ -83,7 +83,7 @@ export default async function Release({ params, searchParams }: { params: { id: 
                 </form>
               )}
 
-              <h4 className="mt-3 text-xs uppercase tracking-widest">Splits {t.splits ? `v${t.splits.version}` : '(none)'}</h4>
+              <h4 className="mt-3 text-xs uppercase tracking-[0.08em] text-ink-3">Splits {t.splits ? `v${t.splits.version}` : '(none)'}</h4>
               <form action={splitsAction} className="flex flex-col gap-2">
                 <input type="hidden" name="releaseId" value={r.id} />
                 <input type="hidden" name="trackId" value={t.id} />
@@ -93,10 +93,10 @@ export default async function Release({ params, searchParams }: { params: { id: 
               </form>
             </div>
             <div>
-              <h4 className="text-xs uppercase tracking-widest">Credits</h4>
+              <h4 className="text-xs uppercase tracking-[0.08em] text-ink-3">Credits</h4>
               <Credits credits={t.credits} back={back} />
               <CreditForm target={{ trackId: t.id }} back={back} />
-              <h4 className="mt-3 text-xs uppercase tracking-widest">Track links</h4>
+              <h4 className="mt-3 text-xs uppercase tracking-[0.08em] text-ink-3">Track links</h4>
               <Links links={t.links} releaseId={r.id} />
               <LinkForm releaseId={r.id} trackId={t.id} />
             </div>
@@ -139,7 +139,7 @@ export default async function Release({ params, searchParams }: { params: { id: 
           {d.artwork ? (
             <figure>
               {/* eslint-disable-next-line @next/next/no-img-element -- served from the Vault route, not a static asset */}
-              <img src={`/vault/files/${d.artwork.sourceId}/raw`} alt={`${r.title} artwork`} className="max-w-[240px] border-2 border-rule" />
+              <img src={`/vault/files/${d.artwork.sourceId}/raw`} alt={`${r.title} artwork`} className="max-w-[240px] rounded-control border border-line" />
               <figcaption className="meta"><a href={`/vault/files/${d.artwork.sourceId}`}>{d.artwork.title}</a> · set <Time at={d.artwork.setAt} /></figcaption>
             </figure>
           ) : <p className="meta">none</p>}
@@ -158,11 +158,11 @@ export default async function Release({ params, searchParams }: { params: { id: 
           <LinkForm releaseId={r.id} />
 
           <h2>Deliveries</h2>
-          <table>
+          <ScrollTable label="Deliveries">
             <tbody>{d.deliveries.map((x) => (
               <tr key={x.distributor}><td>{x.distributor}</td><td><Status status={x.status} /></td><td className="meta">{x.note ?? ''}</td><td className="meta"><Time at={x.at} /></td></tr>
             ))}</tbody>
-          </table>
+          </ScrollTable>
           {d.deliveries.length === 0 && <p className="meta">none recorded; no distributor connector yet (AOS-06)</p>}
           <form action={deliveryAction} className="mt-2 flex flex-wrap items-end gap-2">
             <input type="hidden" name="releaseId" value={r.id} />

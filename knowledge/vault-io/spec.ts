@@ -22,6 +22,10 @@ export const EXPORT_TABLES = [
   'release_artwork', 'release_deliveries', 'tasks', 'task_events',
   // AOS-03 (design §7): the owner's ratings of a generation's takes.
   'take_ratings',
+  // AOS-04 (design §9): an exported brief's links, and its runs' evidence, sources and findings. Candidates
+  // stay out: canonical knowledge moves only through the gate.
+  'research_links', 'research_link_retractions', 'research_sources', 'research_evidence', 'research_findings',
+  'research_finding_evidence', 'contradictions',
 ] as const;
 export type ExportTable = (typeof EXPORT_TABLES)[number];
 export const isExportTable = (t: string): t is ExportTable => (EXPORT_TABLES as readonly string[]).includes(t);

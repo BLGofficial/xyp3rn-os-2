@@ -45,7 +45,8 @@ describe('the 20 specialist definitions', () => {
 
   it.each(ROSTER)('%s: Research / RESEARCH_INTELLIGENCE, evidence tools only, LLM-backed', (name) => {
     const a = registry.get(name)!;
-    expect(a).toMatchObject({ class: 'Research', domain: 'RESEARCH_INTELLIGENCE', model: 'claude-sonnet-5' });
+    // AOS-04 R1: the specialists run on the OpenRouter free route.
+    expect(a).toMatchObject({ class: 'Research', domain: 'RESEARCH_INTELLIGENCE', model: 'openrouter:nvidia/nemotron-3-ultra-550b-a55b:free' });
     expect([...a.tools].sort()).toEqual(['fetch_source', 'log_message', 'retrieve_context', 'write_evidence']);
   });
 

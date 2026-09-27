@@ -116,16 +116,22 @@ describe('fetch_source → write_evidence (the only path a specialist has to evi
 
   it('write_evidence refuses before touching the DB when a field is missing', async () => {
     const tool = createWriteEvidenceTool({ sql: db.sql });
-    await expect(tool.handler(toolCtx(), { claim: 'x', confidence: 0.5, confidence_inputs: { n: 1 } })).rejects.toThrow(
-      /evidence rejected: research_source_id is required; model_tag is required/,
+    // AOS-04: an agent's claim needs its verbatim quote and exactly one source; those are checked first.
+    await expect(tool.handler(toolCtx(), { claim: 'x', confidence: 0.5, confidence_inputs: { n: 1 } })).rejects.toThrow(/evidence rejected: quote is required/);
+    await expect(tool.handler(toolCtx(), { quote: 'x', claim: 'x', confidence: 0.5, confidence_inputs: { n: 1 } })).rejects.toThrow(
+      /evidence rejected: exactly one of research_source_id or canonical_prompt_id/,
     );
+    await expect(tool.handler(toolCtx(), { research_source_id: '00000000-0000-0000-0000-000000000000', quote: 'x', claim: 'x', confidence: 0.5, confidence_inputs: { n: 1 } }))
+      .rejects.toThrow(/evidence rejected: model_tag is required/);
   });
 
   it('write_evidence records a tagged claim linked to its source, research run and agent run', async () => {
-    const src = await registerResearchSource(db.sql, { researchRunId, kind: 'web', uri: `${base}/notes`, title: 't', contentSha256: 'c'.repeat(64) });
+    const observed = 'Leading the style prompt with the vocal descriptor held timbre in 8 of 10 generations.';
+    const src = await registerResearchSource(db.sql, { researchRunId, kind: 'web', uri: `${base}/notes`, title: 't', contentSha256: 'c'.repeat(64), text: observed });
     const tool = createWriteEvidenceTool({ sql: db.sql });
     const out = (await tool.handler(toolCtx(), {
       research_source_id: src.id,
+      quote: observed,
       claim: 'Leading the style prompt with the vocal descriptor held timbre in 8 of 10 generations.',
       model_tag: 'suno-v4.5',
       confidence: 0.8,

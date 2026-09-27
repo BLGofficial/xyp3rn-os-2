@@ -480,6 +480,28 @@ Migration `20260925160000_studio.sql` (+ rollback). Design: `docs/artist-os/AOS-
   - On import, a submission is ordered after its package's source versions and the decisions on them, because the gate runs on import too.
 - **Rollback:** refuses while any rating exists, or any take is a Vault file (either would lose the owner's data). Then it drops the trace, the ratings, the gate, the readiness function and the guard, and restores `suno_takes.audio_url NOT NULL`.
 
+## AOS-04 additions: the brief, the run deadline, research links, kept sources and quotes, the Findings Library
+
+Migration `20260926100000_research_mode.sql` (+ rollback). Design: `docs/artist-os/AOS-04-design.md` (decisions R1–R5, ARCHITECTURE F42).
+
+- **The brief:** `research_questions` gains `intended_use` (non-blank when set), `urls text[]` (every one `^https?://`, via `xyp_all_http`; 23514) and `specialists text[]` (the owner's pick; non-empty when set). Set at insert: `xyp_research` still updates `status` only (42501).
+- **The run deadline:** `research_runs.expires_at timestamptz not null`, default ten minutes out (existing rows filled at ALTER time, no UPDATE: sealed runs refuse updates). `xyp_research` may raise it; `openResearch` sets `n × LLM_TIMEOUT_MS + 5 min`. `sweepResearch` seals a running run past it as `error`, `abandoned: no result by <expires_at>`.
+- **Kept sources and quotes:**
+  - `research_sources.text` (≤ 20 000 chars, the fetcher's `TEXT_LIMIT`): what `fetch_source` read.
+  - `research_evidence.quote` (non-blank when set). `xyp_research_evidence_quote` (BEFORE INSERT, SECURITY DEFINER) checks it verbatim after a whitespace squash (`xyp_squash`) against the source's `text`, or, for an ingested source, a canonical body quoting that source. Anything else, a typographic variant included, is 23514 "quote not found verbatim". A null quote (the human paths, pre-AOS-04 rows) is not checked.
+- **`research_links` (R2):** `question_id` + exactly one of `artifact_lineage_id` (a lineage root; `xyp_research_links_guard`, 23514), `workflow_name` + `workflow_sha256` together, or `decision_key` (`^F[0-9]+$`); an optional non-blank `role`. One live link per brief and target (the guard, under an advisory lock; 23505). Append-only (`xyp_vault_immutable`, 55000). `research_link_retractions` (link id, reason) unlinks.
+- **Views (`security_invoker`):**
+  - `research_targets`: every live target of a brief, `(question_id, kind, target, role, link_id, via)`: the live `song_links` naming the brief (kind `song`, A1) union the unretracted `research_links` (kinds `lineage`, `workflow` as `name@sha256`, `decision`).
+  - `current_finding_decisions`: the owner's one decision per finding (`accept` | `reject`, by, at, reason).
+  - `findings_library`: the accepted findings with their brief, run, evidence count, and canonical status (`none` | `candidate` | `promoted` | `rejected`, from `knowledge_candidates`).
+- **`xyp_decide_finding(uuid, text, text, text) returns uuid`** (SECURITY DEFINER): one pre-decided `approval_queue` row, `item_type research_finding` (a new enum value). Decision `accept` or `reject`, approver and reason required (22023); a second decision is 23505 (`approval_queue_item_key`). No canonical table is touched. EXECUTE: `service_role` only.
+- **Roles:**
+  - `xyp_research`: SELECT/INSERT on `research_links` and `research_link_retractions`; SELECT on `research_targets`, `song_links`, `song_link_retractions`, `current_song_links` (the song half of `research_targets`); UPDATE (`expires_at`) on `research_runs`; EXECUTE `xyp_all_http`.
+  - `xyp_web`: SELECT on the new tables and views, and on `research_finding_evidence`, `contradictions`, `knowledge_candidates`.
+  - `service_role`: SELECT only (G20); decides through `xyp_decide_finding`. `anon` and `authenticated` get nothing.
+- **Export:** `research_links`, `research_link_retractions`, `research_sources`, `research_evidence`, `research_findings`, `research_finding_evidence` and `contradictions` join `xyp-vault-export/v1`. A brief reached through `song_links` brings its links, runs, evidence (sources by FK), findings, contradictions and the owner's decisions. Knowledge candidates stay out. A re-link is ordered after the retraction that freed it.
+- **Rollback:** refuses while the owner has decided a finding, a brief has a link, evidence carries a quote, a source keeps text, or a brief carries an intended use, URLs or a pick. Then it drops the views, the decision function, the link tables and guard, the quote trigger, the columns and helpers, and the policies and grants it added on older tables. The enum value stays.
+
 ## Adding a table (checklist, every phase)
 
 1. Idempotent DDL (`if not exists`, `create or replace`, enum creation wrapped in a `duplicate_object` catch).

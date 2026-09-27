@@ -27,6 +27,9 @@ pnpm route "your request"       # domain routing decision with evidence
 pnpm ask "your request"         # front door: route → plan → run the domain entrypoint (research, X3LIUS sub-domains)
 pnpm ingest --file records/x3lius/music-system.manifest.yaml --origin first_party   # Phase 7: X3LIUS module + 10 sub-domains via the gate
 pnpm research <cmd> '<json>'    # 6C engines by hand: observation, cite, finding, candidate, eligibility, resolve, experiment:*
+pnpm research ask '{"projectSlug":"...","question":"...","intendedUse":"...","urls":["https://..."],"songId"?:"<uuid>"}'   # AOS-04: a brief, run live (OPENROUTER_API_KEY)
+pnpm research decide <findingId> accept|reject "<reason>"   # AOS-04: the Findings Library (never canonical)
+pnpm research promote '{"findingId":"...","proposed_kind":"canonical_prompt","target_slug":"...","title":"...","body":"...","domain":"RECORDS"}'   # AOS-04: an accepted finding → the gate → pnpm gate decide
 pnpm dispatch x3lius-lyrics '{"request":"..."}'   # Phase 8 Creative agent (also x3lius-songwriting, x3lius-composition); needs the key for its model's provider
 pnpm workflow records/x3lius/song-to-suno.workflow.yaml '{"request":"...","sunoModel":"v5"}'   # Phase 9: brief → Suno-ready prompt artifact
 pnpm dispatch x3lius-studio-editor '{"recipeFrom":{"artifactId":"<formula id>"}}'       # Phase 9 formula → a draft style recipe (AOS-03: a formula is no longer submitted)
@@ -78,7 +81,13 @@ The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md))
   - the handoff is refused until every version the package names is approved (a DB gate); Suno's audio comes back as a Vault take, which the owner rates;
   - every generation attempt traced to its exact lyric, style, tags, workflow sha256 and audio sha256 (`generation_attempts`);
   - the `/studio` screens, the package page, and a Studio section on the song page.
-- [ ] AOS-04: Research mode (research briefs, specialists that run, findings linked to songs and styles). Decisions are listed in the AOS-03 handoff.
+- [x] AOS-04 (Plan A): Research mode ([design](docs/artist-os/AOS-04-design.md), [plan](docs/artist-os/AOS-04-plan.md), [proof](docs/proofs/AOS-04-research.txt), [handoff](docs/handoffs/AOS-04.md)):
+  - a research brief: question, intended use, the only URLs the specialists may read, an optional owner pick of specialists, and typed links to songs, lineages, workflows and decisions;
+  - the 20 specialists run one grounded-evidence program on the OpenRouter free route; every claim quotes its passage verbatim, checked by the DB against the kept page text;
+  - synthesis into findings; the owner accepts findings into the Findings Library, and promotes accepted ones to canonical through the Promotion Gate;
+  - `/research` (briefs, preview, new brief), the run workbench, `/research/library`, and Research sections on songs, recipes and tag sets; runs execute in the background of `next start`.
+- [x] AOS-04 Plan B: the Mercury shell ([plan](docs/artist-os/AOS-04-plan-B.md), [proof](docs/proofs/AOS-04-mercury.txt)): graphite/mercury tokens across the whole app, locally hosted fonts, the three-column shell with a drawer below 1280 px, the metric strip with its definitions, the system pulse and recent activity, the Sofia clock synced to the server, and Research recomposed per §17.
+- [ ] AOS-04 Plan C: the graph, file index and sphere (design §§15–16, 18–21).
 
 ## Build status (Agentic OS build guide)
 
@@ -88,7 +97,7 @@ The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md))
 - [x] Phase 3: Retrieval / context engine
 - [x] Phase 4: Agent runtime + registry (4A–4E)
 - [x] Phase 5: Workflow / orchestration engine
-- [x] Phase 6: AI Music Research Intelligence (6A–6D; the 20 specialists still need an LLM program to run)
+- [x] Phase 6: AI Music Research Intelligence (6A–6D; the 20 specialists run since AOS-04)
 - [x] Phase 7: X3LIUS Music Intelligence (module + ten sub-domains, scoped context path)
 - [x] Phase 8: Songwriting + Lyrics agents, plus Composition (F15). Live verse produced with Nemotron via OpenRouter ([handoff](docs/handoffs/PHASE-08.md))
 - [x] Phase 9: Suno Generation System, plus Genre/Style (F15). Live brief-to-Suno-prompt produced with Nemotron via OpenRouter: whole-song lyrics against the structure, hook in every chorus; no Suno take yet ([handoff](docs/handoffs/PHASE-09.md))

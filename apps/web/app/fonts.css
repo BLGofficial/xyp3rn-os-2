@@ -1,0 +1,7 @@
+/* Locally hosted fonts (AOS-04 design §14.3, decision M2): pinned OFL packages, bundled by the Next build;
+   no runtime font CDN. Notices: apps/web/FONT-NOTICES.md. Space Grotesk ships no Cyrillic, so the display
+   stack (tailwind.config.mjs) falls back to Inter for those glyphs. */
+@import '@fontsource-variable/inter/index.css';
+@import '@fontsource-variable/space-grotesk/index.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';

@@ -1,10 +1,12 @@
+import { sofiaStamp } from '../lib/clock.ts';
+
 // Small presentational pieces shared by the screens. Server components only.
 
 export const ErrorBanner = ({ error }: { error?: string | string[] | undefined }) =>
   typeof error === 'string' && error !== '' ? <p className="error" role="alert">{error}</p> : null;
 
-/** Every figure shows its time: UTC, to the second. */
-export const Time = ({ at }: { at: string | null }) => (at ? <time dateTime={at}>{at.replace('T', ' ').slice(0, 19)}Z</time> : <span>—</span>);
+/** Every figure shows its time, to the second: Sofia wall time with its offset (§19); UTC on hover. */
+export const Time = ({ at }: { at: string | null }) => (at ? <time dateTime={at} title={`UTC ${at}`}>{sofiaStamp(Date.parse(at))}</time> : <span>—</span>);
 
 export const Status = ({ status }: { status: string }) => <span className={`status-${status}`}>{status}</span>;
 
@@ -14,3 +16,10 @@ export const SongLinks = ({ songs }: { songs: readonly { id: string; title: stri
 export const Tags = ({ tags }: { tags: readonly string[] }) => <>{tags.map((t) => <a key={t} href={`/vault?tag=${encodeURIComponent(t)}`} className="tag no-underline">{t}</a>)}</>;
 
 export const first = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v) || undefined;
+
+/** A data table that scrolls inside its own labelled region at narrow widths, never the page (§13.3). */
+export const ScrollTable = ({ label, className = '', children }: { label: string; className?: string; children: React.ReactNode }) => (
+  <div className={`table-scroll ${className}`.trim()} role="region" aria-label={label} tabIndex={0}>
+    <table>{children}</table>
+  </div>
+);

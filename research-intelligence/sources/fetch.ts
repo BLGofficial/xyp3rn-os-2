@@ -44,12 +44,13 @@ export const htmlToText = (html: string): { title: string; text: string } => {
 /**
  * Fetches a URL within the limits and extracts text.
  * @param url - http(s) URL
+ * @param fetchFn - the HTTP client (default the global fetch; tests inject a stub)
  * @returns final URI, content type, title, text (≤ TEXT_LIMIT chars), sha256 of the full body
  * @throws Error on non-2xx, oversize body, timeout or unsupported content type
  */
-export const fetchSource = async (url: string): Promise<FetchedSource> => {
+export const fetchSource = async (url: string, fetchFn: typeof fetch = fetch): Promise<FetchedSource> => {
   if (!/^https?:\/\//i.test(url)) throw new Error(`fetch_source: only http(s) URLs are allowed: ${url}`);
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), redirect: 'follow' });
+  const res = await fetchFn(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), redirect: 'follow' });
   if (!res.ok) throw new Error(`fetch_source: ${url} returned HTTP ${res.status}`);
   const declared = Number(res.headers.get('content-length') ?? 0);
   if (declared > FETCH_MAX_BYTES) throw new Error(`fetch_source: ${url} is ${declared} bytes (limit ${FETCH_MAX_BYTES})`);

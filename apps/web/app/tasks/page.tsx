@@ -16,7 +16,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Record
       <h1>Tasks</h1>
       <ErrorBanner error={searchParams.error} />
       <nav className="mt-2 flex gap-4 text-sm">
-        {STATUSES.map((s) => (s === status ? <span key={s} className="text-records">{s}</span> : <a key={s} href={`/tasks?status=${s}`}>{s}</a>))}
+        {STATUSES.map((s) => (s === status ? <span key={s} aria-current="true" className="font-medium text-ink-1 underline decoration-mercury underline-offset-4">{s}</span> : <a key={s} href={`/tasks?status=${s}`}>{s}</a>))}
       </nav>
       <div className="mt-4"><Tasks tasks={tasks} back={back} /></div>
 

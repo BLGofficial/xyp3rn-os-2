@@ -1,10 +1,11 @@
 import { notFound } from 'next/navigation';
-import { catalogLoaders, loaders, runtime, studioLoaders } from '../../../lib/server';
+import { catalogLoaders, loaders, researchLoaders, runtime, studioLoaders } from '../../../lib/server';
 import { linkSong, reviseSong, unlinkSong } from '../../actions';
 import { registerTrackAction } from '../../catalog-actions';
 import { buildPackageAction } from '../../studio-actions';
 import { Checks, CreditForm, Credits, TaskForm, Tasks } from '../../catalog-ui';
-import { ErrorBanner, Status, Time } from '../../ui';
+import { ResearchSection } from '../../research/research-ui';
+import { ErrorBanner, ScrollTable, Status, Time } from '../../ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ const Unlink = ({ songId, linkId }: { songId: string; linkId: string }) => (
     <input type="hidden" name="songId" value={songId} />
     <input type="hidden" name="linkId" value={linkId} />
     <input name="reason" placeholder="why" required size={10} aria-label="unlink reason" />
-    <button className="px-1 text-xs">Unlink</button>
+    <button className="btn-quiet">Unlink</button>
   </form>
 );
 
@@ -25,7 +26,9 @@ export default async function Song({ params, searchParams }: { params: { id: str
   if (!d || !w) notFound();
   const { song } = d;
   // After the existence check: the id is cast to uuid there, so a malformed one must 404 first.
-  const [options, studio] = await Promise.all([(await catalogLoaders()).recordingOptions(rt.sql, song.id), (await studioLoaders()).songStudio(rt.sql, song.id)]);
+  const [options, studio, research] = await Promise.all([
+    (await catalogLoaders()).recordingOptions(rt.sql, song.id), (await studioLoaders()).songStudio(rt.sql, song.id), (await researchLoaders()).researchFor(rt.sql, { songId: song.id }),
+  ]);
   const optionLabel = (o: { name: string; version: number; status: string }) => `${o.name} v${o.version} (${o.status})`;
   const back = `/songs/${song.id}`;
   return (
@@ -87,7 +90,7 @@ export default async function Song({ params, searchParams }: { params: { id: str
           <button type="submit">Build Suno package</button>
         </form>
       )}
-      <table className="mt-2">
+      <ScrollTable label="Suno packages built for this song" className="mt-2">
         <thead><tr><th>Package</th><th>Built</th><th>Handoff</th><th>Attempts</th></tr></thead>
         <tbody>
           {studio.packages.map((p) => (
@@ -98,14 +101,14 @@ export default async function Song({ params, searchParams }: { params: { id: str
           ))}
           {studio.packages.length === 0 && <tr><td colSpan={4} className="meta">no package yet</td></tr>}
         </tbody>
-      </table>
+      </ScrollTable>
 
       <h2>Tasks</h2>
       <Tasks tasks={w.tasks} back={back} showTarget={false} />
       <TaskForm target={{ songId: song.id }} back={back} />
 
       <h2>Lyrics</h2>
-      <table>
+      <ScrollTable label="Lyrics">
         <thead><tr><th>Lineage</th><th>Role</th><th>Latest</th><th>Approved</th><th /></tr></thead>
         <tbody>{d.lyrics.map((l) => (
           <tr key={l.linkId}>
@@ -114,23 +117,25 @@ export default async function Song({ params, searchParams }: { params: { id: str
             <td><Unlink songId={song.id} linkId={l.linkId} /></td>
           </tr>
         ))}</tbody>
-      </table>
+      </ScrollTable>
 
       <h2>Files</h2>
-      <table>
+      <ScrollTable label="Files">
         <tbody>{d.files.map((f) => (
           <tr key={f.linkId}><td><a href={`/vault/files/${f.id}`}>{f.title}</a></td><td>{f.mediaClass ?? 'knowledge source'}</td><td>{f.role ?? '—'}</td><td><Unlink songId={song.id} linkId={f.linkId} /></td></tr>
         ))}</tbody>
-      </table>
+      </ScrollTable>
 
       <h2>Takes, tracks, research</h2>
-      <table>
+      <ScrollTable label="Takes, tracks, research">
         <tbody>
           {d.takes.map((t) => <tr key={t.linkId}><td>take</td><td>{t.title ?? t.id}</td><td className="break-all meta">{t.audioUrl ?? 'a Vault audio file'}</td><td><Unlink songId={song.id} linkId={t.linkId} /></td></tr>)}
           {d.tracks.map((t) => <tr key={t.linkId}><td>track</td><td>{t.title}</td><td className="meta">{t.releaseTitle} ({t.releaseStatus})</td><td><Unlink songId={song.id} linkId={t.linkId} /></td></tr>)}
           {d.research.map((r) => <tr key={r.linkId}><td>research</td><td>{r.question}</td><td /><td><Unlink songId={song.id} linkId={r.linkId} /></td></tr>)}
         </tbody>
-      </table>
+      </ScrollTable>
+
+      <ResearchSection research={research} />
 
       <h2>Link</h2>
       <form action={linkSong} className="flex flex-wrap items-end gap-3">
@@ -153,12 +158,12 @@ export default async function Song({ params, searchParams }: { params: { id: str
       </form>
 
       <h2>Revisions</h2>
-      <table>
+      <ScrollTable label="Revisions">
         <thead><tr><th>Rev</th><th>Title</th><th>Status</th><th>Genre</th><th>Lang</th><th>At</th><th>Run</th></tr></thead>
         <tbody>{d.revisions.map((r) => (
           <tr key={r.revision}><td>{r.revision}</td><td>{r.title}</td><td>{r.status}</td><td>{r.genre ?? '—'}</td><td>{r.language ?? '—'}</td><td className="meta"><Time at={r.createdAt} /></td><td className="meta"><code>{r.runId}</code></td></tr>
         ))}</tbody>
-      </table>
+      </ScrollTable>
     </section>
   );
 }

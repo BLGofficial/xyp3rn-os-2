@@ -1,0 +1,208 @@
+AOS-04 — Research mode (Plan A): proof (2026-09-26)
+Produced with the repo's own commands against the local Postgres. Every DB test runs in its own throwaway database. Section 2
+runs the real CLIs (pnpm dispatch, pnpm research, pnpm gate) against a throwaway database (xyp_proof_aos04, dropped
+afterwards). Section 3 drives the real UI (next start) in Chromium against another.
+================================================================================
+
+## 0. Status of the gate (PLAN.md §5 Phase 4: "reusable findings retain their sources and cannot silently become canonical without approval")
+# - Sources retained: fetch_source keeps the page text it read (research_sources.text); every agent claim carries the
+#   verbatim quote behind it (research_evidence.quote), checked by the DB on insert against that text (or, for an
+#   ingested document, the canonical bodies quoting it). A fabricated quote or a typographic variant is refused (23514)
+#   and the specialist declines it with the reason; nothing is written. Section 2b: the fabricated claim declined.
+# - Not silently canonical: accepting a finding into the Findings Library touches no canonical table
+#   (xyp_decide_finding, one final decision per finding); only an accepted finding can be promoted; the Promotion Gate
+#   queues the candidate for the owner (D2), and only the owner's approval writes the canonical row. Section 2c:
+#   canonical counts 0/0/0 after accept and after promote, 1 prompt / 1 module / 2 history rows after approve.
+# - The promoted row chains back: canonical_prompts → knowledge_candidates → research_findings →
+#   research_finding_evidence → research_evidence.quote → research_sources.text (section 2d).
+# - Decisions R1–R5 (F42): the OpenRouter free route; brief-level typed links (song via song_links, lineage, workflow,
+#   decision); two approval tiers; one shared grounded-evidence program; runs in the background of next start (R5 on
+#   Next 14.2: a detached promise, a boot sweep).
+# - Shown three ways: tests/aos-04/brief-to-canonical.test.ts (with the real retrieve_context over the ingested build
+#   guide), the CLIs (section 2), the browser (section 3). The brief survives xyp-vault-export/v1 into a fresh database
+#   (tests/aos-04/research-export.test.ts and the gate test).
+# - Written after the features, not first: the gate test and the web smoke extension, so they were never red. The DB,
+#   evidence-tool, program, synthesis, run, library, export and web loader/ops tests were red first.
+# - Not run live: the specialists' model call. No OPENROUTER_API_KEY is set in this environment. Section 2a runs the live
+#   path up to the call (a real page fetched and kept, the run sealed error naming the missing key); the model's part is
+#   the FAKE MODEL (scripted from the passages the real prompt listed), in the tests and in section 2b.
+
+## 1. Tests (AOS-04 files, the web Research loaders/ops, the orchestrator selection)
+ ✓ tests/aos-04/research-run.test.ts > the brief > reads decision keys from ARCHITECTURE.md and the checked-in workflows
+ ✓ tests/aos-04/research-run.test.ts > the brief > refuses a bad brief before writing, naming each field
+ ✓ tests/aos-04/research-run.test.ts > the brief > refuses a lineage target that is not a root (the DB guard), writing nothing
+ ✓ tests/aos-04/research-run.test.ts > open → execute > opens a brief with links and the owner selection, raises the deadline, runs the specialists and synthesizes
+ ✓ tests/aos-04/research-run.test.ts > open → execute > a second execute of a sealed run runs nothing and reports the seal
+ ✓ apps/web/server/research.test.ts > research ops and loaders (AOS-04 §8) > startBrief returns once the run is open; the run finishes in the background; runDetail shows it
+ ✓ apps/web/server/research.test.ts > research ops and loaders (AOS-04 §8) > refuses a bad brief with the field-level message and writes nothing
+ ✓ apps/web/server/research.test.ts > research ops and loaders (AOS-04 §8) > accept → library; promote → pending; approve → promoted, as the owner
+ ✓ apps/web/server/research.test.ts > research ops and loaders (AOS-04 §8) > filters the library by target; researchFor(song | lineage) lists the brief and its findings
+ ✓ apps/web/server/research.test.ts > research ops and loaders (AOS-04 §8) > the index lists briefs with targets and latest run, the specialists, workflows, decisions, songs and lineages; the preview scores a question
+ ✓ apps/web/server/research.test.ts > research ops and loaders (AOS-04 §8) > re-runs a brief as a new brief with the same fields and live links
+ ✓ apps/web/server/research.test.ts > research ops and loaders (AOS-04 §8) > the boot sweep seals a run a stopped server left past its deadline, and only that one
+ ✓ apps/web/server/research.test.ts > research ops and loaders (AOS-04 §8) > runDetail of an unknown run is null
+ ✓ tests/aos-04/brief-to-canonical.test.ts > AOS-04 gate: a brief to a canonical row, sources kept, nothing canonical without the owner > 1. a brief linked to a song, a recipe lineage and a decision
+ ✓ tests/aos-04/brief-to-canonical.test.ts > AOS-04 gate: a brief to a canonical row, sources kept, nothing canonical without the owner > 2. the run writes the real quote, declines the fabricated one, and synthesizes one finding
+ ✓ tests/aos-04/brief-to-canonical.test.ts > AOS-04 gate: a brief to a canonical row, sources kept, nothing canonical without the owner > 3. accepted into the Findings Library, then promoted to a pending approval: canonical unchanged both times
+ ✓ tests/aos-04/brief-to-canonical.test.ts > AOS-04 gate: a brief to a canonical row, sources kept, nothing canonical without the owner > 4. the owner approves: one canonical row with its history, chaining back to the quote and the page text
+ ✓ tests/aos-04/brief-to-canonical.test.ts > AOS-04 gate: a brief to a canonical row, sources kept, nothing canonical without the owner > 5. the brief survives xyp-vault-export/v1: B has its targets, the quote with its page text, and the decision
+ ✓ tests/aos-04/research-export.test.ts > research in xyp-vault-export/v1 > exports a song-linked brief with its links, run, quoted evidence, page text, finding and decision, and re-imports them
+ ✓ tests/aos-04/synthesis.test.ts > synthesizeRun > writes one finding per (topic, value, tag), claim text from the most confident evidence; lists untopical evidence
+ ✓ tests/aos-04/synthesis.test.ts > synthesizeRun > keeps different model tags apart (recordFinding refuses a mixed-tag finding)
+ ✓ tests/aos-04/synthesis.test.ts > synthesizeRun > is idempotent: a second call writes nothing new
+ ✓ tests/aos-04/specialist-program.test.ts > registration (R1) > registers the program for exactly the Research agents with a Scope, all on the OpenRouter free route
+ ✓ tests/aos-04/specialist-program.test.ts > the specialist program (R4) > writes a claim whose quote the page contains, with the quote kept
+ ✓ tests/aos-04/specialist-program.test.ts > the specialist program (R4) > declines a fabricated quote, a typographic variant, an unknown passage, a bad topic and a non-JSON value, writing none of them
+ ✓ tests/aos-04/specialist-program.test.ts > the specialist program (R4) > skips a failing URL and reports it
+ ✓ tests/aos-04/specialist-program.test.ts > the specialist program (R4) > with no sources, makes no model call and declines
+ ✓ tests/aos-04/specialist-program.test.ts > the specialist program (R4) > accepts a null intended use and null urls (optional workflow inputs bind as null)
+ ✓ tests/aos-04/specialist-program.test.ts > the specialist program (R4) > caps passages at the budget
+ ✓ tests/aos-04/specialist-program.test.ts > passage order > lists the brief's pages before canonical rows, so the owner's sources are never crowded out
+ ✓ tests/aos-04/research-db.test.ts > the brief (§4) > stores intended use, urls and the owner override; refuses a non-http url and an empty override
+ ✓ tests/aos-04/research-db.test.ts > the brief (§4) > keeps the brief immutable for xyp_research (only status is updatable)
+ ✓ tests/aos-04/research-db.test.ts > the run deadline (§4) > defaults expires_at to about ten minutes out and lets xyp_research raise it
+ ✓ tests/aos-04/research-db.test.ts > kept sources and quotes (§4, §5) > accepts a quote found verbatim (whitespace squashed) and a null quote (the human paths)
+ ✓ tests/aos-04/research-db.test.ts > kept sources and quotes (§4, §5) > refuses a quote the source does not contain, including a typographic variant
+ ✓ tests/aos-04/research-db.test.ts > kept sources and quotes (§4, §5) > verifies a quote of an ingested source against the canonical bodies quoting it
+ ✓ tests/aos-04/research-db.test.ts > research_links (R2) > links a lineage root, a workflow and a decision; refuses a second target, a non-root, a bad key and a duplicate live link
+ ✓ tests/aos-04/research-db.test.ts > research_links (R2) > refuses a lineage link to a non-root version
+ ✓ tests/aos-04/research-db.test.ts > research_links (R2) > retracts without deleting: the link leaves research_targets, and a re-link is then allowed
+ ✓ tests/aos-04/research-db.test.ts > research_links (R2) > shows songs that link the brief (song_links, A1) as song targets
+ ✓ tests/aos-04/research-db.test.ts > the owner's finding decisions (R3) > records one decision as service_role, shows it in the library, refuses a second one and every other role
+ ✓ tests/aos-04/research-db.test.ts > the owner's finding decisions (R3) > touches no canonical table
+ ✓ tests/aos-04/research-db.test.ts > the owner's finding decisions (R3) > lets xyp_web read the library, the targets and the research chain
+ ✓ tests/aos-04/evidence-tools.test.ts > fetch_source > stores the text it read, so a quote can be re-verified later
+ ✓ tests/aos-04/evidence-tools.test.ts > fetch_source > fails loudly on a non-2xx page
+ ✓ tests/aos-04/evidence-tools.test.ts > write_evidence > writes a quoted claim against a fetched page
+ ✓ tests/aos-04/evidence-tools.test.ts > write_evidence > refuses an agent write without a quote, and one with both or neither source
+ ✓ tests/aos-04/evidence-tools.test.ts > write_evidence > refuses a quote the page does not contain (the DB check)
+ ✓ tests/aos-04/evidence-tools.test.ts > write_evidence > cites an ingested source through a canonical row and verifies the quote in its body
+ ✓ tests/aos-04/evidence-tools.test.ts > write_evidence > refuses a canonical row with no source (not citable)
+ ✓ tests/aos-04/research-run.test.ts > open → execute > a provider failure (429 after retries) seals the run and keeps the earlier specialist's evidence as findings
+ ✓ tests/aos-04/research-run.test.ts > open → execute > keeps the Phase 6A call shape: runResearch({ question, projectSlug }) still works
+ ✓ tests/aos-04/research-run.test.ts > retractResearchLink > unlinks a target with a reason; a blank reason is refused
+ ✓ tests/aos-04/research-run.test.ts > sweepResearch > seals only runs past their deadline, as abandoned
+ ✓ research-intelligence/orchestrator/select.test.ts > parseScope > reads the one-sentence scope and the weighted keywords
+ ✓ research-intelligence/orchestrator/select.test.ts > parseScope > rejects a scope that is not exactly one sentence or has no keywords
+ ✓ research-intelligence/orchestrator/select.test.ts > selectSpecialists > activates only specialists at or above the threshold, each with its matched terms
+ ✓ research-intelligence/orchestrator/select.test.ts > selectSpecialists > selects nobody (and says so) rather than activating everyone when nothing matches
+ ✓ research-intelligence/orchestrator/select.test.ts > planResearch > emits a workflow plan with one independent step per selected specialist
+ ✓ research-intelligence/orchestrator/select.test.ts > planResearch > uses the owner's picks when given, marking the selection as the owner's
+ ✓ tests/aos-04/library.test.ts > the Findings Library (R3) > refuses promotion of a finding the owner has not accepted
+ ✓ tests/aos-04/library.test.ts > the Findings Library (R3) > refuses promotion of a rejected finding
+ ✓ tests/aos-04/library.test.ts > the Findings Library (R3) > accepts once, touching no canonical table; a second decision is refused in the owner's terms
+ ✓ tests/aos-04/library.test.ts > the Findings Library (R3) > promotes an accepted finding to a pending approval, still touching no canonical table, then the owner approves
+ Test Files  14 passed (14)
+      Tests  168 passed (168)
+
+Full suite (pnpm test): Test Files 98 passed (98), Tests 1322 passed (1322) — up from 1263 at AOS-03.
+Changed on purpose and still green: tests/phase-06b/roster.test.ts (the pinned model, R1), tests/phase-06c/engines.test.ts
+(write_evidence needs a quote from an agent; its source now keeps the text the quote comes from).
+
+## 2. The gate via the CLIs (throwaway database xyp_proof_aos04; XYP_DATABASE_URL pointed at it)
+
+### 2a. pnpm research ask — live, no key: the path runs up to the model call and fails loudly
+$ pnpm dispatch records-songs '{"create":{"title":"[FIXTURE] Night City","artist":"X3LIUS","language":"en"}}'
+  → song 272f9e70-4f1a-4533-8707-962dbc5df717
+$ pnpm research ask '{"projectSlug":"aos04-proof","question":"Where should the vocal descriptor go in a Suno style prompt?",
+    "intendedUse":"fix the order of the Night drive recipe","urls":["https://en.wikipedia.org/wiki/Suno_AI"],
+    "specialists":["suno-researcher"],"targets":[{"kind":"decision","decisionKey":"F41"}],"songId":"272f9e70-…"}'
+stderr: [workflow] research-specialists FAILED at step suno-researcher: LLM runner unavailable: OPENROUTER_API_KEY is not set
+        (agent suno-researcher uses model openrouter:nvidia/nemotron-3-ultra-550b-a55b:free) (run a436a1f1-…; not run: none)
+{
+  "researchRunId": "c668393f-3f46-4806-b5b7-a147c8825c69",
+  "status": "error",
+  "selected": ["suno-researcher"],
+  "error": "specialist step suno-researcher failed: LLM runner unavailable: OPENROUTER_API_KEY is not set (agent suno-researcher uses model openrouter:nvidia/nemotron-3-ultra-550b-a55b:free)",
+  "evidence": [],
+  "findings": []
+}  (exit 1)
+What it wrote before the call:
+  research_sources: web | https://en.wikipedia.org/wiki/Suno_AI | Suno - Wikipedia | text 20000 chars | reliability 0.300
+  suno-researcher log: fetch_source https://en.wikipedia.org/wiki/Suno_AI → new source d24ffc24-… (reliability 0.3)
+  research_targets: song 272f9e70-… (linked through records-songs), decision F41
+
+### 2b. The fixture run (FAKE MODEL): node scripts/proof/aos04-seed.ts <songId>
+The same brief with a stubbed page ("[FIXTURE] Put the vocal descriptor first. Genre tags can follow it."); the fake
+model answers with one real quote and one the page never says. Everything else is the real path.
+{
+  "researchRunId": "c98306e0-d536-4aa9-bdb1-0de9df994c50",
+  "status": "success",
+  "songLink": "success",
+  "specialist": {
+    "status": "done",
+    "declined": [{ "claim": "[FAKE] fabricated",
+                   "reason": "research_evidence: quote not found verbatim in research source 2008516a-…: \"Always put the vocal descriptor first, it doubles adherence.\"" }],
+    "passages": 1, "failedUrls": [], "evidenceIds": ["34986132-3e45-4826-a44f-7ed5bfaf5ce7"]
+  },
+  "findings": [{ "id": "3b164b29-963c-462d-b5f3-c1714e9e9ac7", "claim_topic": "suno.vocal-descriptor-position", "claim_value": "first",
+                 "claim": "[FAKE] the vocal descriptor goes first", "confidence": "0.135" }]
+}
+
+### 2c. The owner's decisions (canonical counts: prompts | modules | knowledge_versions)
+== canonical before: 0|0|0
+== pnpm research promote (before accept)
+only an accepted finding can be promoted; finding 3b164b29-963c-462d-b5f3-c1714e9e9ac7 is undecided
+exit 1
+== pnpm research decide accept
+{
+  "approvalId": "7ad9a0bb-e3ab-4a35-998f-2ed218f02ec1"
+}
+exit 0
+== pnpm research decide (second decision)
+finding 3b164b29-963c-462d-b5f3-c1714e9e9ac7 is already decided; a decision is final (run the brief again for a new finding)
+exit 1
+== canonical after accept: 0|0|0
+== pnpm research promote
+exit 0
+{
+  "candidateId": "943b717a-6513-4c37-b190-89bc4f7453df",
+  "outcome": "pending_approval",
+  "approvalId": "4ddce3f6-c123-4ec1-ab41-1f13908b587f",
+  "steps": [
+    "candidate:pass",
+    "source-verification:pass",
+    "model-version-tagging:pass",
+    "controlled-test:FAIL",
+    "evaluation:FAIL",
+    "confidence-assignment:FAIL",
+    "validated-rule:FAIL"
+  ]
+}
+== canonical after promote: 0|0|0
+(the gate's reasons: "experiment not validated", "confidence 0.135 below 0.8": routed to the owner)
+$ pnpm gate decide 4ddce3f6-c123-4ec1-ab41-1f13908b587f approve owner "make it canonical"
+{ "approval": "approved", "itemType": "knowledge_candidate", "outcome": "promoted", "canonicalPromptId": "3c37c8f5-…", "version": 1,
+  "embedded": { "embedded": 1, "skipped": 0, "truncated": 0 } }
+== canonical after approve: 1|1|2   (the prompt, the gate's records-validated-rules module, a history row each)
+
+### 2d. The chain
+            slug             | version | candidate |          claim_topic           |              quote              |                 uri                  |                          page_text
+-----------------------------+---------+-----------+--------------------------------+---------------------------------+--------------------------------------+--------------------------------------------------------------
+ suno-vocal-descriptor-first |       1 | promoted  | suno.vocal-descriptor-position | Put the vocal descriptor first. | https://example.org/suno-style-order | [FIXTURE] Put the vocal descriptor first. Genre tags can fol
+(1 row)
+findings_library: suno.vocal-descriptor-position | promoted | evidence 1 | owner | matches the studio notes
+research_runs: the live run error (no key), the fixture run success.
+
+## 3. The browser (pnpm web:build && node apps/web/e2e/smoke.ts <dir>): the AOS-04 lines
+ok  a brief linked to the song runs to completion (suno-researcher, FAKE MODEL, stubbed page)
+ok  /research lists the brief with its targets and run ([FIXTURE] Where should the vocal descriptor go in a Suno style prompt?[FIXTURE] the Night drive recipe orderdecision: F41song: [FIXTURE] Night City (research)success…)
+ok  the run page shows the finding by topic, with the verbatim quote and its source
+ok  the owner accepts the finding into the Findings Library
+ok  the library lists it with canonical: none (accepted is not canonical)
+ok  promoting it makes a candidate (the gate queues it for the owner)
+ok  the run page shows the canonical approval pending
+ok  the owner approves: the library shows canonical: promoted
+ok  the song's Research section links the brief and its finding
+ok  a brief with the override ticked and nobody picked is refused, naming the field
+ok  a brief no specialist matches opens, runs in the background of next start, and ends success with no specialist selected
+smoke: all checks passed
+(every AOS-01/02/03 line before these passed in the same run; screenshots 10-research-run, 11-research-library, 12-research-empty)
+
+## 4. The gates (run before the push)
+pnpm typecheck                       exit 0
+pnpm test                            Test Files 98 passed (98) · Tests 1322 passed (1322)
+pnpm agents:validate                 validateAll(): 0 failure(s)
+db:down, db:up, db:down, db:up       rolled back / applied 20260926100000, twice, every command exit 0
+pnpm web:build                       ok (/research, /research/library, /research/runs/[id] built)
+pnpm web:smoke                       smoke: all checks passed (section 3)
