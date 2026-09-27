@@ -10,7 +10,7 @@ import { createLocalVaultStore } from '../../../knowledge/source-registry/vault-
 import { asCommitted, insertTake } from '../../../tests/helpers/records-fixture.ts';
 import { createTestDb, REPO_ROOT, type TestDb } from '../../../tests/helpers/db.ts';
 import { fileDetail, ingestStatus, lineageDetail, listVault, songDetail, songList } from './loaders.ts';
-import { decide, editLyrics, songCreate, songLink, songRevise, songUnlink, uploadFiles } from './ops.ts';
+import { decide, editLyrics, indexVaultFile, songCreate, songLink, songRevise, songUnlink, uploadFiles } from './ops.ts';
 
 // AOS-01 §9: what the UI reads (as xyp_web, read only) and writes (through dispatch and
 // xyp_decide_artifact), against a throwaway migrated database. The pages only render these.
@@ -139,5 +139,25 @@ describe('loaders: read as xyp_web, read only', () => {
     const { asWeb } = await import('./loaders.ts');
     await expect(asWeb(db.sql, (tx) => tx`insert into tags (slug, label) values ('x', 'x')`)).rejects.toMatchObject({ code: '25006' });
     await expect(asCommitted(db.sql, 'xyp_web', (tx) => tx`insert into tags (slug, label) values ('x', 'x')`)).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+// AOS-04 Plan C1 Task 9 (§15.2 item 5): a Vault file is Saved the moment its row exists and Indexed for Vault
+// search once vault_embeddings holds it. A fake 384-d embedder stands in for the model (marked [FAKE] by its name).
+describe('Saved vs Indexed', () => {
+  const fake = { model: '[FAKE] test-embedder', embed: async (texts: readonly string[]) => texts.map(() => ({ vector: Array.from({ length: 384 }, (_, i) => (i === 0 ? 1 : 0)), tokens: 1, truncated: false })) };
+
+  it('is saved and not indexed until the Vault index runs, then indexed with its model and time', async () => {
+    const before = (await fileDetail(db.sql, fileId))!;
+    expect(before.indexed).toBeNull();
+    expect(await indexVaultFile(db.sql, async () => fake)).toEqual({ ok: true, model: '[FAKE] test-embedder' });
+    const after = (await fileDetail(db.sql, fileId))!;
+    expect(after.indexed).toEqual({ model: '[FAKE] test-embedder', at: expect.any(String) });
+  });
+
+  it('reports an indexing failure without touching the saved file', async () => {
+    const r = await indexVaultFile(db.sql, async () => { throw new Error('[FIXTURE] the model is not downloaded'); });
+    expect(r).toEqual({ ok: false, error: '[FIXTURE] the model is not downloaded' });
+    expect((await fileDetail(db.sql, fileId))!.id).toBe(fileId);
   });
 });
