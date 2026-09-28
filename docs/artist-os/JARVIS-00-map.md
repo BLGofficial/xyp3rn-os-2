@@ -64,7 +64,7 @@ The contract's first rule makes the repository's decisions authoritative and for
 
 | Prompt | Existing work | State |
 |---|---|---|
-| 01 Baseline, shell, Mercury sphere | AOS-00 baseline; Plan B shell (tokens, fonts, clock, metrics, pulse, activity, drawer, 390 px); Plan C1 graph data | **partial**: no sphere, no command input, nav differs (§5) |
+| 01 Baseline, shell, Mercury sphere | AOS-00 baseline; Plan B shell (tokens, fonts, clock, metrics, pulse, activity, drawer, 390 px); Plan C1 graph data; **Prompt 01: the sphere, the command input, the eight areas** | **built** (F48; open items F49) |
 | 02 Voice loop (Whisper/Kokoro) | none (= AOS-05) | **not built** |
 | 03 Sphere as provenance and navigation | C1: stored-only nodes and edges with provenance, inspector, search, domain/kind/lens filters, retractions, inherited targets | **partial**: no sphere, no answer-driven focus, filters lack status/language/project/date; no Social Stats nodes (Prompt 11) |
 | 04 X3LIUS persona and command routing | keyword domain router (`pnpm ask`), specialist scope selection | **partial**: no persona config, no assistant surface, no intent classes beyond domains |
@@ -84,6 +84,8 @@ The contract's first rule makes the repository's decisions authoritative and for
 | 18 Security, recovery, readiness | least-privilege roles, RLS, session auth, sandboxed raw routes, rollbacks refusing owner data | **not built** as an audit; no backup/restore test (= AOS-08) |
 
 ## 5. Prompt 01 gaps
+
+> **Closed by Prompt 01** (plan [JARVIS-01-plan.md](JARVIS-01-plan.md), decisions F48, open items F49, proof `docs/proofs/JARVIS-01.txt`): the sphere (1), the command input (2), the eight areas (3), the sphere's own loading, empty, error and populated states (4), and the same bars for it as for the shell (5). The list below is the gap as it stood before.
 
 1. **The sphere** is not built. Its data is (C1: `graph_nodes`/`graph_edges`, 752 entities on the dev DB). Decided: in-house SVG (S2), extractive answers (S4).
 2. **Bottom command input:** not built.

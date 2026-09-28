@@ -89,14 +89,14 @@ Contract conflicts (UUID v7, `prm_*`/`skl_*`, the six-state lifecycle, semantic 
 - **Interface:** `overview(tx, { maxNodes = 250, maxEdges = 500 })` returns `{ hub, nodes, groups, edges, counts: { indexed, drawn, grouped }, asOf }`.
   - A group is `{ id: 'group:<domain|shared>:<kind>', kind, domain, label, count, query, memberIds (first 200), membersTruncated }`.
   - If the real entities alone exceed the budget, the least-connected kinds are grouped first (agents before modules), and the counts say so.
-- [ ] **Red test:**
+- [x] **Red test:**
   - on a fixture graph, every node id is in `graph_nodes`, and every edge except `contains` is in `graph_edges` with its provenance;
   - groups count their real members, and their query text reads back the same members;
   - the budget holds with 400 fixture files;
   - two calls give identical output;
   - an empty workspace gives the six domains, the hub, and no group with zero members;
   - `/api/graph/overview` answers the loader's JSON, `no-store`.
-- [ ] **Commit(s):** red, then `Jarvis 01: the overview projection and the graph API (bounded, groups disclose members)`.
+- [x] **Commit(s):** red, then `Jarvis 01: the overview projection and the graph API (bounded, groups disclose members)`.
 
 ### Task 2: Sphere geometry
 
@@ -108,14 +108,14 @@ Contract conflicts (UUID v7, `prm_*`/`skl_*`, the six-state lifecycle, semantic 
   - `rotate(v, yaw, pitch)`;
   - `project(v, { width, height, zoom }): { x, y, depth, scale }`;
   - `hitRadius(scale) >= 22` (a 44 px target).
-- [ ] **Red test:**
+- [x] **Red test:**
   - every placed point has unit length and lies within its cap;
   - positions are identical across calls and independent of input order;
   - distinct ids never collide exactly;
   - Core projects above Records at yaw 0;
   - depth decreases for the far side, and a far-side point is dimmer;
   - the hit radius is never under 22 px.
-- [ ] **Commit(s):** red, then `Jarvis 01: sphere geometry (sectors, deterministic placement, projection)`.
+- [x] **Commit(s):** red, then `Jarvis 01: sphere geometry (sectors, deterministic placement, projection)`.
 
 ### Task 3: The sphere on Command
 
@@ -138,8 +138,8 @@ Contract conflicts (UUID v7, `prm_*`/`skl_*`, the six-state lifecycle, semantic 
   - from `md` up, the sphere takes the centre's width and at least 480 px of height;
   - below `md`, the list shows first and the sphere sits behind a "Show the sphere" disclosure;
   - reduced motion: no transitions.
-- [ ] **Test:** Task 8's smoke (browser behaviour). The geometry and data are unit-tested in Tasks 1–2.
-- [ ] **Commit:** `Jarvis 01 UI: the Mercury sphere on Command (selectable, keyboard, reduced motion, states) and the command input`.
+- [x] **Test:** Task 8's smoke (browser behaviour). The geometry and data are unit-tested in Tasks 1–2.
+- [x] **Commit:** `Jarvis 01 UI: the Mercury sphere on Command (selectable, keyboard, reduced motion, states) and the command input`.
 
 ### Task 4: The eight areas
 
@@ -152,7 +152,7 @@ Contract conflicts (UUID v7, `prm_*`/`skl_*`, the six-state lifecycle, semantic 
   - Workflow Builder (`/workflows`), Analytics (`/analytics`), System Admin (`/system`).
 - **More:** Search everything, Tasks, People, Ingest. The domain filters stay.
 - **Tabs:** Songs | Releases, as links with `aria-current`, on both pages.
-- [ ] **Commit:** `Jarvis 01 UI: the eight areas in navigation; Songs & Releases as one area with tabs`.
+- [x] **Commit:** `Jarvis 01 UI: the eight areas in navigation; Songs & Releases as one area with tabs`.
 
 ### Task 5: Workflow Builder (read-only)
 
@@ -163,11 +163,11 @@ Contract conflicts (UUID v7, `prm_*`/`skl_*`, the six-state lifecycle, semantic 
   - its recorded runs: count, last status and time, and how many ran the current revision vs earlier ones;
   - recorded runs whose workflow has no definition file (for example `research-specialists`), listed apart as "no definition file".
 - **The page** says: "Builder: not built (Prompt 14). These are the workflows that exist, read from their files and runs."
-- [ ] **Red test:**
+- [x] **Red test:**
   - a fixture workflow with two runs (one of an earlier revision) lists them with the right counts;
   - an undefined workflow's run is listed apart;
   - nothing is listed that has neither a file nor a run.
-- [ ] **Commit(s):** red, then `Jarvis 01: Workflow Builder, read-only (workflows, steps, runs by revision)`.
+- [x] **Commit(s):** red, then `Jarvis 01: Workflow Builder, read-only (workflows, steps, runs by revision)`.
 
 ### Task 6: Analytics (honest)
 
@@ -176,8 +176,8 @@ Contract conflicts (UUID v7, `prm_*`/`skl_*`, the six-state lifecycle, semantic 
 - **The page:** "No platform connector is configured. Metrics arrive with Prompt 11; nothing here is a statistic."
 - **The one real data point:** the recorded platform links (AOS-02) by platform, labelled "links, not metrics".
 - **Platform access:** listed only as "to be verified at Prompt 11", with no claims.
-- [ ] **Red test:** the loader counts the fixture's platform links by platform, and returns no metric field.
-- [ ] **Commit(s):** red, then `Jarvis 01: Analytics, honest (links only; connectors are Prompt 11)`.
+- [x] **Red test:** the loader counts the fixture's platform links by platform, and returns no metric field.
+- [x] **Commit(s):** red, then `Jarvis 01: Analytics, honest (links only; connectors are Prompt 11)`.
 
 ### Task 7: System Admin
 
@@ -190,11 +190,11 @@ Contract conflicts (UUID v7, `prm_*`/`skl_*`, the six-state lifecycle, semantic 
   - DB roles (`xyp_*`, from `pg_roles`: names only);
   - index coverage (C1, unchanged).
 - Secrets: the page shows "Configured" or "Not configured" only, never a value.
-- [ ] **Red test:**
+- [x] **Red test:**
   - the registry counts equal the registry's and the DB's;
   - the roles list includes `xyp_web` and `xyp_indexer`;
   - with a provider key set in the injected env, its value appears nowhere in the output.
-- [ ] **Commit(s):** red, then `Jarvis 01: System Admin (pulse, migrations, registries, roles, index)`.
+- [x] **Commit(s):** red, then `Jarvis 01: System Admin (pulse, migrations, registries, roles, index)`.
 
 ### Task 8: The browser journey
 
@@ -214,7 +214,7 @@ Contract conflicts (UUID v7, `prm_*`/`skl_*`, the six-state lifecycle, semantic 
 - **Layout:** 390 px with no sideways scroll on the new pages.
 - **Screenshots:** Command with the sphere at four viewports + 200%.
 - **Recorded, not gated:** LCP and CLS on `/` (PerformanceObserver), with device and dataset, for the proof.
-- [ ] **Commit:** `Jarvis 01: web:smoke drives the sphere and the eight areas`.
+- [x] **Commit:** `Jarvis 01: web:smoke drives the sphere and the eight areas`.
 
 ### Task 9: Proof, docs, handoff
 
@@ -226,7 +226,17 @@ Contract conflicts (UUID v7, `prm_*`/`skl_*`, the six-state lifecycle, semantic 
   - the gates.
 - **ARCHITECTURE:** **F48** (J1–J3; the overview's grouping rule; the hub as configuration) and **F49** (open: Prompt 03's answers, clusters and filters; fps not measured; the contract conflicts in the map's §2).
 - The map's §5 gaps are marked closed; the handoff and README are updated.
-- [ ] **Commit:** `Jarvis 01 proof and docs (F48 decided, F49 open)`.
+- [x] **Commit:** `Jarvis 01 proof and docs (F48 decided, F49 open)`.
+
+## As built (2026-09-28)
+
+All nine tasks are done; proof `docs/proofs/JARVIS-01.txt`, decisions F48, open items F49. Where the build differs from the text above:
+- **Budget floor:** the six domains and the groups are always drawn, even when they alone exceed `maxNodes`; the response names the demoted kinds (`demoted`). Workflows give way last, after modules.
+- **Overview nodes** carry only what the sphere draws (id, kind, title, owner, availability, the inspector link); the inspector loads the rest through `?node=`.
+- **The focus transition** runs only when the selection is out of view (the far side or past the rim); a selection in view doesn't move the camera. Shift+arrows turn the sphere, so the far side is reachable without a pointer.
+- **Geometry** also exports `facing` and `ease` (red-tested on their own), and `arcControl` for the curved links.
+- **The sphere's height** is CSS (340 px; 520 px from 960 px), so the server-rendered skeleton and the drawing take the same box.
+- **Command** gained a `kind` filter (`/?kind=<kind>&domain=<D>`), which a group opens.
 
 ## Prompt 01's verify list, mapped
 

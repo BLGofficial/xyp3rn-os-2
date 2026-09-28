@@ -1,0 +1,89 @@
+Jarvis Prompt 01 — the Mercury sphere and the eight areas: proof (2026-09-28)
+Produced with the repo's own commands. Unit and DB tests run on throwaway databases. Section 1 reads the dev database (migrations,
+the build guide and the X3LIUS manifest admitted, this checkout scanned; no songs or research in it). The browser section drives the
+real UI (next start) in headless Chromium against another database, seeded by the AOS-01–04 journey. Plan:
+docs/artist-os/JARVIS-01-plan.md (decisions J1–J3; ARCHITECTURE F48 decided, F49 open). Map: docs/artist-os/JARVIS-00-map.md.
+================================================================================
+
+## 0. What is shown
+# - The overview the sphere draws: bounded, every mark a graph_nodes row, a named group or the configured hub; the counts add up (1).
+# - Determinism: the same graph gives the same overview and the same positions, whatever the input order (2).
+# - The browser: the eight areas, the sphere's states, keyboard, reduced motion, the command input, clean logs (3).
+# - Recorded, not gated: LCP and CLS on / (4). The gates (5).
+# - Not built here (F49): Prompt 03's answers, clusters, filters and connection signals; frame rate.
+
+## 1. The overview on the dev database (graphLoaders.overview, as xyp_web, one repeatable-read snapshot)
+$ pnpm index scan --full   →  eligible 582 · indexed 582 · failed 0 · missing 0;  pnpm index status  →  diagnostics 0
+counts:  indexed 778 · drawn 113 · grouped 665 in 15 groups · edges 166 of 166 · demoted []
+drawn by kind:     agent 51 · domain 6 · module 35 · workflow 6 · workflow_step 15
+edges by relation: contains 13 · depends_on 17 · owned_by 92 · part_of 15 · step_uses_agent 15 · subdomain_of 14
+groups:  Core · Canonical prompts 15 · Core · Files 56 · Knowledge Layer · Canonical prompts 3 · Knowledge Layer · Files 47 ·
+         Knowledge Layer · Sources 3 · Research Intelligence · Canonical prompts 4 · Research Intelligence · Files 43 ·
+         XYP3RN Records · Canonical prompts 7 · XYP3RN Records · Files 88 · XYP3RN Tech · Canonical prompts 1 · XYP3RN Tech · Files 21 ·
+         Governance · Canonical prompts 1 · Governance · Files 2 · Shared/Unassigned · Decisions 49 · Shared/Unassigned · Files 325
+hub:     {"id":"app:xyp3rn-os","title":"xyp3rn-os","version":"0.0.0","sourceRef":"package.json","backing":"configuration"}
+# The 113 drawn are the six domains and every registered entity (51 agents = the registry's 51; 35 modules; 6 workflow files
+# and their 15 steps), well inside the budget (250 marks, 500 edges), so nothing is demoted. Files, decisions, canonical prompts
+# and sources are groups: each names its query ("kind = file and owner = RECORDS"), counts all its members and opens them in the
+# list (/?kind=file&domain=RECORDS). The 13 contains links are the groups' links to their domains, marked as grouping (the two
+# Shared groups have none: Shared is not a domain). The other 153 edges are graph_edges rows between drawn nodes.
+# apps/web/server/overview.test.ts pins it on a 400-file fixture: every node a graph_nodes row, every non-contains edge a
+# graph_edges row with its provenance, groups reading back the list's members, the budget (steps, then agents, modules and
+# workflows give way; the domains stay), and an empty workspace (the six domains and the hub, no group, no edge).
+
+## 2. Determinism
+two calls identical apart from asOf: true
+layout identical across calls and input order: true (128 positions)
+# apps/web/lib/sphere.ts places each member from two hashes of its id (no Math.random, no input order); sphere.test.ts pins unit
+# length, the cap, order independence, no collision among 5000 ids, the compass sectors (Core above Records at rest), depth,
+# opacity, the 44 px target, facing a node, and the focus easing (cubic-bezier(0.22, 1, 0.36, 1)).
+
+## 3. The browser (pnpm web:smoke, the Jarvis 01 lines; every earlier line also passed)
+ok  the navigation lists the eight areas in order (Command Center · Songs & Releases · Studio · Research · Creative Vault · Workflow Builder · Analytics · System Admin)
+ok  each area opens (200) with its heading, marked current (8 areas)
+ok  /releases keeps its URL, under Songs & Releases, with its tab current
+ok  Workflow Builder lists the workflow files (retrieve-and-summarize) and the journey's research-specialists runs apart, and says the builder is Prompt 14
+ok  Analytics says no connector exists and shows the journey's platform links as links
+ok  System Admin shows the registries, 18 xyp roles by name, and each provider key as configured or not
+ok  /api/graph/overview and /api/graph/node answer 401 without a session
+ok  /api/graph/overview answers the session, no-store: 79 drawn + 704 in 28 groups = 783 graph_nodes rows
+ok  the sphere shows a labelled skeleton while the overview loads (Loading the graph…)
+ok  the sphere draws what the API returned (107 marks = 79 nodes + 28 groups)
+ok  the sphere says how much it draws (Showing 79 of 783 entities; 704 in 28 groups)
+ok  Tab reaches the sphere
+ok  the arrows move by domain, with a visible focus ring (domain:RECORDS)
+ok  Enter selects: the inspector opens for domain:RECORDS
+ok  + zooms and R resets the view (rim 208 → 260 → 208)
+ok  Escape clears the focus
+ok  a group opens its members in the list (25 Core files on page 1)
+ok  an API failure shows the error state, and the Graph list still renders
+ok  the command input searches the whole index (a GET to /search)
+ok  with reduced motion a mark has no transition (0s) and a far-side selection faces the viewer at once (0.00 px off centre)
+ok  no console error on / and the eight areas (none)
+ok  no error line in the next start log since the Jarvis checks began (none)
+ok  at 390 px no page scrolls sideways (19 pages)
+smoke: all checks passed
+# The smoke's database has no modules admitted, so it draws 79 (domains, agents, workflows, steps) against the dev DB's 113.
+# The loading check holds the overview back 1.5 s with a route intercept; the error check answers it with a [FAKE] 500.
+# The API route's own failure answers {"error":"the server could not read the graph"} with the cause in the server log only.
+# Screenshots (not committed): Command, Command with domain:RECORDS selected, /workflows, /analytics, /system and the earlier pages at
+# 1920×1080, 1440×900, 1024×768, 390×844 and "200%" (960×540 at device scale 2); from 960 px the smoke waits for the drawn sphere
+# before each shot. Reviewing earlier shots found four faults, fixed before this proof: a selection already in view turned the
+# camera onto the hub; group rings were opaque disks; labels ran off the drawing at 390 px; and the sphere's height was measured in
+# JS, so the skeleton and the drawing had different heights (a layout shift). The height is now CSS (340 px; 520 px from 960 px).
+# Observed, not fixed (F49): on /login, before a session exists, the Sofia clock's /api/time samples answer 401, and Chromium logs
+# three console errors there (Plan B). The smoke's console check covers / and the eight areas, after login.
+
+## 4. Recorded, not gated
+note  / at 1440×900 (headless Chromium, the smoke's dataset of 783 entities): LCP 572 ms, CLS 0.009 (recorded, not gated)
+# Method: a fresh browser context with the session, / loaded, the sphere drawn, then PerformanceObserver (largest-contentful-paint
+# and layout-shift, buffered; shifts after input excluded). One run on this container, so it is a reading, not a benchmark. An
+# earlier run on the same build read LCP 1008 ms, CLS 0.009. The frame rate while dragging is not measured (F49).
+
+## 5. Gates (branch claude/aos-04-next-steps-gqj676; code at ab54e11, then this proof and the docs)
+pnpm typecheck                                   exit 0
+pnpm test                                        113 files, 1456 tests passed (up from 1431 after C1)
+pnpm agents:validate                             validateAll(): 0 failure(s)
+pnpm db:down 1 / up / down 1 / up (dev DB)       rolled back / applied 20260927100000, twice (no migration in this plan)
+pnpm web:build                                   exit 0
+pnpm web:smoke                                   smoke: all checks passed
