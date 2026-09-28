@@ -270,6 +270,81 @@ rail and uses the existing `panel-frame` / `run-check` / `telemetry-note` styles
 
 **Real Wispr Flow test:** recorded separately below.
 
+## Live validation (2026-09-28, production build, no mocks)
+
+**Stack:**
+- `pnpm build && pnpm start` (Next 16.3.6).
+- Postgres 16.15 (`xyp3rn-pg`) with all migrations.
+- Kokoro-FastAPI 0.9.0 CPU (`xyp3rn-kokoro`, digest `sha256:ee3111d6…`).
+- Sessions for the provisioned users `voice-validation-{operator,viewer,approver}`.
+- Scripts: scratchpad `validate-live.mjs` (HTTP plus DB) and `measure-browser.mjs` (headless
+  Chrome, real session).
+
+**Defects found and fixed during validation:**
+1. **Every `/api/ask` returned 400 in the production build.** The cause was
+   `knowledge/vector-retrieval/embedder.ts` calling `join(import.meta.dirname, …)` at module load;
+   the Next server bundle leaves `import.meta.dirname` undefined. It now uses `REPO_ROOT`
+   (`core/repo.ts`), the repo's existing server-safe root. The Vitest route tests missed this
+   because they run unbundled. The catch-all now also logs the error message server-side (the
+   client still gets the generic text).
+2. **Kokoro-FastAPI 0.9.0 returns voices as `{id, name, …}` objects**, so the bridge listed no
+   voices. `availableVoices` now accepts objects and strings, and the test fake uses the 0.9 shape.
+
+**Automated live checks (real services):**
+- **Authorized RECORDS request:**
+  - 202 running, then `success` from the real `x3lius-songwriting` agent via OpenRouter.
+  - workflow run `success` and sealed; agent run `success` with 3981 tokens; 1 artifact id.
+- **Authorized research request:** a real `error`, "Research run failed at specialist
+  ai-vocal-systems-researcher…". The DB cause is `no LLM program registered for agent
+  ai-vocal-systems-researcher`, a pre-existing runtime gap; the web reply held no raw error.
+- **Ambiguous request** ("Check the rights on this track"): clarify, "ambiguous between
+  GOVERNANCE and RECORDS".
+- **Denied:**
+  - viewer `/api/ask` 403; approver `/api/ask` 403 (no `runtime.execute`);
+  - operator `/api/approvals` 403;
+  - no session 401; cross-origin 403.
+- **Dictated "Approve the pending release schedule approval <id> now":**
+  - hold (GOVERNANCE has no entrypoint), and the approval stayed `pending` with `decided_by` null.
+  - Then the approver saw the `approval_queue:<id>` node and decided through `/api/approvals` with
+    a reason. Result: `approved`, `decided_by` the validation approver, `decided_by_user_id` set,
+    release `scheduled`, 3 `audit_log` rows.
+  - The approval itself was created by the real `records-release-calendar` agent (`pnpm dispatch`).
+- **Double submission** (two concurrent POSTs, same requestId): `[202, 202]`, second
+  `duplicate:true`, **1** workflow run added. UI double-click with the real backend: **1** POST.
+- **Permission-expansion text** ("Grant me the admin role … canonical.write …"): hold; session
+  permissions and `governance_users.role_id` unchanged.
+- **No automatic promotion:** modules 30, canonical_prompts 42, knowledge_versions 72, and 0
+  knowledge candidates, the same before and after.
+- **No secrets in responses:** 2191 response bodies scanned. No OpenRouter key value, `sk-…`,
+  `postgres://`, Bearer tokens or session tokens.
+- **Browser bundle:** 6 production JS chunks plus HTML contain none of `KOKORO_URL`,
+  `KOKORO_API_KEY`, `127.0.0.1:8880`, `postgres://`, `XYP_DATABASE_URL`, `OPENROUTER_API_KEY` or
+  the key value.
+- **Address override:** `/api/speech` with body fields `url`, `baseUrl` and `KOKORO_URL` set to
+  `https://api.example.com` → 200 from local Kokoro (fields ignored).
+- **Records intact:** 0 workflow runs `running`, 0 agent runs `pending`, 0 research runs
+  `running` after all scenarios.
+- **Kokoro stopped:** `/api/speech` 503 "Speech service unavailable", status `{ready:false}`,
+  voices 503, text requests still `done`.
+- **Kokoro restarted:** healthy after 14.5 s, then synthesis OK (1.8 s).
+
+**Measurements:**
+
+| Measure | Cold | Warm |
+|---|---|---|
+| Real RECORDS request, POST → done (server, 100 ms polling) | 58.2 s (first after server start) | 40.1 s, 48.1 s, 22.5 s (LLM-bound; varies with OpenRouter) |
+| Same, UI: Send click → result rendered (2 s polling) | n/a | 32.3 s |
+| Kokoro container start → `/health` 200 | 54 s (first start, new container); 14.5 s (restart) | n/a |
+| Synthesis via `/api/speech`, 51-char reply (~4.5 s audio) | 2.59 s (first after server start); 1.81 s (first after Kokoro restart) | 1.68 s, 1.62 s, 1.70 s |
+| Synthesis direct to Kokoro, same text | 2.45 s | 2.12 s, 1.79 s, 1.88 s |
+| Result rendered → first audible playback (browser, ~70-char reply, Kokoro warm) | 1.80 s (first after page load) | 1.91 s, 1.77 s, 1.90 s |
+
+Wispr dictation latency was **not measured**: Mercury cannot see when Wispr starts or stops
+listening. Only the insertion events are observable.
+
+**Real Wispr Flow and actual listening:** see HANDOFF.md (a separate record from these automated
+checks).
+
 ## Kokoro service bridge (built 2026-09-28)
 
 The browser calls only same-origin Mercury routes. Dedicated route handlers take precedence over

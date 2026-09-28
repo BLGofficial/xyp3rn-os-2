@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { env, pipeline, type FeatureExtractionPipeline } from '@huggingface/transformers';
+import { REPO_ROOT } from '../../core/repo.ts';
 
 /**
  * Embedding model (user decision): Supabase/gte-small via transformers.js, quantized ONNX.
@@ -13,7 +14,8 @@ export const EMBEDDING_DIM = 384;
 /** gte-small's context window; longer input is truncated by the tokenizer and flagged. */
 export const MAX_TOKENS = 512;
 
-env.cacheDir = join(import.meta.dirname, '..', '..', '.local-models');
+// REPO_ROOT, not import.meta.dirname: the Next.js server bundle leaves import.meta.dirname undefined.
+env.cacheDir = join(REPO_ROOT, '.local-models');
 
 export type Embedding = { readonly vector: number[]; readonly tokens: number; readonly truncated: boolean };
 

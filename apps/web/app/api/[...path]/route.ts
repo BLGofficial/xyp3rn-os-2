@@ -82,5 +82,8 @@ export async function POST(request:NextRequest){
       return json(await decideAuthenticated(sql,token,input.id,String(input.decision),input.reason));
     }
     return json({error:'Not found'},404);
-  }catch(error){const forbidden=error instanceof Error&&error.message==='Forbidden';return json({error:forbidden?'Forbidden':'Request could not be completed; verify the input and current source state'},forbidden?403:400);}
+  }catch(error){const forbidden=error instanceof Error&&error.message==='Forbidden';
+    // Server log only; the client gets the generic message below.
+    if(!forbidden)console.error(`mercury api ${request.nextUrl.pathname}:`,error instanceof Error?error.message:error);
+    return json({error:forbidden?'Forbidden':'Request could not be completed; verify the input and current source state'},forbidden?403:400);}
 }
