@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DOMAINS } from '../../../core/contracts/taxonomy.ts';
-import { DOMAIN_DIRECTION, hitRadius, layout, opacity, place, project, rotate, SPREAD, step, type Vec3 } from './sphere.ts';
+import { DOMAIN_DIRECTION, ease, facing, hitRadius, layout, opacity, place, project, rotate, SPREAD, step, type Vec3 } from './sphere.ts';
 
 // Jarvis Prompt 01 Task 2 (AOS-04 design §13.2, §14): the sphere's geometry. Stable domain sectors, members placed by
 // a hash of their id (the same graph gives the same picture on the server and the client), perspective projection,
@@ -129,5 +129,30 @@ describe('step (the keyboard)', () => {
     expect(step(order, 'agent:a', 'End')).toBe('module:m');
     expect(step(order, 'gone', 'ArrowRight')).toBe('domain:CORE');
     expect(step([], null, 'ArrowRight')).toBeNull();
+  });
+});
+
+describe('facing and ease (the focus transition)', () => {
+  it('turns any point to face the viewer', () => {
+    for (const v of [...Object.values(DOMAIN_DIRECTION), { x: 0.6, y: -0.8, z: 0 }]) {
+      const f = facing(v);
+      const r = rotate(v, f.yaw, f.pitch);
+      expect(r.x).toBeCloseTo(0, 12);
+      expect(r.y).toBeCloseTo(0, 12);
+      expect(r.z).toBeCloseTo(1, 12);
+    }
+  });
+
+  it('eases like cubic-bezier(0.22, 1, 0.36, 1): from 0 to 1, never backwards, fast then slow', () => {
+    expect(ease(0)).toBe(0);
+    expect(ease(1)).toBe(1);
+    let last = 0;
+    for (let t = 0.01; t <= 1; t += 0.01) {
+      expect(ease(t)).toBeGreaterThanOrEqual(last - 1e-12);
+      last = ease(t);
+    }
+    expect(ease(0.5)).toBeGreaterThan(0.85);
+    expect(ease(-1)).toBe(0);
+    expect(ease(2)).toBe(1);
   });
 });
