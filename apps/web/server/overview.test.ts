@@ -48,7 +48,11 @@ describe('overview', () => {
   it('draws only graph_nodes rows and the configured hub, and only graph_edges rows and group contains links', async () => {
     const o = await overview(db.sql);
     const ids = new Set((await db.sql<{ id: string }[]>`select id from graph_nodes`).map((r) => r.id));
-    for (const n of o.nodes) expect(ids.has(n.id), n.id).toBe(true);
+    for (const n of o.nodes) {
+      expect(ids.has(n.id), n.id).toBe(true);
+      // Selecting any drawn node, a domain included, opens its inspector.
+      expect(n.href).toBe(`/?node=${encodeURIComponent(n.id)}`);
+    }
     const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as { name: string; version: string };
     expect(o.hub).toEqual({ id: `app:${pkg.name}`, title: pkg.name, version: pkg.version, sourceRef: 'package.json', backing: 'configuration' });
     expect(ids.has(o.hub.id)).toBe(false);
@@ -89,7 +93,8 @@ describe('overview', () => {
       expect(g.href).toBe(`/?kind=${g.kind}&domain=${g.domain}`);
     }
     const coreFiles = o.groups.find((g) => g.id === 'group:CORE:file')!;
-    expect(coreFiles).toMatchObject({ count: 250, membersTruncated: true, label: 'Core · Files' });
+    // 250 under core/ and the four CORE agents' files (an agent file is owned by its frontmatter domain).
+    expect(coreFiles).toMatchObject({ count: 254, membersTruncated: true, label: 'Core · Files' });
     expect(coreFiles.memberIds).toHaveLength(200);
     expect(o.groups.find((g) => g.id === 'group:shared:file')).toMatchObject({ label: 'Shared/Unassigned · Files' });
 
