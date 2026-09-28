@@ -134,3 +134,6 @@ export const overview = async (sql: Sql, o: { maxNodes?: number; maxEdges?: numb
     groups: r.groups.map((g): OverviewGroup => ({ ...g, href: `/?kind=${encodeURIComponent(g.kind)}&domain=${g.domain}` })),
   };
 };
+
+/** What GET /api/graph/overview answers (the sphere's data). */
+export type OverviewData = Awaited<ReturnType<typeof overview>>;

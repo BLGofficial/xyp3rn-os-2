@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span className="text-[11px] uppercase tracking-[0.08em] text-ink-3">Mercury</span>
               </span>
             </a>
-            <form action="/search" method="get" role="search" className="mx-auto hidden w-full max-w-xl md:block">
+            <form action="/search" method="get" role="search" aria-label="Top bar search" className="mx-auto hidden w-full max-w-xl md:block">
               <label className="relative block">
                 <span className="sr-only">Search everything</span>
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"><Icon name="search" className="h-4 w-4" /></span>
