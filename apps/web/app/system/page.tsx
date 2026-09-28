@@ -1,4 +1,4 @@
-import { graphLoaders, runtime } from '../../lib/server';
+import { adminLoaders, graphLoaders, runtime, shellLoaders } from '../../lib/server';
 import { rescanAction } from '../graph-actions';
 import { ErrorBanner, first, ScrollTable, Time } from '../ui';
 
@@ -9,20 +9,60 @@ type Counts = {
   excluded: Record<string, number>; vault: { present: number; missing: number; corrupt: number };
 };
 
-// The index's scope and freshness (AOS-04 design §15.2 item 1, §13.1 "infrastructure details live under System"):
-// what is indexed, what was left out and why (counted, never named), what failed, and what doesn't resolve.
+// System Admin (Jarvis Prompt 01, J1): the pulse, migrations, registries, roles and secrets (configured or not, never
+// a value), then the index's scope and freshness (AOS-04 design §15.2 item 1, §13.1 "infrastructure details live
+// under System"): what is indexed, what was left out and why (counted, never named), what failed, what doesn't resolve.
 export default async function System({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
-  const sql = (await runtime()).sql;
+  const rt = await runtime();
+  const sql = rt.sql;
   const gl = await graphLoaders();
-  const [c, diags, unreadable] = await Promise.all([gl.coverage(sql), gl.diagnostics(sql), gl.unreadableFiles(sql)]);
+  const [c, diags, unreadable, admin, pulse] = await Promise.all([
+    gl.coverage(sql), gl.diagnostics(sql), gl.unreadableFiles(sql),
+    (await adminLoaders()).adminOverview(sql, { env: process.env, registry: rt.deps.registry, tools: rt.deps.tools }),
+    (await shellLoaders()).pulse(sql, process.env, rt.deps.registry),
+  ]);
   const s = c.lastScan;
   const counts = (s?.counts ?? null) as Counts | null;
   const justRan = first(searchParams.scan);
   return (
     <section>
-      <h1>System</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1>System Admin</h1>
+        <span className="meta">as of <Time at={admin.asOf} /></span>
+      </div>
       <ErrorBanner error={searchParams.error} />
       {justRan && s?.id === justRan && <p className="status-success mt-3" role="status">Scan {justRan.slice(0, 8)}… finished: {s.status}.</p>}
+
+      <h2>System pulse</h2>
+      <ScrollTable label="System pulse" className="mt-2">
+        <tbody>
+          {pulse.map((p) => (
+            <tr key={p.label}><td>{p.label}</td><td><span className={`status-${p.state}`}>{p.state === 'not-configured' ? 'Not configured' : p.state === 'configured' ? 'Configured' : p.state}</span></td><td className="meta break-words">{p.detail}</td><td className="meta"><Time at={p.asOf} /></td></tr>
+          ))}
+        </tbody>
+      </ScrollTable>
+      <p className="meta mt-1">Only what was checked: a configured key is not a reachable provider.</p>
+
+      <h2>Migrations</h2>
+      <p className="text-sm" data-migrations>Head <code>{admin.migrations.head ?? 'none'}</code> · {admin.migrations.applied} applied <span className="meta">(xyp_meta.applied_migrations)</span></p>
+
+      <h2>Registries</h2>
+      <ScrollTable label="Registries" className="mt-2">
+        <thead><tr><th>Registry</th><th>Count</th><th>Read from</th></tr></thead>
+        <tbody>
+          {admin.registries.map((r) => <tr key={r.name} data-registry={r.name}><td>{r.name}</td><td className="num">{r.count}</td><td className="meta">{r.source}</td></tr>)}
+        </tbody>
+      </ScrollTable>
+
+      <h2>Database roles</h2>
+      <p className="meta">One role per component, least privilege (names from pg_roles; grants live in the migrations).</p>
+      <ul className="mt-2 flex flex-wrap gap-1" data-roles>{admin.roles.map((r) => <li key={r}><code className="tag">{r}</code></li>)}</ul>
+
+      <h2>Secrets</h2>
+      <p className="meta">Whether each provider key is set in the server's environment. Values are never read into a page.</p>
+      <ul className="mt-2 flex flex-col gap-1 text-sm" data-secrets>
+        {admin.secrets.map((x) => <li key={x.name}><code>{x.name}</code> <span className={x.configured ? 'status-configured' : 'status-not-configured'}>{x.configured ? 'Configured' : 'Not configured'}</span></li>)}
+      </ul>
 
       <h2>File index</h2>
       <p className="meta">{c.nodes} entities in the graph as of <Time at={c.asOf} />. The index covers only the roots below; nothing outside them is read.</p>
