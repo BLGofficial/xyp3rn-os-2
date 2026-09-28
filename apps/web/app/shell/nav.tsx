@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { DOMAIN_FILTERS, DOMAIN_STYLE } from './domains';
 import { Icon, type IconName } from './icons';
 
 // Product navigation (AOS-04 design §13.1): icon + full label, the current page marked for assistive tech.
@@ -15,8 +16,10 @@ export const PRIMARY: readonly Item[] = [
   { href: '/songs', label: 'Songs', icon: 'songs' },
   { href: '/releases', label: 'Releases', icon: 'releases' },
   { href: '/tasks', label: 'Tasks', icon: 'tasks' },
+  { href: '/system', label: 'System', icon: 'system' },
 ];
 export const SECONDARY: readonly Item[] = [
+  { href: '/search', label: 'Search everything', icon: 'search' },
   { href: '/people', label: 'People', icon: 'people' },
   { href: '/ingest', label: 'Ingest', icon: 'ingest' },
 ];
@@ -42,6 +45,17 @@ export function NavLinks() {
   return (
     <div className="flex flex-col gap-1">
       <ul className="flex flex-col gap-1">{PRIMARY.map((i) => <li key={i.href}><Link item={i} path={path} /></li>)}</ul>
+      <p className="mt-5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-3">Domains</p>
+      <ul className="flex flex-col gap-1" aria-label="Filter the graph by domain">
+        {DOMAIN_FILTERS.map((d) => (
+          <li key={d}>
+            <a href={`/?domain=${d}`} className="flex min-h-[44px] items-center gap-3 rounded-control px-3 text-[14px] no-underline hover:bg-hover">
+              <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border ${DOMAIN_STYLE[d].cls}`}><Icon name={DOMAIN_STYLE[d].icon} className="h-3.5 w-3.5" /></span>
+              <span className={DOMAIN_STYLE[d].cls.split(' ')[1]}>{DOMAIN_STYLE[d].label}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
       <p className="mt-5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-3">More</p>
       <ul className="flex flex-col gap-1">
         {SECONDARY.map((i) => <li key={i.href}><Link item={i} path={path} /></li>)}

@@ -90,3 +90,13 @@ export async function unlinkSong(form: FormData) {
   const songId = text(form, 'songId');
   return attempt(`/songs/${songId}`, async () => (await ops()).songUnlink((await runtime()).deps, { linkId: text(form, 'linkId'), reason: text(form, 'reason') }));
 }
+
+// AOS-04 Plan C1: Index now / Retry on a Vault file. A failure comes back as "Saved; indexing failed: …".
+export async function indexFileAction(form: FormData) {
+  const id = text(form, 'fileId');
+  return attempt(`/vault/files/${encodeURIComponent(id)}`, async () => {
+    const r = await (await ops()).indexVaultFile((await runtime()).sql);
+    if (!r.ok) throw new Error(`Saved; indexing failed: ${r.error}`);
+    return r;
+  }, () => `/vault/files/${encodeURIComponent(id)}?indexed=1`);
+}

@@ -80,3 +80,61 @@ HANDOFF — AOS-04 Plan B (the Mercury shell) complete; Plan C (graph, file inde
   - the first 390 px run found six pages scrolling sideways, all from tables.
 - **Open** (F45): global search and domain filters wait on Plan C; no performance numbers; 200% zoom approximated; forms still keep typed values (F39); Plan C not built.
 - **Next:** Plan C, written and reviewed before code, as Plan B was. The live `pnpm research ask` still waits on `OPENROUTER_API_KEY`.
+
+---
+
+HANDOFF — AOS-04 Plan C1 (the graph and file index) complete; Plan C2 (sphere, motion, answers) next
+
+- **Built** (plan `docs/artist-os/AOS-04-plan-C1.md`, decisions S1–S4 in ARCHITECTURE F46; proof `docs/proofs/AOS-04-graph-index.txt`):
+  - **Data:** migration `20260927100000_graph_index` (+ rollback):
+    - the file index: `index_scans`, `indexed_files`, `index_nodes`, `index_edges`, `index_vault_status`;
+    - the graph views: `graph_nodes`, `graph_edge_candidates`, `graph_edges`, `graph_diagnostics`, `graph_link_history`;
+    - the `xyp_indexer` role, which writes only the index.
+  - **The scan** (`knowledge/knowledge-graph/`):
+    - walks this checkout, never following a symlink;
+    - counts exclusions per rule without naming them, and hashes only what changed (`--full` rehashes everything);
+    - marks vanished paths missing, and checks the Vault's bytes;
+    - parses agents, workflows and steps, ARCHITECTURE decisions, imports and Markdown links into nodes and edges with their lines.
+    - Runs from `pnpm index scan | status`, at web boot (not awaited), and as Rescan on `/system`.
+  - **The projection:** pages of nodes filtered by domain, Shared or a Creative lens group; one node with its proven connections both ways, inherited targets, link history and diagnostics; one hop; coverage; the Creative lens under the real X3LIUS module.
+  - **Search everything:** the whole index, grouped by type. The top bar and the rail both reach it.
+  - **The viewer:** `/index/files/[id]` and `/raw` open by opaque id and verify root, symlink and checksum.
+  - **UI:**
+    - Command's Graph list (the sphere is C2), with domain filters in the rail;
+    - the inspector in the right rail, and `/node` full width;
+    - `/system`: coverage, diagnostics, unreadable files, Rescan;
+    - Saved vs Indexed on Vault files, with Index now and Retry.
+  - `pnpm web:smoke` drives it all (section 5 of the proof).
+- **Numbers:**
+  - 1431 tests (up from 1359 after Plan B), all passing;
+  - 62 tables (+5) and 26 views (+5);
+  - 1 new role, 1 new dependency (`typescript-api`, an alias of TypeScript 5.9.3);
+  - no new agent, tool or capability.
+  - On this checkout: 560 files, 752 nodes, 0 diagnostics.
+  - Gates: typecheck, the suite, `agents:validate`, the migration round trip, `web:build`, `web:smoke`.
+- **Red first:** every C1 test was committed failing before its code. Four red tests had bugs of their own, fixed in the green commit and named in each commit message:
+  - a fixture column;
+  - an ordering (filename order vs `localeCompare`);
+  - an underscore probe that `snake_case` matched literally;
+  - a `fileId` out of scope.
+- **Found and fixed on the way:**
+  - postgres.js serialized a `'true'` string as `false` in a `boolean[]` parameter, and would have double-encoded JSON. Bulk writes now send text arrays cast in SQL.
+  - Next's TypeScript 5.9 couldn't type postgres.js's row helper, which the root's TypeScript 7 accepts.
+  - `preProcessFile` reports the leading literal of `import('./' + x)`; a partial literal is dropped.
+  - A preserved mtime round-trips through float seconds, so it is compared at rounded milliseconds.
+  - A decision's heading text never said its number; titles now lead with it.
+  - Screenshot review found three layout faults (rail table, inspector title, the list at 390 px); all fixed.
+  - PR #18 was merged mid-work, carrying Tasks 1–3. The rest came on a fresh base in PR #19.
+- **Open** (F47):
+  - Plan C2;
+  - tools as entities;
+  - `.env.example`;
+  - extra roots;
+  - Windows rules (string checks only on this Linux host);
+  - quick scans don't re-resolve unchanged files' references;
+  - research runs' `research-specialists` workflow has no definition file, so it shows as a dangling diagnostic;
+  - suggested relations.
+- **Next:**
+  1. **Plan C2**, written and reviewed before code: the SVG sphere over this graph, motion, the extractive answers, performance numbers.
+  2. **The live `pnpm research ask`** still waits on `OPENROUTER_API_KEY`.
+  3. Then **AOS-05**.

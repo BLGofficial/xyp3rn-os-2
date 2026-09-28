@@ -1,0 +1,92 @@
+AOS-04 Plan C1 — the graph and file index: proof (2026-09-28)
+Produced with the repo's own commands against the local Postgres (the dev database: migrations, the build guide and the
+X3LIUS manifest admitted; no songs or research in it). Unit and DB tests run on throwaway databases; the browser section
+drives the real UI (next start) in Chromium against another, seeded by the AOS-01–04 journey. Plan:
+docs/artist-os/AOS-04-plan-C1.md (decisions S1–S4, ARCHITECTURE F46; open items F47).
+================================================================================
+
+## 0. What is shown
+# - The file index (S3): a scan of this checkout, counts that add up, exclusions counted by rule and never named (section 1).
+# - One graph of files, declarations and live records, each edge with its proof (sections 2–3).
+# - The viewer refuses what it can't prove (section 4). The browser journey (section 5). The gates (section 6).
+# - Not built here: the sphere, motion, answers, performance numbers (Plan C2, F47).
+
+## 1. The real repository, scanned
+$ pnpm index scan
+index scan 9425d7a6-af67-49e1-8924-99ce23a0b537: success
+  eligible 560 · indexed 560 · failed 0 (unsupported paths 0) · missing 0
+  excluded: build-output 1 · credentials 1 · dependencies 2 · runtime-state 2 · vcs 1
+  vault: present 0 · missing 0 · corrupt 0
+$ pnpm index status   (tail)
+files present 560 · missing 0 · unreadable 0
+diagnostics 0 (unresolved 0 · dangling 0)
+# The excluded entries are .git, node_modules (root and apps/web), apps/web/.next, .local-db, .vault and .env.example;
+# the scan output counts them by rule only. Timing on this checkout (throwaway DB, earlier run): 692 ms for a first scan,
+# 68 ms for a rescan that trusts size and mtime. 0 diagnostics: every import and Markdown link in the repo resolves.
+
+## 2. The graph (read as xyp_web)
+nodes by kind:   file 560 · agent 51 · decision 45 · module 35 · canonical_prompt 31 · workflow_step 15 · domain 6 · workflow 6 · source 3
+nodes by owner:  CORE 82 · GOVERNANCE 5 · KNOWLEDGE 59 · RECORDS 150 · RESEARCH_INTELLIGENCE 70 · TECH 37 · Shared/Unassigned 349
+edges:           imports 1379 · owned_by 348 · derived_from 66 · references 59 · defined_by 57 · depends_on 17 · part_of 15 ·
+                 step_uses_agent 15 · subdomain_of 14 · precedes 12
+# 51 agents = the registry's 51 (tests/aos-04/index-refs.test.ts compares them by name and domain). Shared/Unassigned holds
+# docs/, apps/, tests/, supabase/, scripts/ and root files: no seventh domain, nothing forced into Core.
+
+## 3. Traced chains (graph_edges; provenance is the proof)
+# An import:
+imports  file:repo/apps/web/instrumentation-node.ts → file:repo/apps/web/lib/server.ts
+         provenance apps/web/instrumentation-node.ts:1 at revision 3fa903cb20b3…
+# A workflow dependency (core/workflows/retrieve-and-summarize.workflow.yaml):
+part_of          workflow_step:retrieve-and-summarize#retrieve   → workflow:retrieve-and-summarize        (…yaml:9)
+step_uses_agent  workflow_step:retrieve-and-summarize#retrieve   → agent:context-retriever                (…yaml:10)
+part_of          workflow_step:retrieve-and-summarize#summarize  → workflow:retrieve-and-summarize        (…yaml:13)
+step_uses_agent  workflow_step:retrieve-and-summarize#summarize  → agent:extractive-summarizer            (…yaml:14)
+depends_on       workflow_step:retrieve-and-summarize#summarize  → workflow_step:retrieve-and-summarize#retrieve (…yaml:15)
+# X3LIUS under Records, from the admitted manifest (relations rows):
+subdomain_of  module:x3lius-arrangement → module:x3lius-music-system   relations:05a96f19-b55f-4d7d-8758-a83425b05123
+subdomain_of  module:x3lius-composition → module:x3lius-music-system   relations:abf7e20c-2089-430d-9d8d-31485c719496
+# Brief → run → evidence → source, and a finding's inherited targets: section 5 (the journey's research) and
+# apps/web/server/graph.test.ts (FAKE MODEL, stubbed page).
+# A dangling reference found by the journey: research runs record their workflow run as `research-specialists`, a plan
+# generated at run time with no definition file, so that run_of edge is a diagnostic (F47), not a guessed workflow.
+
+## 4. The viewer's refusals (apps/web/server/graph-files.test.ts, all passing)
+# - ../../etc/passwd, /etc/passwd, docs/readme.md, C:\Windows\win.ini, \\server\share\x, a random uuid, '' → not-found
+# - a file swapped for a symlink to /etc/passwd after the scan → escaped, no bytes
+# - a row whose path runs through a directory symlink pointing outside the root → escaped
+# - bytes edited since the scan → changed, naming the indexed and the current checksum
+# - a file deleted since the scan → missing
+# - a long text → cut at a line break, marked truncated; markup comes back as text; a binary has no text
+# Live (next start, a real session): /index/files/<id> of apps/web/app/layout.tsx shows its <script> escaped; the raw
+# route answers text/plain, nosniff, "sandbox; default-src 'none'; img-src 'self'"; ..%2F..%2Fetc%2Fpasswd → 404;
+# no session → 401.
+
+## 5. The browser (pnpm web:smoke, the C1 lines; every earlier line also passed)
+ok  next start scanned the checkout at boot (scan …: success)
+ok  /system shows the scan's counts as index_scans holds them (eligible 560 · indexed 560 · failed 0 (unsupported paths 0) · missing 0)
+ok  /search finds apps/web/instrumentation-node.ts in the whole index
+ok  the viewer opens it by its opaque index id, checksum verified, with its contents
+ok  the inspector's Why connected? names the import's file and line (… Declared in apps/web/instrumentation-node.ts:1 at revision 3fa903cb20b3… ./lib/server)
+ok  a workflow step shows the agent it uses and the step it depends on
+ok  the song is linked to its lyrics; the retracted recipe link is in history with its reason, not in its connections
+ok  evidence → the research source it quotes (the quote as proof) and the run that produced it
+ok  a finding shows its evidence, and its targets (F41, the song) only as inherited from the brief
+ok  /?domain=RECORDS lists only Records-owned entities (25 on page 1)
+ok  the Creative lens's Songs group counts the journey's songs (Songs 1 group · kind = song = 1)
+ok  /index/files/not-a-uuid is 404: the viewer takes an index id, never a path
+ok  layout.tsx's <script> renders as text in the viewer, never as an element
+ok  the raw route serves text/plain with nosniff and a sandbox CSP
+ok  at 390 px no page scrolls sideways (15 pages)
+smoke: all checks passed
+# Screenshots (not committed): Command with the inspector, /search and /system at 1920×1080, 1440×900, 1024×768, 390×844
+# and "200%" (960×540 at device scale 2). Reviewing them found three layout faults, fixed before this proof: the rail's
+# three-column connections table hid Why connected? (now a stacked list), the inspector title took the uppercase
+# section-label style, and the Graph table squeezed titles to a letter per line at 390 px (now stacked items there).
+
+## 6. Gates (head of claude/aos-04-next-steps-gqj676 at this proof)
+pnpm typecheck                                   exit 0
+pnpm test                                        108 files, 1431 tests passed
+pnpm agents:validate                             validateAll(): 0 failure(s)
+pnpm db:down 1 / up / down 1 / up (dev DB)       rolled back / applied 20260927100000, twice
+pnpm web:build                                   exit 0
+pnpm web:smoke                                   smoke: all checks passed

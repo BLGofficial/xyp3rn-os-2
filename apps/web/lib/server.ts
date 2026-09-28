@@ -10,6 +10,9 @@ type StudioOps = typeof import('../server/studio-ops.ts');
 type ResearchLoaders = typeof import('../server/research-loaders.ts');
 type ResearchOps = typeof import('../server/research-ops.ts');
 type ShellLoaders = typeof import('../server/shell-loaders.ts');
+type GraphOps = typeof import('../server/graph-ops.ts');
+type GraphLoaders = typeof import('../server/graph-loaders.ts');
+type GraphFiles = typeof import('../server/graph-files.ts');
 type Runtime = typeof import('../server/runtime.ts');
 type Store = typeof import('../../../knowledge/source-registry/vault-store.ts');
 
@@ -22,6 +25,9 @@ export const studioOps = () => osImport<StudioOps>('apps/web/server/studio-ops.t
 export const researchLoaders = () => osImport<ResearchLoaders>('apps/web/server/research-loaders.ts');
 export const researchOps = () => osImport<ResearchOps>('apps/web/server/research-ops.ts');
 export const shellLoaders = () => osImport<ShellLoaders>('apps/web/server/shell-loaders.ts');
+export const graphOps = () => osImport<GraphOps>('apps/web/server/graph-ops.ts');
+export const graphLoaders = () => osImport<GraphLoaders>('apps/web/server/graph-loaders.ts');
+export const graphFiles = () => osImport<GraphFiles>('apps/web/server/graph-files.ts');
 export const runtime = async () => (await osImport<Runtime>('apps/web/server/runtime.ts')).runtime();
 export const vaultStore = async () => {
   const s = await osImport<Store>('knowledge/source-registry/vault-store.ts');

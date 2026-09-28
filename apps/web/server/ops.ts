@@ -6,6 +6,8 @@ import { dispatch, type DispatchDeps } from '../../../core/orchestrator/dispatch
 import { decideArtifact, type ArtifactDecision } from '../../../governance/approvals.ts';
 import { addAndImport } from '../../../records/vault/import.ts';
 import type { LyricVersion } from '../../../records/vault/lyric-editor.ts';
+import { loadEmbedder, type Embedder } from '../../../knowledge/vector-retrieval/embedder.ts';
+import { embedVault } from '../../../knowledge/vector-retrieval/pipeline.ts';
 
 /**
  * What the UI writes (AOS-01 §9, A2): every change is an agent run through dispatch, and approval
@@ -83,3 +85,21 @@ export const songLink = (deps: DispatchDeps, l: { readonly songId: string; reado
 /** @returns the retracted link */
 export const songUnlink = (deps: DispatchDeps, u: { readonly linkId: string; readonly reason: string }) =>
   run<{ linkId: string; retracted: true }>(deps, 'records-songs', { unlink: u });
+
+/**
+ * Index now (AOS-04 Plan C1, §15.2 item 5): runs the Vault index (`pnpm embed`'s Vault half) so a saved file becomes
+ * searchable by meaning. It indexes every pending Vault entity, not only one file; a failure leaves every saved
+ * file as it was and is reported, never hidden.
+ * @param sql - the app's pool
+ * @param load - the embedder (a seam: the model by default)
+ * @returns ok with the model, or the error
+ */
+export const indexVaultFile = async (sql: Sql, load: () => Promise<Embedder> = loadEmbedder): Promise<{ ok: true; model: string } | { ok: false; error: string }> => {
+  try {
+    const e = await load();
+    await embedVault(sql, e);
+    return { ok: true, model: e.model };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+};

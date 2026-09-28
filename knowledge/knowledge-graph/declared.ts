@@ -97,7 +97,8 @@ const decisionsOf = (text: string): Declared => {
     let end = i + 1;
     while (end < lines.length && !DECISION.test(lines[end]!) && !/^#{1,6} /.test(lines[end]!)) end++;
     nodes.push({
-      id: `decision:F${m[1]}`, kind: 'decision', title: m[2]!.replace(/\.$/, ''), ownerDomain: null, basis: 'shared', line: i + 1,
+      // Known by its number: the title leads with it, so a list, a search or an inherited target reads "F41 · …".
+      id: `decision:F${m[1]}`, kind: 'decision', title: `F${m[1]} · ${m[2]!.replace(/\.$/, '')}`, ownerDomain: null, basis: 'shared', line: i + 1,
       revision: sha256(lines.slice(i, end).join('\n')), detail: {},
     });
   });

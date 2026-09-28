@@ -106,25 +106,31 @@ const walk = async (
   }
 };
 
+// Bulk writes go through unnest() over one array per column: one parameter per column whatever the row count,
+// and plain tagged templates that both the root's TypeScript and Next's build type-check. Every array is sent as
+// text[] and cast per column in the select: postgres.js serializes a boolean[] or jsonb[] parameter element by
+// element with its own rules (a 'true' string becomes false; a JSON string is encoded twice), Postgres parses text.
+const txt = (xs: readonly (string | number | boolean | null)[]): (string | null)[] => xs.map((x) => (x === null ? null : String(x)));
+
 const insertRows = async (tx: postgres.TransactionSql, rows: readonly Row[]): Promise<Map<string, string>> => {
-  const ids = new Map<string, string>();
-  // Chunked: Postgres takes at most 65 535 parameters per statement.
-  for (let i = 0; i < rows.length; i += 1000) {
-    const chunk = rows.slice(i, i + 1000);
-    const written = await tx<{ id: string; path: string }[]>`
-      insert into indexed_files ${tx(chunk as Row[], 'root', 'path', 'sha256', 'size_bytes', 'mime', 'mtime', 'text_indexed', 'owner_domain', 'ownership_basis', 'status', 'error', 'first_scan_id', 'last_scan_id', 'indexed_at')}
-      on conflict (root, path) do update set
-        sha256 = excluded.sha256, size_bytes = excluded.size_bytes, mime = excluded.mime, mtime = excluded.mtime,
-        text_indexed = excluded.text_indexed, owner_domain = excluded.owner_domain, ownership_basis = excluded.ownership_basis,
-        status = excluded.status, error = excluded.error, last_scan_id = excluded.last_scan_id, indexed_at = excluded.indexed_at
-      returning id, path`;
-    for (const w of written) ids.set(w.path, w.id);
-  }
-  return ids;
+  if (rows.length === 0) return new Map();
+  const col = <K extends keyof Row>(k: K) => txt(rows.map((r) => { const v = r[k]; return v instanceof Date ? v.toISOString() : v as string | number | boolean | null; }));
+  const written = await tx<{ id: string; path: string }[]>`
+    insert into indexed_files (root, path, sha256, size_bytes, mime, mtime, text_indexed, owner_domain, ownership_basis, status, error, first_scan_id, last_scan_id, indexed_at)
+    select u.root, u.path, u.sha256, u.size_bytes::bigint, u.mime, u.mtime::timestamptz, u.text_indexed::boolean, u.owner_domain::public.xyp_domain,
+           u.ownership_basis, u.status, u.error, u.first_scan_id::uuid, u.last_scan_id::uuid, u.indexed_at::timestamptz
+    from unnest(${col('root')}::text[], ${col('path')}::text[], ${col('sha256')}::text[], ${col('size_bytes')}::text[], ${col('mime')}::text[],
+                ${col('mtime')}::text[], ${col('text_indexed')}::text[], ${col('owner_domain')}::text[], ${col('ownership_basis')}::text[],
+                ${col('status')}::text[], ${col('error')}::text[], ${col('first_scan_id')}::text[], ${col('last_scan_id')}::text[], ${col('indexed_at')}::text[])
+      as u(root, path, sha256, size_bytes, mime, mtime, text_indexed, owner_domain, ownership_basis, status, error, first_scan_id, last_scan_id, indexed_at)
+    on conflict (root, path) do update set
+      sha256 = excluded.sha256, size_bytes = excluded.size_bytes, mime = excluded.mime, mtime = excluded.mtime,
+      text_indexed = excluded.text_indexed, owner_domain = excluded.owner_domain, ownership_basis = excluded.ownership_basis,
+      status = excluded.status, error = excluded.error, last_scan_id = excluded.last_scan_id, indexed_at = excluded.indexed_at
+    returning id, path`;
+  return new Map(written.map((w) => [w.path, w.id]));
 };
 
-type NodeRow = { id: string; kind: string; title: string; owner_domain: string | null; ownership_basis: string; file_id: string; line: number; revision: string; scan_id: string; detail: postgres.JSONValue };
-type EdgeRow = { relation: string; from_id: string; to_id: string | null; file_id: string; line: number; detail: string; revision: string; scan_id: string };
 type Changed = { readonly rel: string; readonly text: string; readonly sha256: string; readonly owner: ReturnType<typeof ownerOf> };
 
 /**
@@ -167,18 +173,23 @@ const writeDeclared = async (
     }
     for (const e of d.edges) if (!dropped.has(e.fromId)) edges.push({ ...e, fileId, sha256: c.sha256 });
   }
-  for (let i = 0; i < nodes.length; i += 1000) {
-    const chunk: NodeRow[] = nodes.slice(i, i + 1000).map((n) => ({
-      id: n.id, kind: n.kind, title: n.title, owner_domain: n.ownerDomain, ownership_basis: n.basis, file_id: n.fileId, line: n.line,
-      revision: n.revision, scan_id: scanId, detail: n.detail as postgres.JSONValue,
-    }));
-    await tx`insert into index_nodes ${tx(chunk, 'id', 'kind', 'title', 'owner_domain', 'ownership_basis', 'file_id', 'line', 'revision', 'scan_id', 'detail')}`;
+  if (nodes.length > 0) {
+    await tx`
+      insert into index_nodes (id, kind, title, owner_domain, ownership_basis, file_id, line, revision, scan_id, detail)
+      select u.id, u.kind, u.title, u.owner_domain::public.xyp_domain, u.basis, u.file_id::uuid, u.line::int, u.revision, ${scanId}, u.detail::jsonb
+      from unnest(${txt(nodes.map((n) => n.id))}::text[], ${txt(nodes.map((n) => n.kind))}::text[], ${txt(nodes.map((n) => n.title))}::text[],
+                  ${txt(nodes.map((n) => n.ownerDomain))}::text[], ${txt(nodes.map((n) => n.basis))}::text[], ${txt(nodes.map((n) => n.fileId))}::text[],
+                  ${txt(nodes.map((n) => n.line))}::text[], ${txt(nodes.map((n) => n.revision))}::text[], ${txt(nodes.map((n) => JSON.stringify(n.detail)))}::text[])
+        as u(id, kind, title, owner_domain, basis, file_id, line, revision, detail)`;
   }
-  for (let i = 0; i < edges.length; i += 1000) {
-    const chunk: EdgeRow[] = edges.slice(i, i + 1000).map((e) => ({
-      relation: e.relation, from_id: e.fromId, to_id: e.toId, file_id: e.fileId, line: e.line, detail: e.detail, revision: e.sha256, scan_id: scanId,
-    }));
-    await tx`insert into index_edges ${tx(chunk, 'relation', 'from_id', 'to_id', 'file_id', 'line', 'detail', 'revision', 'scan_id')}`;
+  if (edges.length > 0) {
+    await tx`
+      insert into index_edges (relation, from_id, to_id, file_id, line, detail, revision, scan_id)
+      select u.relation, u.from_id, u.to_id, u.file_id::uuid, u.line::int, u.detail, u.revision, ${scanId}
+      from unnest(${txt(edges.map((e) => e.relation))}::text[], ${txt(edges.map((e) => e.fromId))}::text[], ${txt(edges.map((e) => e.toId))}::text[],
+                  ${txt(edges.map((e) => e.fileId))}::text[], ${txt(edges.map((e) => e.line))}::text[], ${txt(edges.map((e) => e.detail))}::text[],
+                  ${txt(edges.map((e) => e.sha256))}::text[])
+        as u(relation, from_id, to_id, file_id, line, detail, revision)`;
   }
 };
 

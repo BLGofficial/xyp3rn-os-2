@@ -143,8 +143,8 @@ describe('declared entities', () => {
     const text = ['# Architecture', '', '**F1. First decision.** DECIDED.', 'body one', '', '**F7. Seventh (AOS-9).** PROPOSED.', 'body seven', '', '## Next', 'not in F7'].join('\n');
     const d = declaredOf({ rootId: 'repo', rel: 'docs/ARCHITECTURE.md', text, owner: ownerOf('docs/ARCHITECTURE.md', null), files: FILES });
     expect(d.nodes.map((n) => [n.id, n.title, n.line, n.ownerDomain, n.revision])).toEqual([
-      ['decision:F1', 'First decision', 3, null, sha(['**F1. First decision.** DECIDED.', 'body one', ''].join('\n'))],
-      ['decision:F7', 'Seventh (AOS-9)', 6, null, sha(['**F7. Seventh (AOS-9).** PROPOSED.', 'body seven', ''].join('\n'))],
+      ['decision:F1', 'F1 · First decision', 3, null, sha(['**F1. First decision.** DECIDED.', 'body one', ''].join('\n'))],
+      ['decision:F7', 'F7 · Seventh (AOS-9)', 6, null, sha(['**F7. Seventh (AOS-9).** PROPOSED.', 'body seven', ''].join('\n'))],
     ]);
   });
 
@@ -223,6 +223,9 @@ describe('the scan writes what files declare', () => {
     ]);
     const [agent] = await db.sql<{ owner_domain: string }[]>`select owner_domain::text from graph_nodes where id = 'agent:fixture-retriever'`;
     expect(agent).toEqual({ owner_domain: 'CORE' });
+    // Stored as a JSON object, not a JSON string holding one.
+    const [detail] = await db.sql<{ t: string; cls: string }[]>`select jsonb_typeof(detail) as t, detail->>'class' as cls from index_nodes where id = 'agent:fixture-retriever'`;
+    expect(detail).toEqual({ t: 'object', cls: 'Knowledge' });
   });
 
   it('replaces a changed file\'s declarations and drops a vanished file\'s', async () => {

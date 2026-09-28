@@ -1,6 +1,8 @@
-import { catalogLoaders, runtime, shellLoaders } from '../lib/server';
+import { DOMAINS, type Domain } from '../../../core/contracts/taxonomy.ts';
+import { catalogLoaders, graphLoaders, runtime, shellLoaders } from '../lib/server';
+import { DomainChip, GraphList, Inspector, LENS_HINT, Pager } from './graph-ui';
 import { WithRail } from './shell/right-rail';
-import { ErrorBanner, ScrollTable, Status, Time } from './ui';
+import { ErrorBanner, first, ScrollTable, Status, Time } from './ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,9 +19,34 @@ export default async function Command({ searchParams }: { searchParams: Record<s
   const [d, m, pulse, activity] = await Promise.all([
     (await catalogLoaders()).dashboard(rt.sql), sl.metrics(rt.sql), sl.pulse(rt.sql, process.env, rt.deps.registry), sl.activity(rt.sql, 12),
   ]);
+  // The graph (AOS-04 Plan C1): a List view filtered by domain or a Creative lens group; ?node= opens the inspector
+  // in the right rail in place of pulse and activity (§13.1).
+  const gl = await graphLoaders();
+  const dp = first(searchParams.domain);
+  const domain = dp === 'shared' || (DOMAINS as readonly string[]).includes(dp ?? '') ? (dp as Domain | 'shared') : undefined;
+  const lens = first(searchParams.lens) === 'creative' ? ('creative' as const) : undefined;
+  const group = lens ? first(searchParams.group) : undefined;
+  const page = Math.max(1, Math.trunc(Number(first(searchParams.page))) || 1);
+  const nodeId = first(searchParams.node);
+  const [list, cov, lensData, detail] = await Promise.all([
+    lens && !group ? null : gl.listNodes(rt.sql, { domain, lens, group, page, perPage: 25 }),
+    gl.coverage(rt.sql),
+    lens ? gl.lensGroups(rt.sql) : null,
+    nodeId ? gl.nodeDetail(rt.sql, nodeId) : null,
+  ]);
+  const qs = (o: Record<string, string | number | undefined>) => {
+    const q = new URLSearchParams(Object.entries(o).filter((e): e is [string, string | number] => e[1] !== undefined && e[1] !== '').map(([k, v]) => [k, String(v)])).toString();
+    return q ? `/?${q}` : '/';
+  };
+  const inspect = (id: string) => `${qs({ domain, lens, group, page: page > 1 ? page : undefined, node: id })}#inspector-h`;
   const blockers = d.alerts.filter((a) => a.severity === 'blocker');
   const warnings = d.alerts.filter((a) => a.severity === 'warning');
-  const rail = (
+  const rail = nodeId ? (
+    <>
+      {detail ? <Inspector d={detail} limit={12} /> : <section className="card"><h2 className="mt-0">Not in the index</h2><p className="meta">No entity has the id <code className="break-all">{nodeId}</code>.</p></section>}
+      <p className="text-sm"><a href={qs({ domain, lens, group, page: page > 1 ? page : undefined })}>Close the inspector</a> <span className="meta">(back to pulse and activity)</span></p>
+    </>
+  ) : (
     <>
       <section className="card" aria-labelledby="pulse-h">
         <h2 id="pulse-h" className="mt-0">System pulse</h2>
@@ -51,7 +78,7 @@ export default async function Command({ searchParams }: { searchParams: Record<s
     </>
   );
   return (
-    <WithRail rail={rail} label="System pulse and recent activity">
+    <WithRail rail={rail} label={nodeId ? 'Inspector' : 'System pulse and recent activity'}>
       <section>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h1>Command Center</h1>
@@ -79,6 +106,44 @@ export default async function Command({ searchParams }: { searchParams: Record<s
             </article>
           ))}
         </div>
+
+        <section aria-labelledby="graph-h">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="graph-h">Graph</h2>
+            <nav aria-label="Graph lens" className="flex gap-4 text-sm">
+              <a href={qs({ domain })} aria-current={lens ? undefined : 'page'}>System lens</a>
+              <a href={qs({ lens: 'creative' })} aria-current={lens ? 'page' : undefined}>Creative lens</a>
+            </nav>
+          </div>
+          <p className="meta" data-coverage>
+            {cov.nodes} entities in the index · {cov.lastScan ? <>last scan <Time at={cov.lastScan.finishedAt ?? cov.lastScan.startedAt} /> ({cov.lastScan.status})</> : 'no scan yet'} · <a href="/system">coverage and diagnostics</a> · List view (the sphere comes with Plan C2)
+          </p>
+          {domain && <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">Showing <DomainChip domain={domain === 'shared' ? null : domain} /> <a href={qs({})}>clear the filter</a></p>}
+          {lensData && (
+            <div className="mt-3">
+              <p className="meta">
+                {lensData.anchor ? <>Under <a href={lensData.anchor.href}>{lensData.anchor.title}</a> (Records). </> : 'No X3LIUS Music System module is registered in this database, so the groups stand alone. '}
+                {LENS_HINT}
+              </p>
+              <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {lensData.groups.map((g) => (
+                  <li key={g.key}>
+                    <a href={qs({ lens: 'creative', group: g.key })} aria-current={group === g.key ? 'true' : undefined} className="card block p-3 no-underline" data-lens-group={g.key}>
+                      <span className="flex items-baseline justify-between gap-2"><span className="text-ink-1">{g.label}</span><span className="num text-ink-1">{g.count}</span></span>
+                      <span className="meta block">group · {g.query}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {list && (
+            <div className="mt-3">
+              <GraphList nodes={list.nodes} inspect={inspect} />
+              <Pager page={list.page} perPage={list.perPage} total={list.total} at={(p) => qs({ domain, lens, group, page: p })} />
+            </div>
+          )}
+        </section>
 
         <h2>Songs by status</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
