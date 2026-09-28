@@ -22,8 +22,8 @@ const put = (rel: string, body: string) => {
 const RUN = 'name: fixture-run\ndescription: x\nsteps:\n  - id: fetch\n    agent: fixture-agent\n  - id: sum\n    agent: fixture-agent\n    dependsOn: [fetch]\n';
 const IDLE = 'name: fixture-idle\ndescription: x\nsteps:\n  - id: only\n    agent: fixture-agent\n';
 const run = (name: string, spec: string, status: 'success' | 'error', at: string) =>
-  db.sql`insert into workflow_runs (workflow_name, spec_sha256, spec, input, status, created_at, completed_at)
-         values (${name}, ${spec}, '{}', '{}', ${status}, ${at}, ${at})`;
+  db.sql`insert into workflow_runs (workflow_name, spec_sha256, spec, input, status, created_at, completed_at, failed_step, error_detail)
+         values (${name}, ${spec}, '{}', '{}', ${status}, ${at}, ${at}, ${status === 'error' ? 'fetch' : null}, ${status === 'error' ? '[FIXTURE] failed' : null})`;
 
 beforeAll(async () => {
   db = await createTestDb('jarvis01_workflows', { migrated: true });
