@@ -527,3 +527,20 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **A research run's workflow run** is recorded as `research-specialists`, a plan generated at run time with no definition file, so its `run_of` edge is a dangling diagnostic, not a guessed workflow.
 - **Suggested relations** (title mentions, similarity) are not built.
 
+
+**F48. The Mercury sphere and the eight areas (Jarvis Prompt 01).** DECIDED (operator, 2026-09-28; plan `docs/artist-os/JARVIS-01-plan.md`, map `docs/artist-os/JARVIS-00-map.md`).
+- **J1:** Workflow Builder, Analytics and System Admin are honest pages. `/workflows` lists the workflow files as the index read them (steps, agents, dependencies) and their recorded runs by revision, with runs of workflows that have no file listed apart; the builder is Prompt 14's. `/analytics` shows only the recorded platform links, as links; metrics wait on connectors (Prompt 11). `/system` (System Admin) adds the pulse, the migration head, registry counts, `xyp_*` role names and whether each provider key is set (never a value).
+- **J2:** Songs & Releases is one navigation area opening `/songs`; `/songs` and `/releases` keep their URLs and carry Songs | Releases tabs.
+- **J3:** the prompts' split holds. Prompt 01 builds the sphere, selection, keyboard, states, reduced motion and a command input that searches; Prompt 03 builds answers that focus their sources, clusters, the richer filters and connection signals.
+- **The overview's grouping rule** (`knowledge/knowledge-graph/overview.ts`, `GET /api/graph/overview`): domains, workflows, modules, agents and workflow steps are drawn one by one; every other kind is grouped per owner domain (or Shared) into a group that names its query (`kind = <kind> and owner = <D>`), counts all its members and lists the first 200. Over the budget (250 marks, 500 edges) steps, then agents, modules and workflows become groups, and the response names them. Edges are `graph_edges` rows between drawn nodes plus a group's `contains` link to its domain, marked as grouping; a grouped node's edges are dropped, never re-pointed at its group. One repeatable-read snapshot, so `indexed = drawn + grouped` holds while a scan commits.
+- **The hub** is the application's identity from `package.json` (name and version), drawn at the centre. It is configuration: not an agent, a server or a row, and never connected.
+- **Geometry** (`apps/web/lib/sphere.ts`, pure): domain anchors on their §13.2 bearings 60° off the view axis, Shared on the far side; members spread by area over a 0.4 rad cap from two hashes of the id (no `Math.random`, no input order), so the server and the client compute the same picture.
+- **Motion:** nothing moves on its own. The camera turns on a drag, Shift+arrows, or a selection that is out of view (550 ms, `cubic-bezier(0.22, 1, 0.36, 1)`; at once under `prefers-reduced-motion`); a selection already in view doesn't move it.
+- **The command input** is a GET form to `/search` at the bottom of Command's centre column: it works without JavaScript and shows no voice or attachment control.
+
+**F49. Open after Jarvis Prompt 01.**
+- **Prompt 03:** answers that focus their sources, source clusters, status/language/project/date filters and connection signals are not built; the sphere and the overview are built so they attach (a focus is a `?node=`, a filter is the list's).
+- **Frame rate is not measured.** LCP and CLS on `/` are recorded by the smoke (not gated); on a large graph the SVG redraws every mark per drag frame.
+- **Group labels** use the taxonomy's labels (`XYP3RN Records · Files`); the sphere's domain labels use the shell's shorter ones (`Records`).
+- **The contract conflicts** in the map's §2 stand as the repository decided them (UUID v4, no `prm_*`/`skl_*` codes, per-table lifecycles, spec sha256 rather than semantic versions, the unused Anthropic provider): each is raised again at the prompt that depends on it.
+- **Observed, not fixed here:** the Sofia clock samples `/api/time` on `/login`, where there is no session, so the login page logs three 401 console errors (Plan B). Command and the eight areas log none.

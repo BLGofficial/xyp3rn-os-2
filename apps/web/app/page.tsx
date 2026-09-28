@@ -1,6 +1,8 @@
 import { DOMAINS, type Domain } from '../../../core/contracts/taxonomy.ts';
 import { catalogLoaders, graphLoaders, runtime, shellLoaders } from '../lib/server';
-import { DomainChip, GraphList, Inspector, LENS_HINT, Pager } from './graph-ui';
+import { CommandInput } from './graph/command-input';
+import { Sphere } from './graph/sphere';
+import { DomainChip, GraphList, Inspector, kindWord, LENS_HINT, Pager } from './graph-ui';
 import { WithRail } from './shell/right-rail';
 import { ErrorBanner, first, ScrollTable, Status, Time } from './ui';
 
@@ -24,12 +26,15 @@ export default async function Command({ searchParams }: { searchParams: Record<s
   const gl = await graphLoaders();
   const dp = first(searchParams.domain);
   const domain = dp === 'shared' || (DOMAINS as readonly string[]).includes(dp ?? '') ? (dp as Domain | 'shared') : undefined;
+  // A kind filter (a sphere group opens its members here): a known kind's shape, never free text in SQL.
+  const kp = first(searchParams.kind);
+  const kind = kp && /^[a-z_]{1,40}$/.test(kp) ? kp : undefined;
   const lens = first(searchParams.lens) === 'creative' ? ('creative' as const) : undefined;
   const group = lens ? first(searchParams.group) : undefined;
   const page = Math.max(1, Math.trunc(Number(first(searchParams.page))) || 1);
   const nodeId = first(searchParams.node);
   const [list, cov, lensData, detail] = await Promise.all([
-    lens && !group ? null : gl.listNodes(rt.sql, { domain, lens, group, page, perPage: 25 }),
+    lens && !group ? null : gl.listNodes(rt.sql, { domain, kind, lens, group, page, perPage: 25 }),
     gl.coverage(rt.sql),
     lens ? gl.lensGroups(rt.sql) : null,
     nodeId ? gl.nodeDetail(rt.sql, nodeId) : null,
@@ -38,13 +43,13 @@ export default async function Command({ searchParams }: { searchParams: Record<s
     const q = new URLSearchParams(Object.entries(o).filter((e): e is [string, string | number] => e[1] !== undefined && e[1] !== '').map(([k, v]) => [k, String(v)])).toString();
     return q ? `/?${q}` : '/';
   };
-  const inspect = (id: string) => `${qs({ domain, lens, group, page: page > 1 ? page : undefined, node: id })}#inspector-h`;
+  const inspect = (id: string) => `${qs({ domain, kind, lens, group, page: page > 1 ? page : undefined, node: id })}#inspector-h`;
   const blockers = d.alerts.filter((a) => a.severity === 'blocker');
   const warnings = d.alerts.filter((a) => a.severity === 'warning');
   const rail = nodeId ? (
     <>
       {detail ? <Inspector d={detail} limit={12} /> : <section className="card"><h2 className="mt-0">Not in the index</h2><p className="meta">No entity has the id <code className="break-all">{nodeId}</code>.</p></section>}
-      <p className="text-sm"><a href={qs({ domain, lens, group, page: page > 1 ? page : undefined })}>Close the inspector</a> <span className="meta">(back to pulse and activity)</span></p>
+      <p className="text-sm"><a href={qs({ domain, kind, lens, group, page: page > 1 ? page : undefined })}>Close the inspector</a> <span className="meta">(back to pulse and activity)</span></p>
     </>
   ) : (
     <>
@@ -116,9 +121,14 @@ export default async function Command({ searchParams }: { searchParams: Record<s
             </nav>
           </div>
           <p className="meta" data-coverage>
-            {cov.nodes} entities in the index · {cov.lastScan ? <>last scan <Time at={cov.lastScan.finishedAt ?? cov.lastScan.startedAt} /> ({cov.lastScan.status})</> : 'no scan yet'} · <a href="/system">coverage and diagnostics</a> · List view (the sphere comes with Plan C2)
+            {cov.nodes} entities in the index · {cov.lastScan ? <>last scan <Time at={cov.lastScan.finishedAt ?? cov.lastScan.startedAt} /> ({cov.lastScan.status})</> : 'no scan yet'} · <a href="/system">coverage and diagnostics</a>
           </p>
-          {domain && <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">Showing <DomainChip domain={domain === 'shared' ? null : domain} /> <a href={qs({})}>clear the filter</a></p>}
+          {!lens && <Sphere selected={nodeId ?? null} scanKey={`${cov.lastScan?.id ?? 'none'}:${cov.nodes}`} />}
+          {(domain || kind) && (
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              Showing {kind && <span>{kindWord(kind)}</span>} {domain && <DomainChip domain={domain === 'shared' ? null : domain} />} <a href={qs({})}>clear the filter</a>
+            </p>
+          )}
           {lensData && (
             <div className="mt-3">
               <p className="meta">
@@ -140,7 +150,7 @@ export default async function Command({ searchParams }: { searchParams: Record<s
           {list && (
             <div className="mt-3">
               <GraphList nodes={list.nodes} inspect={inspect} />
-              <Pager page={list.page} perPage={list.perPage} total={list.total} at={(p) => qs({ domain, lens, group, page: p })} />
+              <Pager page={list.page} perPage={list.perPage} total={list.total} at={(p) => qs({ domain, kind, lens, group, page: p })} />
             </div>
           )}
         </section>
@@ -217,6 +227,7 @@ export default async function Command({ searchParams }: { searchParams: Record<s
             <p className="meta">{d.connectors.length === 0 ? 'none connected; platform and distributor connectors arrive in AOS-06' : ''}</p>
           </div>
         </div>
+        <CommandInput />
       </section>
     </WithRail>
   );

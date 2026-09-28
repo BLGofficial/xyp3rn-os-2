@@ -1,4 +1,7 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Sql } from '../../../core/db/client.ts';
+import * as ov from '../../../knowledge/knowledge-graph/overview.ts';
 import * as p from '../../../knowledge/knowledge-graph/projection.ts';
 import { searchIndex } from '../../../knowledge/knowledge-graph/search.ts';
 import { asWeb } from './loaders.ts';
@@ -99,3 +102,38 @@ export const diagnostics = (sql: Sql, limit = 200) =>
 export const unreadableFiles = (sql: Sql) =>
   asWeb(sql, async (tx) => (await tx<{ id: string; path: string; error: string; indexed_at: Date }[]>`
     select id, path, error, indexed_at from indexed_files where status = 'unreadable' order by path`).map((f) => ({ id: f.id, path: f.path, error: f.error, indexedAt: f.indexed_at.toISOString() })));
+
+export type OverviewGroup = ov.OverviewGroup & { readonly href: string };
+export type Hub = { readonly id: string; readonly title: string; readonly version: string; readonly sourceRef: 'package.json'; readonly backing: 'configuration' };
+
+// The hub is the application's identity from its configuration: not an agent, a server or a row.
+const PACKAGE_JSON = join(import.meta.dirname, '..', '..', '..', 'package.json');
+const hub = async (): Promise<Hub> => {
+  const pkg = JSON.parse(await readFile(PACKAGE_JSON, 'utf8')) as { name: string; version: string };
+  return { id: `app:${pkg.name}`, title: pkg.name, version: pkg.version, sourceRef: 'package.json', backing: 'configuration' };
+};
+
+/**
+ * The sphere's bounded overview (see overview.overview) with the configured hub, each node's inspector link and each
+ * group's list filter.
+ * @param sql - the app's pool
+ * @param o - the node and edge budget
+ */
+export const overview = async (sql: Sql, o: { maxNodes?: number; maxEdges?: number } = {}) => {
+  const [h, r] = await Promise.all([
+    hub(),
+    asWeb(sql, async (tx) => {
+      // One snapshot for the counts, the members and the edges (the default, read committed, gives each its own).
+      await tx.unsafe('set transaction isolation level repeatable read');
+      return ov.overview(tx, o);
+    }),
+  ]);
+  return {
+    ...r, hub: h,
+    nodes: r.nodes.map((n) => ({ ...n, href: `/?node=${encodeURIComponent(n.id)}` })),
+    groups: r.groups.map((g): OverviewGroup => ({ ...g, href: `/?kind=${encodeURIComponent(g.kind)}&domain=${g.domain}` })),
+  };
+};
+
+/** What GET /api/graph/overview answers (the sphere's data). */
+export type OverviewData = Awaited<ReturnType<typeof overview>>;

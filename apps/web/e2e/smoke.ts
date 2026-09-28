@@ -372,7 +372,7 @@ try {
   const [active] = await db.sql<{ n: number }[]>`select count(*)::int as n from current_songs where status::text in ('idea', 'writing', 'producing', 'releasing')`;
   const shown = Number(((await page.textContent('[data-metric="activeSongs"] p.num')) ?? '').trim().split(/\s/)[0]);
   check(shown === active!.n, `Active songs shows what the database holds at that moment (${shown} = ${active!.n})`);
-  check((await page.textContent('nav[aria-label="Primary"] a[aria-current="page"]'))?.trim() === 'Command', 'the rail marks the current page (aria-current)');
+  check((await page.textContent('nav[aria-label="Primary"] a[aria-current="page"]'))?.trim() === 'Command Center', 'the rail marks the current page (aria-current)');
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const duration = await page.$eval('nav[aria-label="Primary"] a', (a) => getComputedStyle(a).transitionDuration);
@@ -463,8 +463,138 @@ try {
   check(raw.headers()['content-type']?.startsWith('text/plain') === true && raw.headers()['content-security-policy']?.startsWith('sandbox') === true && raw.headers()['x-content-type-options'] === 'nosniff',
     'the raw route serves text/plain with nosniff and a sandbox CSP');
 
+  // Jarvis Prompt 01: the eight areas, the sphere over /api/graph/overview, the command input, reduced motion, logs.
+  const logFrom = serverLog.length;
+  const consoleErrors: string[] = [];
+  page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(`${page.url()}: ${m.text()}`); });
+  page.on('pageerror', (e) => consoleErrors.push(`${page.url()}: ${String(e)}`));
+  const AREAS = [['Command Center', '/', 'Command Center'], ['Songs & Releases', '/songs', 'Songs'], ['Studio', '/studio', 'Studio'], ['Research', '/research', 'Research'],
+    ['Creative Vault', '/vault', 'Creative Vault'], ['Workflow Builder', '/workflows', 'Workflow Builder'], ['Analytics', '/analytics', 'Analytics'], ['System Admin', '/system', 'System Admin']] as const;
+  const navLabels = (await page.locator('nav[aria-label="Primary"] > div > ul').first().locator('a').allTextContents()).map((t) => t.trim());
+  check(JSON.stringify(navLabels) === JSON.stringify(AREAS.map((a) => a[0])), `the navigation lists the eight areas in order (${navLabels.join(' · ')})`);
+  const opened8: string[] = [];
+  for (const [label, path, h1] of AREAS) {
+    const res = await page.goto(`${BASE}${path}`);
+    const heading = (await page.textContent('h1'))?.trim();
+    const current = (await page.textContent('nav[aria-label="Primary"] a[aria-current="page"]'))?.trim();
+    if (res?.status() !== 200 || heading !== h1 || current !== label) opened8.push(`${path}: ${res?.status()} "${heading}" current "${current}"`);
+  }
+  check(opened8.length === 0, `each area opens (200) with its heading, marked current (${opened8.join('; ') || AREAS.length + ' areas'})`);
+  await page.goto(`${BASE}/releases`);
+  check((await page.textContent('nav[aria-label="Primary"] a[aria-current="page"]'))?.trim() === 'Songs & Releases' && (await page.textContent('nav[aria-label="Songs & Releases"] a[aria-current="page"]'))?.trim() === 'Releases',
+    '/releases keeps its URL, under Songs & Releases, with its tab current');
+  await page.goto(`${BASE}/workflows`);
+  check((await page.textContent('[data-builder-state]'))?.includes('not built (Prompt 14)') === true && (await page.locator('[data-workflow="retrieve-and-summarize"]').count()) === 1
+    && (await page.locator('[data-undefined-run="research-specialists"]').count()) === 1,
+    'Workflow Builder lists the workflow files (retrieve-and-summarize) and the journey\'s research-specialists runs apart, and says the builder is Prompt 14');
+  await page.goto(`${BASE}/analytics`);
+  check((await page.textContent('[data-analytics-state]'))?.includes('nothing here is a statistic') === true && (await page.locator('[data-platform]').count()) > 0,
+    'Analytics says no connector exists and shows the journey\'s platform links as links');
+  await page.goto(`${BASE}/system`);
+  const [roleCount] = await db.sql<{ n: number }[]>`select count(*)::int as n from pg_roles where rolname like 'xyp\_%'`;
+  check((await page.locator('[data-roles] li').count()) === roleCount!.n && (await page.textContent('[data-secrets]'))?.includes('Not configured') === true
+    && (await page.textContent('[data-registry="Agents"]'))?.includes(String(createAgentRegistry({ dir: join(REPO_ROOT, 'agents') }).list().length)) === true,
+    `System Admin shows the registries, ${roleCount!.n} xyp roles by name, and each provider key as configured or not`);
+
+  check((await fetch(`${BASE}/api/graph/overview`)).status === 401 && (await fetch(`${BASE}/api/graph/node?id=domain%3ACORE`)).status === 401,
+    '/api/graph/overview and /api/graph/node answer 401 without a session');
+  const api = await page.request.get(`${BASE}/api/graph/overview`);
+  const ov = (await api.json()) as { nodes: { id: string }[]; groups: { id: string; count: number }[]; counts: { indexed: number; drawn: number; grouped: number } };
+  const [gn] = await db.sql<{ n: number }[]>`select count(*)::int as n from graph_nodes`;
+  const known = new Set((await db.sql<{ id: string }[]>`select id from graph_nodes where id = any(${ov.nodes.map((n) => n.id)})`).map((r) => r.id));
+  check(api.status() === 200 && api.headers()['cache-control'] === 'no-store' && ov.nodes.every((n) => known.has(n.id)) && ov.counts.indexed === gn!.n
+    && ov.counts.drawn + ov.counts.grouped === gn!.n,
+    `/api/graph/overview answers the session, no-store: ${ov.counts.drawn} drawn + ${ov.counts.grouped} in ${ov.groups.length} groups = ${gn!.n} graph_nodes rows`);
+
+  // Loading: the overview held back, the skeleton first; then as many marks as the API answered.
+  await page.route('**/api/graph/overview', async (r) => { await new Promise((res) => setTimeout(res, 1500)); await r.continue(); });
+  await page.goto(`${BASE}/`);
+  check(await page.locator('[data-sphere-state=loading]').isVisible(), 'the sphere shows a labelled skeleton while the overview loads (Loading the graph…)');
+  await page.waitForSelector('[data-sphere-state=populated]', { timeout: 15_000 });
+  await page.unroute('**/api/graph/overview');
+  const marks = await page.locator('[data-sphere-node]').count();
+  check(marks === ov.nodes.length + ov.groups.length, `the sphere draws what the API returned (${marks} marks = ${ov.nodes.length} nodes + ${ov.groups.length} groups)`);
+  check(/Showing \d+ of \d+ entities; \d+ in \d+ groups/.test((await page.textContent('[data-sphere-coverage]')) ?? ''), `the sphere says how much it draws (${(await page.textContent('[data-sphere-coverage]'))?.trim()})`);
+
+  // The keyboard: Tab from the toolbar reaches the sphere; right to Core, down across Knowledge and Governance to
+  // Records; Enter opens its inspector.
+  await page.focus('button[aria-label="Zoom out"]');
+  await page.keyboard.press('Tab');
+  check(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Graph sphere'), 'Tab reaches the sphere');
+  await page.keyboard.press('ArrowRight');
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown');
+  const focusedNode = await page.locator('[data-sphere-focus]').evaluate((c) => c.closest('[data-sphere-node]')?.getAttribute('data-sphere-node'));
+  check(focusedNode === 'domain:RECORDS', `the arrows move by domain, with a visible focus ring (${focusedNode})`);
+  await page.keyboard.press('Enter');
+  await page.waitForURL(/node=domain%3ARECORDS/);
+  await page.waitForSelector('[data-sphere-selected]');
+  check(/RECORDS/.test((await page.textContent('[data-inspector]')) ?? ''), 'Enter selects: the inspector opens for domain:RECORDS');
+  const rimR = () => page.locator('[role=application] svg > circle').first().getAttribute('r');
+  const r0 = await rimR();
+  await page.keyboard.press('+');
+  const r1 = await rimR();
+  await page.keyboard.press('r');
+  check(Number(r1) > Number(r0) && (await rimR()) === r0, `+ zooms and R resets the view (rim ${r0} → ${r1} → ${await rimR()})`);
+  await page.keyboard.press('Escape');
+  check((await page.locator('[data-sphere-focus]').count()) === 0, 'Escape clears the focus');
+  await page.locator('[data-sphere-node="group:CORE:file"]').dispatchEvent('click');
+  await page.waitForURL(/kind=file&domain=CORE/);
+  const coreFiles = await page.locator('[aria-label="Graph entities"] tbody tr').allTextContents();
+  check(coreFiles.length > 0 && coreFiles.every((r) => r.includes('file') && r.includes('Core')), `a group opens its members in the list (${coreFiles.length} Core files on page 1)`);
+
+  // An API failure: the error state, and the list below still lists every entity.
+  await page.route('**/api/graph/overview', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: '[FAKE] the server could not read the graph' }) }));
+  await page.goto(`${BASE}/`);
+  await page.waitForSelector('[data-sphere-state=error]');
+  check((await page.textContent('[data-sphere-state=error]'))?.includes('Graph unavailable: [FAKE] the server could not read the graph (HTTP 500)') === true
+    && (await page.locator('[aria-label="Graph entities"] tbody tr').count()) > 0, 'an API failure shows the error state, and the Graph list still renders');
+  await page.unroute('**/api/graph/overview');
+  consoleErrors.length = 0; // the 500 above was the point; only what follows counts
+
+  await page.goto(`${BASE}/`);
+  await page.fill('#command-q', 'instrumentation-node');
+  await page.press('#command-q', 'Enter');
+  await page.waitForURL(/\/search\?q=instrumentation-node/);
+  check((await page.locator('[data-search-group=file] li', { hasText: 'apps/web/instrumentation-node.ts' }).count()) === 1, 'the command input searches the whole index (a GET to /search)');
+
+  // Reduced motion: no transition on a mark, and a far-side selection turns at once (no 550 ms turn).
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`${BASE}/?node=${encodeURIComponent('group:shared:file')}`);
+  await page.waitForSelector('[data-sphere-state=populated][data-motion=reduced] [data-sphere-selected]');
+  const turned = await page.evaluate(async () => {
+    // Two frames in: an animated turn would be a few per cent along, far from the centre.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const svg = document.querySelector('[role=application] svg')!;
+    const c = document.querySelector('[data-sphere-selected]')!;
+    return { dx: Math.abs(Number(c.getAttribute('cx')) - Number(svg.getAttribute('width')) / 2), duration: getComputedStyle(document.querySelector('[data-sphere-node]')!).transitionDuration };
+  });
+  check(turned.duration === '0s' && turned.dx < 1, `with reduced motion a mark has no transition (${turned.duration}) and a far-side selection faces the viewer at once (${turned.dx.toFixed(2)} px off centre)`);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  for (const [, path] of AREAS) await page.goto(`${BASE}${path}`);
+  check(consoleErrors.length === 0, `no console error on / and the eight areas (${consoleErrors.join(' | ') || 'none'})`);
+  const errLines = serverLog.slice(logFrom).split('\n').filter((l) => /\berror\b|Error:|⨯/i.test(l));
+  check(errLines.length === 0, `no error line in the next start log since the Jarvis checks began (${errLines.join(' | ') || 'none'})`);
+
+  // Recorded, not gated: LCP and CLS on / (this machine, headless Chromium, the smoke's dataset).
+  const perf = await browser.newContext({ viewport: { width: 1440, height: 900 }, storageState: await page.context().storageState() });
+  const pp = await perf.newPage();
+  await pp.goto(`${BASE}/`);
+  await pp.waitForSelector('[data-sphere-state=populated]');
+  await pp.waitForTimeout(500);
+  const vitals = await pp.evaluate(() => new Promise<{ lcp: number; cls: number }>((resolve) => {
+    let lcp = 0;
+    let cls = 0;
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) lcp = e.startTime; }).observe({ type: 'largest-contentful-paint', buffered: true });
+    new PerformanceObserver((l) => { for (const e of l.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean })[]) if (!e.hadRecentInput) cls += e.value; }).observe({ type: 'layout-shift', buffered: true });
+    setTimeout(() => resolve({ lcp, cls }), 300);
+  }));
+  console.log(`note  / at 1440×900 (headless Chromium, the smoke's dataset of ${gn!.n} entities): LCP ${Math.round(vitals.lcp)} ms, CLS ${vitals.cls.toFixed(3)} (recorded, not gated)`);
+  await perf.close();
+
   const narrow = [`/`, `/research`, `/research/runs/${opened.researchRunId}`, `/research/library`, `/songs/${songId}`, `/studio/packages/${packageId}`, `/studio`, `/vault`, `/releases`,
-    `/search?q=night`, '/system', `/node?id=${encodeURIComponent(`songs:${songId}`)}`, `/?node=${encodeURIComponent('file:repo/apps/web/instrumentation-node.ts')}`, `/index/files/${layout!.id}`, '/?lens=creative'];
+    `/search?q=night`, '/system', `/node?id=${encodeURIComponent(`songs:${songId}`)}`, `/?node=${encodeURIComponent('file:repo/apps/web/instrumentation-node.ts')}`, `/index/files/${layout!.id}`, '/?lens=creative',
+    '/songs', '/workflows', '/analytics', '/?kind=file&domain=CORE'];
   await page.setViewportSize({ width: 390, height: 844 });
   const wide: string[] = [];
   for (const path of narrow) {
@@ -477,11 +607,14 @@ try {
   if (shots) {
     const views = [[1920, 1080], [1440, 900], [1024, 768], [390, 844]] as const;
     const pages = [['command', '/'], ['research', '/research'], ['run', `/research/runs/${opened.researchRunId}`], ['library', '/research/library'],
-      ['inspector', `/?node=${encodeURIComponent('file:repo/apps/web/instrumentation-node.ts')}`], ['search', '/search?q=night'], ['system', '/system']] as const;
+      ['inspector', `/?node=${encodeURIComponent('file:repo/apps/web/instrumentation-node.ts')}`], ['search', '/search?q=night'], ['system', '/system'],
+      ['sphere-records', `/?node=${encodeURIComponent('domain:RECORDS')}`], ['workflows', '/workflows'], ['analytics', '/analytics']] as const;
     for (const [w, h] of views) {
       await page.setViewportSize({ width: w, height: h });
       for (const [name, path] of pages) {
         await page.goto(`${BASE}${path}`);
+        // The sphere draws after its fetch; from 960 px it must have drawn before the shot (below, it is folded away).
+        if ((path.startsWith('/?') || path === '/') && w >= 960) await page.waitForSelector('[data-sphere-state=populated]', { timeout: 15_000 });
         await shot(page, `13-${name}-${w}x${h}`);
       }
     }
@@ -490,6 +623,7 @@ try {
     const zp = await zoom.newPage();
     for (const [name, path] of pages) {
       await zp.goto(`${BASE}${path}`);
+      if (path.startsWith('/?') || path === '/') await zp.waitForSelector('[data-sphere-state=populated]', { timeout: 15_000 });
       await shot(zp, `13-${name}-200pct`);
     }
     await zoom.close();
