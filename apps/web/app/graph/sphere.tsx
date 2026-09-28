@@ -73,11 +73,9 @@ export function Sphere({ selected, scanKey }: { selected: string | null; scanKey
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => {
-      const width = Math.floor(e!.contentRect.width);
-      const wide = window.matchMedia('(min-width: 960px)').matches;
-      setSize({ width, height: width === 0 ? 0 : Math.max(wide ? 480 : 340, Math.min(640, Math.round(width * 0.66))) });
-    });
+    // The box's height is CSS (340 px, 520 px from 960 px): the server-rendered skeleton and the drawn sphere take
+    // the same space, so loading shifts nothing below it.
+    const ro = new ResizeObserver(([e]) => setSize({ width: Math.floor(e!.contentRect.width), height: Math.floor(e!.contentRect.height) }));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -276,21 +274,21 @@ export function Sphere({ selected, scanKey }: { selected: string | null; scanKey
               : load.state === 'loading' ? 'Loading the graph…' : 'Graph unavailable'}
           </span>
         </div>
-        <div ref={wrap} className="relative mt-2 w-full">
+        <div ref={wrap} className="relative mt-2 h-[340px] w-full md:h-[520px]">
           {load.state === 'loading' && (
-            <div aria-busy="true" className="panel flex items-center justify-center" style={{ height: height || 480 }} data-sphere-state="loading">
+            <div aria-busy="true" className="panel flex h-full items-center justify-center" data-sphere-state="loading">
               <p className="meta">Loading the graph…</p>
             </div>
           )}
           {load.state === 'error' && (
-            <div role="alert" className="panel flex items-center justify-center p-6" style={{ height: Math.min(height || 480, 240) }} data-sphere-state="error">
+            <div role="alert" className="panel flex h-full items-center justify-center p-6" data-sphere-state="error">
               <p>Graph unavailable: {load.reason}. The list below lists every entity.</p>
             </div>
           )}
           {data && width > 0 && (
             <div
               role="application" aria-label="Graph sphere" aria-describedby="sphere-help" tabIndex={0} onKeyDown={onKey}
-              className="panel relative overflow-hidden focus-visible:outline-2" style={{ height }}
+              className="panel relative h-full overflow-hidden focus-visible:outline-2"
               data-sphere-state={empty ? 'empty' : 'populated'} data-motion={reduced ? 'reduced' : 'full'}
               onBlur={() => setFocusId(null)}
             >
