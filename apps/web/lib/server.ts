@@ -14,6 +14,7 @@ type GraphOps = typeof import('../server/graph-ops.ts');
 type GraphLoaders = typeof import('../server/graph-loaders.ts');
 type GraphFiles = typeof import('../server/graph-files.ts');
 type WorkflowsLoaders = typeof import('../server/workflows-loaders.ts');
+type AnalyticsLoaders = typeof import('../server/analytics-loaders.ts');
 type Runtime = typeof import('../server/runtime.ts');
 type Store = typeof import('../../../knowledge/source-registry/vault-store.ts');
 
@@ -30,6 +31,7 @@ export const graphOps = () => osImport<GraphOps>('apps/web/server/graph-ops.ts')
 export const graphLoaders = () => osImport<GraphLoaders>('apps/web/server/graph-loaders.ts');
 export const graphFiles = () => osImport<GraphFiles>('apps/web/server/graph-files.ts');
 export const workflowsLoaders = () => osImport<WorkflowsLoaders>('apps/web/server/workflows-loaders.ts');
+export const analyticsLoaders = () => osImport<AnalyticsLoaders>('apps/web/server/analytics-loaders.ts');
 export const runtime = async () => (await osImport<Runtime>('apps/web/server/runtime.ts')).runtime();
 export const vaultStore = async () => {
   const s = await osImport<Store>('knowledge/source-registry/vault-store.ts');
