@@ -164,3 +164,36 @@ export const step = (order: readonly { readonly id: string; readonly domain: str
   }
   return here.id;
 };
+
+/**
+ * @param v - a point on the sphere
+ * @returns the yaw and pitch that bring it to the front, facing the viewer (rotate(v, yaw, pitch) = +z)
+ */
+export const facing = (v: Vec3): { yaw: number; pitch: number } => {
+  const yaw = Math.atan2(-v.x, v.z);
+  return { yaw, pitch: Math.atan2(v.y, Math.hypot(v.x, v.z)) };
+};
+
+/** The focus transition's length, ms (§18: 450–650). */
+export const FOCUS_MS = 550;
+
+const bez = (a: number, b: number, t: number) => 3 * (1 - t) * (1 - t) * t * a + 3 * (1 - t) * t * t * b + t * t * t;
+
+/**
+ * cubic-bezier(0.22, 1, 0.36, 1), the focus transition's easing (§18).
+ * @param p - progress in time, 0..1 (clamped)
+ * @returns progress in position, 0..1
+ */
+export const ease = (p: number): number => {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  // x(t) is monotonic for these control points: bisect t for x(t) = p, then read y(t).
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (bez(0.22, 0.36, mid) < p) lo = mid;
+    else hi = mid;
+  }
+  return bez(1, 1, (lo + hi) / 2);
+};
