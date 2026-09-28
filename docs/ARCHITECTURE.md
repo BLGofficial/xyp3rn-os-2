@@ -47,6 +47,7 @@ Shared, non-domain directories: `docs/` (contracts, handoffs), `agents/` (`*.age
 **Owns.** `agent_runs`, the in-memory agent and tool registries, workflow specs, and run telemetry (latency, tokens, error rates).
 **Never touches directly.** Canonical knowledge tables, which it reads only through the Context Engine and never writes. Also research tables, Records data, and domain business logic. Core decides *how* work runs, never *what* the content is.
 **Boundary with Knowledge.** The Context Engine (Core) ranks, bundles and caches context for agents. It calls Knowledge's Vector Retrieval and Knowledge Graph for the raw similarity and graph queries. Retrieval primitives live in `knowledge/`; ranking, the reasons attached to each result, and caching live in `core/`.
+**Front doors.** `pnpm ask` and Mercury's `POST /api/ask` share one path: `planRequest` → `runPlan` (`core/orchestrator/ask.ts`). The web path adds session auth, the same-origin check and the `runtime.execute` permission; approvals raised by runs go through `approval_queue` as usual. Voice sits at the edges and adds no runtime logic. Dictation is typed text from the external Wispr Flow app, submitted only by Send. Replies are spoken by a loopback-only Kokoro-FastAPI service. Mercury bridges to it through `/api/speech*` (`apps/web/lib/kokoro.ts`). Plan: `docs/voice/PLAN.md`.
 
 ### KNOWLEDGE — Knowledge Layer
 
