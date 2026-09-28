@@ -67,7 +67,9 @@ export const availableVoices = async (): Promise<Voice[] | null> => {
     const res = await upstream('/v1/audio/voices', { method: 'GET' }, STATUS_TIMEOUT_MS);
     if (!res.ok) return null;
     const body = (await res.json()) as { voices?: unknown };
-    const installed = new Set(Array.isArray(body.voices) ? body.voices.filter((v): v is string => typeof v === 'string') : []);
+    // Kokoro-FastAPI 0.9 returns [{ id, name, ... }]; older releases return plain names.
+    const ids = Array.isArray(body.voices) ? body.voices.map((v: unknown) => (typeof v === 'string' ? v : (v as { id?: unknown } | null)?.id)) : [];
+    const installed = new Set(ids.filter((v): v is string => typeof v === 'string'));
     return VOICES.filter(v => installed.has(v));
   } catch { return null; }
 };

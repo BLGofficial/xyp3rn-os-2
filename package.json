@@ -32,7 +32,10 @@
     "build": "next build apps/web --webpack",
     "start": "next start apps/web --hostname 127.0.0.1",
     "typecheck:web": "tsc --noEmit -p apps/web/tsconfig.json",
-    "governance:user": "node governance/cli.ts user"
+    "governance:user": "node governance/cli.ts user",
+    "voice:start": "node scripts/voice-services.ts start",
+    "voice:status": "node scripts/voice-services.ts status",
+    "voice:stop": "node scripts/voice-services.ts stop"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

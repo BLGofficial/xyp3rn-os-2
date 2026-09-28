@@ -25,7 +25,8 @@ const upstream: Server = createServer((req, res) => {
   req.on('data', c => { raw += c; });
   req.on('end', () => {
     if (req.url === '/health') return void res.writeHead(200, { 'content-type': 'application/json' }).end('{"status":"healthy"}');
-    if (req.url === '/v1/audio/voices') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ voices: ['af_heart', 'bf_emma', 'zz_unlisted'] }));
+    // Kokoro-FastAPI 0.9.0 shape (objects); a plain-string entry covers older releases.
+    if (req.url === '/v1/audio/voices') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ voices: [{ id: 'af_heart', name: 'af_heart', overall_grade: 'A' }, 'bf_emma', { id: 'zz_unlisted' }, null] }));
     hits++; last = { headers: req.headers, body: JSON.parse(raw) };
     res.on('close', () => { if (!res.writableEnded) closedEarly++; });
     if (mode === 'hang') return;
