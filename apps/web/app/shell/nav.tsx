@@ -7,27 +7,30 @@ import { Icon, type IconName } from './icons';
 // Product navigation (AOS-04 design §13.1): icon + full label, the current page marked for assistive tech.
 // A client component only for usePathname; it is server-rendered, so the links work without JS.
 
-type Item = { readonly href: string; readonly label: string; readonly icon: IconName };
+// Jarvis Prompt 01: the eight areas. Songs & Releases is one area (both routes, tabs on each page, J2).
+type Item = { readonly href: string; readonly label: string; readonly icon: IconName; readonly also?: readonly string[] };
 export const PRIMARY: readonly Item[] = [
-  { href: '/', label: 'Command', icon: 'command' },
+  { href: '/', label: 'Command Center', icon: 'command' },
+  { href: '/songs', label: 'Songs & Releases', icon: 'songs', also: ['/releases'] },
   { href: '/studio', label: 'Studio', icon: 'studio' },
   { href: '/research', label: 'Research', icon: 'research' },
   { href: '/vault', label: 'Creative Vault', icon: 'vault' },
-  { href: '/songs', label: 'Songs', icon: 'songs' },
-  { href: '/releases', label: 'Releases', icon: 'releases' },
-  { href: '/tasks', label: 'Tasks', icon: 'tasks' },
-  { href: '/system', label: 'System', icon: 'system' },
+  { href: '/workflows', label: 'Workflow Builder', icon: 'workflow' },
+  { href: '/analytics', label: 'Analytics', icon: 'analytics' },
+  { href: '/system', label: 'System Admin', icon: 'system' },
 ];
 export const SECONDARY: readonly Item[] = [
   { href: '/search', label: 'Search everything', icon: 'search' },
+  { href: '/tasks', label: 'Tasks', icon: 'tasks' },
   { href: '/people', label: 'People', icon: 'people' },
   { href: '/ingest', label: 'Ingest', icon: 'ingest' },
 ];
 
-const current = (path: string, href: string) => (href === '/' ? path === '/' : path === href || path.startsWith(`${href}/`));
+const under = (path: string, href: string) => (href === '/' ? path === '/' : path === href || path.startsWith(`${href}/`));
+const current = (path: string, item: Item) => [item.href, ...(item.also ?? [])].some((h) => under(path, h));
 
 const Link = ({ item, path }: { item: Item; path: string }) => {
-  const on = current(path, item.href);
+  const on = current(path, item);
   return (
     <a
       href={item.href}
@@ -59,12 +62,6 @@ export function NavLinks() {
       <p className="mt-5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-3">More</p>
       <ul className="flex flex-col gap-1">
         {SECONDARY.map((i) => <li key={i.href}><Link item={i} path={path} /></li>)}
-        <li>
-          <span aria-disabled="true" className="flex min-h-[44px] cursor-not-allowed items-center gap-3 px-3 text-[14.5px] text-ink-3">
-            <Icon name="analytics" />
-            <span>Analytics <span className="block text-[11.5px]">not built yet (AOS-06)</span></span>
-          </span>
-        </li>
       </ul>
     </div>
   );

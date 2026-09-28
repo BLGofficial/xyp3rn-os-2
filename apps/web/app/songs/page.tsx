@@ -1,5 +1,6 @@
 import { loaders, runtime } from '../../lib/server';
 import { createSong } from '../actions';
+import { AreaTabs, SONGS_RELEASES } from '../shell/tabs';
 import { ErrorBanner, ScrollTable, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +9,7 @@ export default async function Songs({ searchParams }: { searchParams: Record<str
   const songs = await (await loaders()).songList((await runtime()).sql);
   return (
     <section>
+      <AreaTabs label="Songs & Releases" tabs={SONGS_RELEASES} current="/songs" />
       <h1>Songs</h1>
       <ErrorBanner error={searchParams.error} />
       <ScrollTable label="Songs" className="mt-4">

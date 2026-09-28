@@ -1,5 +1,6 @@
 import { catalogLoaders, runtime } from '../../lib/server';
 import { registerTrackAction } from '../catalog-actions';
+import { AreaTabs, SONGS_RELEASES } from '../shell/tabs';
 import { ErrorBanner, ScrollTable, Status, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
@@ -9,6 +10,7 @@ export default async function Releases({ searchParams }: { searchParams: Record<
   const [releases, options] = await Promise.all([(await catalogLoaders()).releaseList(rt.sql), (await catalogLoaders()).recordingOptions(rt.sql)]);
   return (
     <section>
+      <AreaTabs label="Songs & Releases" tabs={SONGS_RELEASES} current="/releases" />
       <h1>Releases</h1>
       <ErrorBanner error={searchParams.error} />
       <ScrollTable label="Releases" className="mt-4">
