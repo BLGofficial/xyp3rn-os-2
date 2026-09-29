@@ -38,27 +38,36 @@ export const runningCount = (userId: string, action?: string) =>
 
 /**
  * Cancels the caller's own running job: aborts its work (a headless run is killed) and marks it done.
- * @returns false for an unknown, finished or other user's job
+ * Only skill/deep jobs (headless Claude Code, killable via the signal) can be cancelled: a running
+ * `plan` job ignores the signal (runPlan has no abort wiring), so cancelling it would free its
+ * concurrency slot while the run kept going underneath, letting a resubmit bypass the per-user cap.
+ * @returns 'not-found' for an unknown, finished or other user's job; 'not-cancellable' for a running
+ * job whose action is not skill/deep
  */
-export const cancelJob = (userId: string, requestId: string): boolean => {
+export const cancelJob = (userId: string, requestId: string): 'cancelled' | 'not-found' | 'not-cancellable' => {
   const job = jobs.get(keyOf(userId, requestId));
-  if (!job || job.view.state !== 'running') return false;
+  if (!job || job.view.state !== 'running') return 'not-found';
+  if (job.view.action !== 'skill' && job.view.action !== 'deep') return 'not-cancellable';
   job.view = { ...job.view, state: 'done', status: 'cancelled', reply: 'Cancelled. Anything it already started is listed in Live Events.' };
   job.controller.abort(new Error('cancelled'));
-  return true;
+  return 'cancelled';
 };
 
 /**
  * Registers a job synchronously (call right after `findJob`, with no await between, so two
- * identical submissions cannot both start work). `work` runs once and is never retried.
- * @returns the job, or a reason it was refused
+ * identical submissions cannot both start work). `work` runs once and is never retried. Never
+ * overwrites an existing entry for the key: a caller that awaited between its own `findJob` and
+ * this call (the lookup tier reads its answer first) must re-check the outcome itself.
+ * @returns the job, or a reason it was refused ('exists': another job claimed this id meanwhile)
  */
 export const createJob = (
   userId: string, requestId: string, fingerprint: string, initial: AskView,
   work?: (signal: AbortSignal) => Promise<AskView>, failed?: () => AskView,
-): Job | 'busy' | 'full' => {
+): Job | 'busy' | 'full' | 'exists' => {
   const now = Date.now();
   for (const [k, j] of jobs) if (j.view.state === 'done' && now - j.createdAt > TTL_MS) jobs.delete(k);
+  const key = keyOf(userId, requestId);
+  if (jobs.has(key)) return 'exists';
   if (work && runningCount(userId) >= MAX_RUNNING_PER_USER) return 'busy';
   if (jobs.size >= MAX_JOBS) {
     const oldestDone = [...jobs].find(([, j]) => j.view.state === 'done');
@@ -66,7 +75,7 @@ export const createJob = (
     jobs.delete(oldestDone[0]);
   }
   const job: Job = { userId, fingerprint, createdAt: now, view: initial, controller: new AbortController() };
-  jobs.set(keyOf(userId, requestId), job);
+  jobs.set(key, job);
   if (work) {
     work(job.controller.signal).then((v) => { if (job.view.status !== 'cancelled') job.view = v; }, (error: unknown) => {
       if (job.view.status === 'cancelled') return;
