@@ -1,0 +1,45 @@
+import { isLoggedOut, parseClaudeResult, runClaudeCli, type ClaudeRunner } from '../../../core/llm/claude-cli';
+import { MAX_REPLY_CHARS } from '../../../core/orchestrator/ask';
+import type { SkillName } from './skills';
+
+/**
+ * Mercury's headless Claude Code runs (tiers 1 and 3), on the owner's logged-in CLI. cwd is the repo
+ * so project skills load; hooks and the style plugin are off so replies read aloud as plain text.
+ * Every run has an explicit tool list and permission mode dontAsk (anything not allowed is denied).
+ */
+
+export const SKILL_TIMEOUT_MS = 30 * 60_000;
+export const DEEP_TIMEOUT_MS = 20 * 60_000;
+const SETTINGS = JSON.stringify({ disableAllHooks: true, enabledPlugins: { 'chisle@chisle': false } });
+const BASE = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--settings', SETTINGS, '--strict-mcp-config', '--permission-mode', 'dontAsk'];
+
+// --allowedTools is variadic, so it is always last.
+export const skillArgs = (): string[] => [...BASE, '--tools', 'Bash,Read,Skill', '--allowedTools', 'Bash(pnpm ask:*)', 'Read', 'Skill'];
+export const deepArgs = (): string[] => [...BASE, '--disable-slash-commands', '--tools', 'Read,Grep,Glob,WebSearch,WebFetch,Bash', '--allowedTools', 'Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'Bash(pnpm ask:*)'];
+
+export type HeadlessOutcome = { readonly ok: boolean; readonly reply: string; readonly sessionId?: string };
+type Opts = { readonly signal?: AbortSignal; readonly run?: ClaudeRunner; readonly cwd?: string };
+const cap = (s: string) => (s.length > MAX_REPLY_CHARS ? `${s.slice(0, MAX_REPLY_CHARS - 1)}…` : s);
+
+const launch = async (args: string[], prompt: string, timeoutMs: number, o: Opts): Promise<HeadlessOutcome> => {
+  const run = o.run ?? runClaudeCli;
+  let out;
+  try {
+    out = await run(args, prompt, { cwd: o.cwd ?? process.env.XYP_REPO_ROOT ?? process.cwd(), timeoutMs, ...(o.signal ? { signal: o.signal } : {}) });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { ok: false, reply: 'Claude Code is not installed on this PC (claude not found).' };
+    throw e;
+  }
+  const r = parseClaudeResult(out.stdout);
+  if (!r) return { ok: false, reply: `Claude Code stopped without a result (exit ${out.code}).` };
+  if (r.isError) {
+    if (isLoggedOut(r)) return { ok: false, reply: 'Claude Code is not logged in on this PC. Run `claude` once and sign in.', sessionId: r.sessionId };
+    return { ok: false, reply: `Claude Code reported an error (${r.apiErrorStatus ?? r.subtype}).`, sessionId: r.sessionId };
+  }
+  return { ok: true, reply: cap(r.text.trim()), sessionId: r.sessionId };
+};
+
+/** Tier 1: `/<skill> <text>`. The skill name comes from the allowlist; text is only its argument. */
+export const runSkill = (skill: SkillName, text: string, o: Opts = {}) => launch(skillArgs(), `/${skill} ${text}`, SKILL_TIMEOUT_MS, o);
+/** Tier 3: free-form task, read-only tools plus `pnpm ask`. */
+export const runDeep = (text: string, o: Opts = {}) => launch(deepArgs(), text, DEEP_TIMEOUT_MS, o);
