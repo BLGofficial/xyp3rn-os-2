@@ -61,6 +61,16 @@ describe('runSkill', () => {
     const run: ClaudeRunner = async () => ({ code: null, stdout: '', stderr: '' });
     expect(await runSkill('xyp-music', 'x', { run, cwd: '/r' })).toEqual({ ok: false, reply: 'Claude Code timed out or was stopped before finishing.' });
   });
+
+  it('maps a resolved stoppedBy:abort to Cancelled (win32 path)', async () => {
+    const run: ClaudeRunner = async () => ({ code: 1, stdout: '', stderr: '', stoppedBy: 'abort' });
+    expect(await runSkill('xyp-music', 'x', { run, cwd: '/r' })).toEqual({ ok: false, reply: 'Cancelled.' });
+  });
+
+  it('maps a resolved stoppedBy:timeout to the timeout reply (win32 path)', async () => {
+    const run: ClaudeRunner = async () => ({ code: 1, stdout: '', stderr: '', stoppedBy: 'timeout' });
+    expect(await runSkill('xyp-music', 'x', { run, cwd: '/r' })).toEqual({ ok: false, reply: 'Claude Code timed out or was stopped before finishing.' });
+  });
 });
 
 describe('runDeep', () => {
