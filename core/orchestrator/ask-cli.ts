@@ -9,12 +9,17 @@ import { ROUTABLE_DOMAINS, type RoutableDomain } from './router.ts';
 // --domain / --workflow skip keyword routing: used by Claude Code skills that already chose.
 
 const USAGE = 'usage: ask-cli.ts "<request>" [--domain <DOMAIN> | --workflow <id>] [--project <slug>]';
-const flag = (name: string) => { const at = process.argv.indexOf(name); return at > 0 ? process.argv[at + 1] : undefined; };
+const bad = (why: string): never => { console.error(`${why}\n${USAGE}`); process.exit(2); };
+const flag = (name: string): string | undefined => {
+  const at = process.argv.indexOf(name);
+  if (at < 0) return undefined;
+  const value = process.argv[at + 1];
+  return value !== undefined && !value.startsWith('--') ? value : bad(`${name} requires a value`);
+};
 const request = process.argv[2];
 const projectSlug = flag('--project') ?? 'ad-hoc';
 const domain = flag('--domain');
 const workflow = flag('--workflow');
-const bad = (why: string) => { console.error(`${why}\n${USAGE}`); process.exit(2); };
 if (!request || request.startsWith('--')) bad('missing request');
 if (domain && workflow) bad('use --domain or --workflow, not both');
 if (domain && !(ROUTABLE_DOMAINS as readonly string[]).includes(domain)) bad(`unknown domain: ${domain}`);
