@@ -35,6 +35,8 @@ const launch = async (args: string[], prompt: string, timeoutMs: number, o: Opts
     if (o.signal?.aborted || err.name === 'AbortError') return { ok: false, reply: 'Cancelled.' };
     throw e;
   }
+  if (out.stoppedBy === 'abort') return { ok: false, reply: 'Cancelled.' };
+  if (out.stoppedBy === 'timeout') return { ok: false, reply: 'Claude Code timed out or was stopped before finishing.' };
   const r = parseClaudeResult(out.stdout);
   if (!r) return { ok: false, reply: out.code === null ? 'Claude Code timed out or was stopped before finishing.' : `Claude Code stopped without a result (exit ${out.code}).` };
   if (r.isError) {

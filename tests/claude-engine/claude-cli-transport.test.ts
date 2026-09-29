@@ -1,7 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { existsSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { JsonSchema } from '../../core/llm/json-schema.ts';
-import { childEnv, parseClaudeResult, type ClaudeRunner } from '../../core/llm/claude-cli.ts';
+import { childEnv, parseClaudeResult, runClaudeCli, type ClaudeRunner } from '../../core/llm/claude-cli.ts';
 import { createLlmClient } from '../../core/llm/providers.ts';
 
 // FAKE runner: records each spawn and answers with a canned CLI result. Proves the arguments, cwd,
@@ -83,4 +85,62 @@ describe('LLM_ENGINE=claude-code', () => {
     await expect(client(fake([{ code: 2, stdout: 'SECRET RAW OUTPUT' }]).run).complete(REQ)).rejects.toThrow(/^claude-code exited 2 without a result$/);
     await expect(client(fake([{ stdout: result({ result: '{"ok":"yes"}' }) }]).run).complete(REQ)).rejects.toThrow('violates schema ok_schema');
   });
+});
+
+// REAL process, Windows only: proves runClaudeCli's win32 tree-kill actually kills a detached
+// grandchild (like `pnpm ask`, spawned by a skill run inside `claude`), not just the immediate
+// stand-in process. `CLAUDE_BIN` is pointed at node itself so the "claude" process is a script we
+// control, which spawns a detached grandchild that records its own pid and outlives its parent.
+describe('runClaudeCli win32 tree-kill (real process)', () => {
+  const prevBin = process.env.CLAUDE_BIN;
+  afterEach(() => {
+    if (prevBin === undefined) delete process.env.CLAUDE_BIN;
+    else process.env.CLAUDE_BIN = prevBin;
+  });
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const isAlive = (pid: number) => {
+    try { process.kill(pid, 0); return true; } catch { return false; }
+  };
+  const waitForPid = async (pidFile: string, budgetMs = 5000): Promise<number> => {
+    const start = Date.now();
+    while (Date.now() - start < budgetMs) {
+      if (existsSync(pidFile)) return Number(readFileSync(pidFile, 'utf8'));
+      await sleep(50);
+    }
+    throw new Error(`grandchild never wrote its pid to ${pidFile}`);
+  };
+  // The "claude" stand-in: spawns a DETACHED grandchild that writes its own pid to `pidFile` and then
+  // idles, then idles itself so it is still alive when the test aborts/times it out.
+  const standInScript = (pidFile: string) => `
+    const cp = require('child_process');
+    const gc = cp.spawn(${JSON.stringify(process.execPath)}, ['-e', ${JSON.stringify(`require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`)}], { detached: true, stdio: 'ignore' });
+    gc.unref();
+    setInterval(() => {}, 1000);
+  `;
+
+  it.skipIf(process.platform !== 'win32')('kills the whole process tree on abort, including a detached grandchild', async () => {
+    process.env.CLAUDE_BIN = process.execPath;
+    const pidFile = join(tmpdir(), `claude-cli-test-abort-${Date.now()}.pid`);
+    const controller = new AbortController();
+    const promise = runClaudeCli(['-e', standInScript(pidFile)], '', { cwd: process.cwd(), signal: controller.signal });
+    const gcPid = await waitForPid(pidFile);
+    await sleep(500);
+    controller.abort();
+    const out = await promise;
+    expect(out.stoppedBy).toBe('abort');
+    await sleep(300);
+    expect(isAlive(gcPid)).toBe(false);
+  }, 10_000);
+
+  it.skipIf(process.platform !== 'win32')('kills the whole process tree on timeout, including a detached grandchild', async () => {
+    process.env.CLAUDE_BIN = process.execPath;
+    const pidFile = join(tmpdir(), `claude-cli-test-timeout-${Date.now()}.pid`);
+    const promise = runClaudeCli(['-e', standInScript(pidFile)], '', { cwd: process.cwd(), timeoutMs: 800 });
+    const gcPid = await waitForPid(pidFile);
+    const out = await promise;
+    expect(out.stoppedBy).toBe('timeout');
+    await sleep(300);
+    expect(isAlive(gcPid)).toBe(false);
+  }, 10_000);
 });

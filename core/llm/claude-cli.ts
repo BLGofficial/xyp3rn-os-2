@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 
 /**
  * Drives the real `claude` CLI (Claude Code) as a child process, for the claude-code LLM engine and
@@ -6,7 +6,7 @@ import { execFile, spawn } from 'node:child_process';
  * reads credentials. Arguments are an array with no shell; text goes through stdin.
  */
 
-export type ClaudeRun = { readonly code: number | null; readonly stdout: string; readonly stderr: string };
+export type ClaudeRun = { readonly code: number | null; readonly stdout: string; readonly stderr: string; readonly stoppedBy?: 'abort' | 'timeout' };
 export type ClaudeRunner = (
   args: readonly string[],
   stdin: string,
@@ -28,35 +28,61 @@ export const childEnv = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
 };
 
 /**
- * Windows: `child.kill()` (from an AbortSignal or Node's own `timeout` option) only terminates the
- * `claude` process itself, not a grandchild like `pnpm ask` it spawned. `taskkill /T` kills the whole
- * tree. Best-effort: its own errors (e.g. the process already exited) are ignored.
+ * Windows: Node's own abort/timeout wiring (passing `signal`/`timeout` to `spawn`) only terminates the
+ * `claude` process itself, not a grandchild like `pnpm ask` it spawned — proven by manual repro: with
+ * Node's `timeout` removed, `taskkill /T /F` killed the whole tree, but `child.kill()` alone left the
+ * grandchild running. So on win32 we never pass `signal`/`timeout` to `spawn`; we watch for both
+ * ourselves and run `taskkill /pid <pid> /T /F` first. `child.kill()` runs afterwards, in taskkill's
+ * callback, only as a fallback (e.g. taskkill itself isn't on PATH) — its own errors are ignored.
  */
-const killTreeOnWindows = (pid: number | undefined) => {
-  if (process.platform === 'win32' && pid !== undefined) execFile('taskkill', ['/pid', String(pid), '/T', '/F'], () => {});
+const killTreeOnWindows = (child: ChildProcess) => {
+  if (child.pid === undefined) { child.kill(); return; }
+  execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], () => { child.kill(); });
 };
 
 /** `CLAUDE_BIN` overrides the binary (tests, non-PATH installs). */
 export const runClaudeCli: ClaudeRunner = (args, stdin, opts) =>
   new Promise((resolve, reject) => {
+    const win = process.platform === 'win32';
     const child = spawn(process.env.CLAUDE_BIN ?? 'claude', [...args], {
       cwd: opts.cwd, shell: false, windowsHide: true, env: childEnv(process.env),
-      ...(opts.signal ? { signal: opts.signal } : {}),
-      ...(opts.timeoutMs ? { timeout: opts.timeoutMs } : {}),
+      ...(!win && opts.signal ? { signal: opts.signal } : {}),
+      ...(!win && opts.timeoutMs ? { timeout: opts.timeoutMs } : {}),
     });
     let stdout = '';
     let stderr = '';
-    const onAbort = () => killTreeOnWindows(child.pid);
-    opts.signal?.addEventListener('abort', onAbort, { once: true });
-    const timer = opts.timeoutMs ? setTimeout(() => killTreeOnWindows(child.pid), opts.timeoutMs) : undefined;
-    const cleanup = () => { if (timer) clearTimeout(timer); opts.signal?.removeEventListener('abort', onAbort); };
+    let stoppedBy: 'abort' | 'timeout' | undefined;
+
+    // On win32 only: we own abort/timeout entirely (nothing was handed to spawn above), including the
+    // case where the signal is already aborted before this call ever gets to add a listener for it.
+    let onAbort: (() => void) | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (win) {
+      const stopFor = (reason: 'abort' | 'timeout') => { stoppedBy = reason; killTreeOnWindows(child); };
+      if (opts.signal) {
+        if (opts.signal.aborted) stopFor('abort');
+        else { onAbort = () => stopFor('abort'); opts.signal.addEventListener('abort', onAbort, { once: true }); }
+      }
+      if (opts.timeoutMs) timer = setTimeout(() => stopFor('timeout'), opts.timeoutMs);
+    }
+    const cleanup = () => { if (timer) clearTimeout(timer); if (onAbort) opts.signal?.removeEventListener('abort', onAbort); };
+
     child.stdout.setEncoding('utf8').on('data', (d: string) => { stdout += d; });
     child.stderr.setEncoding('utf8').on('data', (d: string) => { stderr += d; });
     child.on('error', (e: NodeJS.ErrnoException) => {
       cleanup();
       reject(e.code === 'ENOENT' ? Object.assign(new Error('claude CLI not found on PATH (install Claude Code or set CLAUDE_BIN)'), { code: 'ENOENT' }) : e);
     });
-    child.on('close', (code) => { cleanup(); resolve({ code, stdout, stderr }); });
+    child.on('close', (code, signal) => {
+      // Off win32, spawn's own signal/timeout options did the killing; infer why from what's left:
+      // an aborted signal, or (absent that) the SIGTERM that spawn's `timeout` option sends.
+      if (!win && !stoppedBy) {
+        if (opts.signal?.aborted) stoppedBy = 'abort';
+        else if (signal === 'SIGTERM' && opts.timeoutMs !== undefined) stoppedBy = 'timeout';
+      }
+      cleanup();
+      resolve({ code, stdout, stderr, ...(stoppedBy ? { stoppedBy } : {}) });
+    });
     child.stdin.end(stdin);
   });
 
