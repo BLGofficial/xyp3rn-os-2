@@ -13,11 +13,25 @@ export type ClaudeRunner = (
   opts: { readonly cwd: string; readonly signal?: AbortSignal; readonly timeoutMs?: number },
 ) => Promise<ClaudeRun>;
 
+/**
+ * Strips the vars that would steer the child `claude` off the owner's subscription: Claude Code
+ * prefers API-key/token auth over the logged-in session when they're set, and a pinned base URL
+ * (e.g. a hosted dev container's ANTHROPIC_BASE_URL) would send it somewhere else entirely. Pure:
+ * returns a new object, never touches its input.
+ */
+export const childEnv = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const copy = { ...env };
+  delete copy.ANTHROPIC_API_KEY;
+  delete copy.ANTHROPIC_AUTH_TOKEN;
+  delete copy.ANTHROPIC_BASE_URL;
+  return copy;
+};
+
 /** `CLAUDE_BIN` overrides the binary (tests, non-PATH installs). */
 export const runClaudeCli: ClaudeRunner = (args, stdin, opts) =>
   new Promise((resolve, reject) => {
     const child = spawn(process.env.CLAUDE_BIN ?? 'claude', [...args], {
-      cwd: opts.cwd, shell: false, windowsHide: true,
+      cwd: opts.cwd, shell: false, windowsHide: true, env: childEnv(process.env),
       ...(opts.signal ? { signal: opts.signal } : {}),
       ...(opts.timeoutMs ? { timeout: opts.timeoutMs } : {}),
     });
