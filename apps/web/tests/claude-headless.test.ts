@@ -22,8 +22,17 @@ describe('runSkill', () => {
     expect(valueAfter(c.args, '--tools')).toBe('Bash,Read,Skill');
     expect(valueAfter(c.args, '--permission-mode')).toBe('dontAsk');
     expect(JSON.parse(valueAfter(c.args, '--settings')!)).toEqual({ disableAllHooks: true, enabledPlugins: { 'chisle@chisle': false } });
-    expect(c.args.slice(c.args.indexOf('--allowedTools') + 1)).toEqual(['Bash(pnpm ask:*)', 'Read', 'Skill']);
+    expect(c.args.slice(c.args.indexOf('--allowedTools') + 1)).toEqual(['Bash(pnpm ask:*)', 'Read(./**)', 'Skill']);
     expect(c.args.join(' ')).not.toMatch(/bypassPermissions|dangerously/);
+  });
+
+  it('scopes allowed reads to the repo and denies .env reads, deny listed before allow', async () => {
+    const f = fake(ok('done'));
+    await runSkill('xyp-music', 'x', { run: f.run, cwd: '/repo' });
+    const c = f.calls[0]!;
+    expect(c.args.indexOf('--disallowedTools')).toBeGreaterThan(-1);
+    expect(c.args.indexOf('--disallowedTools')).toBeLessThan(c.args.indexOf('--allowedTools'));
+    expect(c.args.slice(c.args.indexOf('--disallowedTools') + 1, c.args.indexOf('--allowedTools'))).toEqual(['Read(./**/.env*)', 'Read(./.env*)']);
   });
 
   it('keeps hostile text as the argument of the chosen skill', async () => {
@@ -40,6 +49,18 @@ describe('runSkill', () => {
     const loggedOut = JSON.stringify({ type: 'result', subtype: 'error', is_error: true, result: 'Not logged in', session_id: 's' });
     expect((await runSkill('xyp-music', 'x', { run: fake(loggedOut, 1).run, cwd: '/r' })).reply).toBe('Claude Code is not logged in on this PC. Run `claude` once and sign in.');
   });
+
+  it('reports cancellation instead of throwing when the run is aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const run: ClaudeRunner = async () => { throw Object.assign(new Error('aborted'), { name: 'AbortError' }); };
+    expect(await runSkill('xyp-music', 'x', { run, cwd: '/r', signal: controller.signal })).toEqual({ ok: false, reply: 'Cancelled.' });
+  });
+
+  it('reports a timeout when the process is stopped before producing a result', async () => {
+    const run: ClaudeRunner = async () => ({ code: null, stdout: '', stderr: '' });
+    expect(await runSkill('xyp-music', 'x', { run, cwd: '/r' })).toEqual({ ok: false, reply: 'Claude Code timed out or was stopped before finishing.' });
+  });
 });
 
 describe('runDeep', () => {
@@ -51,7 +72,16 @@ describe('runDeep', () => {
     expect(c.timeoutMs).toBe(DEEP_TIMEOUT_MS);
     expect(valueAfter(c.args, '--tools')).toBe('Read,Grep,Glob,WebSearch,WebFetch,Bash');
     expect(c.args).toContain('--disable-slash-commands');
-    expect(c.args.slice(c.args.indexOf('--allowedTools') + 1)).toEqual(['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'Bash(pnpm ask:*)']);
+    expect(c.args.slice(c.args.indexOf('--allowedTools') + 1)).toEqual(['Read(./**)', 'Grep(./**)', 'Glob(./**)', 'WebSearch', 'WebFetch', 'Bash(pnpm ask:*)']);
     expect(c.args.join(' ')).not.toMatch(/\bEdit\b|\bWrite\b/);
+  });
+
+  it('scopes allowed reads/greps/globs to the repo and denies .env reads, deny listed before allow', async () => {
+    const f = fake(ok('done'));
+    await runDeep('x', { run: f.run, cwd: '/repo' });
+    const c = f.calls[0]!;
+    expect(c.args.indexOf('--disallowedTools')).toBeGreaterThan(-1);
+    expect(c.args.indexOf('--disallowedTools')).toBeLessThan(c.args.indexOf('--allowedTools'));
+    expect(c.args.slice(c.args.indexOf('--disallowedTools') + 1, c.args.indexOf('--allowedTools'))).toEqual(['Read(./**/.env*)', 'Read(./.env*)']);
   });
 });

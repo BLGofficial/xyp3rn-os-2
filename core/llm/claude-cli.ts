@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 
 /**
  * Drives the real `claude` CLI (Claude Code) as a child process, for the claude-code LLM engine and
@@ -27,6 +27,15 @@ export const childEnv = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
   return copy;
 };
 
+/**
+ * Windows: `child.kill()` (from an AbortSignal or Node's own `timeout` option) only terminates the
+ * `claude` process itself, not a grandchild like `pnpm ask` it spawned. `taskkill /T` kills the whole
+ * tree. Best-effort: its own errors (e.g. the process already exited) are ignored.
+ */
+const killTreeOnWindows = (pid: number | undefined) => {
+  if (process.platform === 'win32' && pid !== undefined) execFile('taskkill', ['/pid', String(pid), '/T', '/F'], () => {});
+};
+
 /** `CLAUDE_BIN` overrides the binary (tests, non-PATH installs). */
 export const runClaudeCli: ClaudeRunner = (args, stdin, opts) =>
   new Promise((resolve, reject) => {
@@ -37,12 +46,17 @@ export const runClaudeCli: ClaudeRunner = (args, stdin, opts) =>
     });
     let stdout = '';
     let stderr = '';
+    const onAbort = () => killTreeOnWindows(child.pid);
+    opts.signal?.addEventListener('abort', onAbort, { once: true });
+    const timer = opts.timeoutMs ? setTimeout(() => killTreeOnWindows(child.pid), opts.timeoutMs) : undefined;
+    const cleanup = () => { if (timer) clearTimeout(timer); opts.signal?.removeEventListener('abort', onAbort); };
     child.stdout.setEncoding('utf8').on('data', (d: string) => { stdout += d; });
     child.stderr.setEncoding('utf8').on('data', (d: string) => { stderr += d; });
     child.on('error', (e: NodeJS.ErrnoException) => {
+      cleanup();
       reject(e.code === 'ENOENT' ? Object.assign(new Error('claude CLI not found on PATH (install Claude Code or set CLAUDE_BIN)'), { code: 'ENOENT' }) : e);
     });
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    child.on('close', (code) => { cleanup(); resolve({ code, stdout, stderr }); });
     child.stdin.end(stdin);
   });
 
