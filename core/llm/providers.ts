@@ -1,4 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { isLoggedOut, isTransient, parseClaudeResult, runClaudeCli, type ClaudeRunner } from './claude-cli.ts';
 import { validateJson, type JsonSchema } from './json-schema.ts';
 
 /**
@@ -151,6 +155,40 @@ const TRANSPORTS: Readonly<Record<Provider, Transport>> = {
   openrouter: openAiCompatible('openrouter'),
 };
 
+/**
+ * LLM_ENGINE=claude-code: Anthropic agents run through the owner's logged-in Claude Code CLI
+ * (subscription) instead of the API. No Claude Code tools: the OS still runs every agent tool.
+ * cwd is a neutral directory so project hooks and plugins cannot touch the JSON reply.
+ */
+const ENGINE_FLAGS = ['-p', '--output-format', 'json', '--tools', '', '--setting-sources', 'project', '--strict-mcp-config', '--no-session-persistence', '--disable-slash-commands'] as const;
+const engineDir = (): string => { const d = join(tmpdir(), 'xyp-claude-engine'); mkdirSync(d, { recursive: true }); return d; };
+
+const claudeCodeTransport = (run: ClaudeRunner): Transport => async (_key, model, req) => {
+  // System prompts can exceed Windows' command-line limit, so they go through a file.
+  const dir = mkdtempSync(join(tmpdir(), 'xyp-sys-'));
+  const file = join(dir, 'system.txt');
+  writeFileSync(file, `${req.system}\n\n${schemaInstruction(req)}`);
+  try {
+    let out;
+    try {
+      out = await run([...ENGINE_FLAGS, '--model', model, '--system-prompt-file', file], req.user, { cwd: engineDir(), ...(req.signal ? { signal: req.signal } : {}) });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') throw new Error('claude CLI not found on PATH (install Claude Code or set CLAUDE_BIN)');
+      throw e;
+    }
+    const r = parseClaudeResult(out.stdout);
+    if (!r) throw new Error(`claude-code exited ${out.code} without a result`);
+    if (r.isError) {
+      if (isLoggedOut(r)) throw new Error('claude CLI is not logged in; run `claude` once and sign in');
+      if (isTransient(r)) throw new TransientProviderError(`claude-code transient error (${r.apiErrorStatus ?? r.subtype})`);
+      throw new Error(`claude-code error (${r.apiErrorStatus ?? r.subtype})`);
+    }
+    return { provider: 'anthropic', model: r.model ?? model, text: r.text, usage: r.usage, stopReason: r.stopReason };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+
 const pause = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     if (signal?.aborted) return reject(new Error(String(signal.reason)));
@@ -199,16 +237,20 @@ export const createLlmClient = (options: {
   readonly fetch?: typeof fetch;
   /** Waits before each retry of a transient provider error; its length is the retry count (default 2 retries). */
   readonly retryDelaysMs?: readonly number[];
+  /** Claude CLI runner override (tests); used only when env.LLM_ENGINE is `claude-code`. */
+  readonly runClaude?: ClaudeRunner;
 }): LlmClient => {
   const delays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
   const modelRef = parseModelRef(options.model);
   return {
     modelRef,
     complete: async (req) => {
+      const viaCli = modelRef.provider === 'anthropic' && options.env.LLM_ENGINE === 'claude-code';
       const { keyEnv } = PROVIDERS[modelRef.provider];
-      const key = options.env[keyEnv];
-      if (!key) throw new Error(`LLM runner unavailable: ${keyEnv} is not set (agent ${options.agentName} uses model ${options.model})`);
-      const raw = await withRetries(() => TRANSPORTS[modelRef.provider](key, modelRef.model, req, options.fetch), delays, req.signal);
+      const key = options.env[keyEnv] ?? '';
+      if (!viaCli && !key) throw new Error(`LLM runner unavailable: ${keyEnv} is not set (agent ${options.agentName} uses model ${options.model})`);
+      const transport = viaCli ? claudeCodeTransport(options.runClaude ?? runClaudeCli) : TRANSPORTS[modelRef.provider];
+      const raw = await withRetries(() => transport(key, modelRef.model, req, options.fetch), delays, req.signal);
       const json = parseReply(modelRef.provider, raw.text);
       const errors = validateJson(req.schema.schema, json);
       if (errors.length > 0) throw new Error(`${modelRef.provider} reply violates schema ${req.schema.name}: ${errors.join('; ')}`);
