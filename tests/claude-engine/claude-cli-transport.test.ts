@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { JsonSchema } from '../../core/llm/json-schema.ts';
-import { parseClaudeResult, type ClaudeRunner } from '../../core/llm/claude-cli.ts';
+import { childEnv, parseClaudeResult, type ClaudeRunner } from '../../core/llm/claude-cli.ts';
 import { createLlmClient } from '../../core/llm/providers.ts';
 
 // FAKE runner: records each spawn and answers with a canned CLI result. Proves the arguments, cwd,
@@ -28,6 +28,15 @@ const fake = (outputs: { code?: number | null; stdout?: string; stderr?: string;
 };
 const client = (run: ClaudeRunner, env: Record<string, string | undefined> = { LLM_ENGINE: 'claude-code' }) =>
   createLlmClient({ model: 'claude-sonnet-5', agentName: 'test-agent', env, runClaude: run, retryDelaysMs: [0] });
+
+describe('childEnv', () => {
+  it('removes the vars that would steer the child off the subscription, keeps the rest, and does not mutate its input', () => {
+    const input = { PATH: '/bin', LLM_ENGINE: 'claude-code', ANTHROPIC_API_KEY: 'sk-x', ANTHROPIC_AUTH_TOKEN: 'tok', ANTHROPIC_BASE_URL: 'http://wrong.invalid' };
+    const out = childEnv(input);
+    expect(out).toEqual({ PATH: '/bin', LLM_ENGINE: 'claude-code' });
+    expect(input).toEqual({ PATH: '/bin', LLM_ENGINE: 'claude-code', ANTHROPIC_API_KEY: 'sk-x', ANTHROPIC_AUTH_TOKEN: 'tok', ANTHROPIC_BASE_URL: 'http://wrong.invalid' });
+  });
+});
 
 describe('parseClaudeResult', () => {
   it('reads the result object and returns null for anything else', () => {

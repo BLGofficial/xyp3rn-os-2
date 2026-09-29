@@ -166,9 +166,9 @@ const engineDir = (): string => { const d = join(tmpdir(), 'xyp-claude-engine');
 const claudeCodeTransport = (run: ClaudeRunner): Transport => async (_key, model, req) => {
   // System prompts can exceed Windows' command-line limit, so they go through a file.
   const dir = mkdtempSync(join(tmpdir(), 'xyp-sys-'));
-  const file = join(dir, 'system.txt');
-  writeFileSync(file, `${req.system}\n\n${schemaInstruction(req)}`);
   try {
+    const file = join(dir, 'system.txt');
+    writeFileSync(file, `${req.system}\n\n${schemaInstruction(req)}`);
     let out;
     try {
       out = await run([...ENGINE_FLAGS, '--model', model, '--system-prompt-file', file], req.user, { cwd: engineDir(), ...(req.signal ? { signal: req.signal } : {}) });
