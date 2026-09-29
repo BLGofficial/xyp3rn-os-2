@@ -11,4 +11,6 @@ coverage/
 .next/
 *.tsbuildinfo
 .codex/
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/skills/
