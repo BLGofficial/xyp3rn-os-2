@@ -17,18 +17,36 @@ export type AskView = {
   readonly reply: string;
   readonly refs?: AskRefs;
   readonly approvalRequired?: boolean;
+  readonly sessionId?: string;
 };
 
-type Job = { readonly userId: string; readonly fingerprint: string; readonly createdAt: number; view: AskView };
+type Job = { readonly userId: string; readonly fingerprint: string; readonly createdAt: number; view: AskView; readonly controller: AbortController };
 
 const TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_JOBS = 500;
 export const MAX_RUNNING_PER_USER = 2;
+export const MAX_DEEP_PER_USER = 1;
 const jobs = new Map<string, Job>();
 const keyOf = (userId: string, requestId: string) => `${userId}\n${requestId}`;
 
 /** The caller's own job, or undefined (another user's id never matches). */
 export const findJob = (userId: string, requestId: string) => jobs.get(keyOf(userId, requestId));
+
+/** Running jobs for a user, optionally only one action (e.g. 'deep'). */
+export const runningCount = (userId: string, action?: string) =>
+  [...jobs.values()].filter((j) => j.userId === userId && j.view.state === 'running' && (!action || j.view.action === action)).length;
+
+/**
+ * Cancels the caller's own running job: aborts its work (a headless run is killed) and marks it done.
+ * @returns false for an unknown, finished or other user's job
+ */
+export const cancelJob = (userId: string, requestId: string): boolean => {
+  const job = jobs.get(keyOf(userId, requestId));
+  if (!job || job.view.state !== 'running') return false;
+  job.view = { ...job.view, state: 'done', status: 'cancelled', reply: 'Cancelled. Anything it already started is listed in Live Events.' };
+  job.controller.abort(new Error('cancelled'));
+  return true;
+};
 
 /**
  * Registers a job synchronously (call right after `findJob`, with no await between, so two
@@ -37,20 +55,21 @@ export const findJob = (userId: string, requestId: string) => jobs.get(keyOf(use
  */
 export const createJob = (
   userId: string, requestId: string, fingerprint: string, initial: AskView,
-  work?: () => Promise<AskView>, failed?: () => AskView,
+  work?: (signal: AbortSignal) => Promise<AskView>, failed?: () => AskView,
 ): Job | 'busy' | 'full' => {
   const now = Date.now();
   for (const [k, j] of jobs) if (j.view.state === 'done' && now - j.createdAt > TTL_MS) jobs.delete(k);
-  if (work && [...jobs.values()].filter((j) => j.userId === userId && j.view.state === 'running').length >= MAX_RUNNING_PER_USER) return 'busy';
+  if (work && runningCount(userId) >= MAX_RUNNING_PER_USER) return 'busy';
   if (jobs.size >= MAX_JOBS) {
     const oldestDone = [...jobs].find(([, j]) => j.view.state === 'done');
     if (!oldestDone) return 'full';
     jobs.delete(oldestDone[0]);
   }
-  const job: Job = { userId, fingerprint, createdAt: now, view: initial };
+  const job: Job = { userId, fingerprint, createdAt: now, view: initial, controller: new AbortController() };
   jobs.set(keyOf(userId, requestId), job);
   if (work) {
-    work().then((v) => { job.view = v; }, (error: unknown) => {
+    work(job.controller.signal).then((v) => { if (job.view.status !== 'cancelled') job.view = v; }, (error: unknown) => {
+      if (job.view.status === 'cancelled') return;
       console.error('mercury ask failed:', error instanceof Error ? error.message : error);
       job.view = failed!();
     });

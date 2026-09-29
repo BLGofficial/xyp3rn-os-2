@@ -35,7 +35,7 @@ const ask = (body: Record<string, unknown>, { token = 'operator', origin = base 
 const status = (requestId: string, token = 'operator') => GET(new NextRequest(`${base}/api/ask/${requestId}`, { headers: { cookie: `mercury_session=${token}` } }));
 const until = async (requestId: string, token = 'operator') => { for (let i = 0; i < 50; i++) { const b = await (await status(requestId, token)).json(); if (b.state === 'done') return b; await new Promise(r => setTimeout(r, 10)); } throw new Error('still running'); };
 const RECORDS = 'Write a hook and two verses for the new X3LIUS track';
-const RESEARCH = 'Research the best current method for controlling dark baritone vocals in Suno.';
+const RESEARCH = 'Find the best current method for controlling dark baritone vocals in Suno research.';
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const selection = { selected: [], evidence: [] } as never;
 let release: () => void;
