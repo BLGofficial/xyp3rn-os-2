@@ -578,9 +578,13 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
   - Below 1280 px: one column.
   - Below 960 px: the list comes first and the globe is behind a button.
 - **Motion:** Cinematic (default), Calm or Off, per browser. Reduced motion forces Off. Boot and ambient motion run in Cinematic only and never move nodes, send light along links or change numbers.
+- **Live events:** `GET /api/events/stream` (SSE, session-only) polls the database every 2 s from a cursor (the rows' own timestamps; keys at the cursor are not re-sent). There are no triggers and no migration. Each agent, workflow and research run arrives when it starts and when it finishes; index scans too.
+  - A step's agent run carries the real edge it touched: step_uses_agent, from the step's sub-component to the agent's. When the globe draws that link, a bead travels it (1.2 s).
+  - Otherwise the event pulses its component or domain. Under Motion Off it is a static highlight (1.5 s).
+  - New rows slide into Live activity with a hue flash. Counts roll (odometer) only when a status re-read after an event changes them. The pipeline button sweeps while a scan runs.
 
 **F53. Open after F52.**
-- **Live events:** `GET /api/events/stream` (SSE) and the data-driven beads, odometer counts and pipeline sweep are not built. Status refreshes every 15 s while the tab is visible.
+- **Live events:** built (F52). Not done: a stream that survives a reconnect (a reconnect starts from now; missed events are in the activity list), and polling replaced by LISTEN/NOTIFY, which needs a migration.
 - **Not built yet:**
   - hovering a file to light its own edges (hovering a component lights its aggregated links)
   - search results that fly the camera to a node (search opens `/search`)

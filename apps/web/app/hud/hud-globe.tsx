@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Domain } from '../../../../core/contracts/taxonomy';
-import type { ComponentsData } from '../../server/hud-loaders';
+import type { ComponentsData, HudEvent } from '../../server/hud-loaders';
 import { bend, clampZoom, layout, satellites, TITLE_H, TITLE_W, toScreen, toWorld, zoomAt, type Item, type Pt, type View } from '../../lib/hud-layout';
 import { HUD_DOMAIN, HUD_STATUS, levelAt, ORBIT_ORDER, ZOOM, type HudOwner, type Lens } from '../../lib/hud-theme';
 import { DomainIcon, XGlyph } from './hud-icons';
@@ -21,7 +21,13 @@ type Props = {
   readonly data: ComponentsData | null; readonly error: string | null; readonly hidden: ReadonlySet<HudOwner>;
   readonly lens: Lens; readonly focus: Domain | null; readonly identity: { readonly name: string; readonly version: string };
   readonly motion: Motion;
+  /** The newest live event (seq increases per event): a bead along its real link, or a pulse on its component. */
+  readonly pulse?: { readonly seq: number; readonly event: HudEvent } | null;
 };
+
+/** A bead travels a real link (1.2 s); a pulse rings a component (0.9 s). With Motion Off both are a static highlight (1.5 s). */
+type Light = { readonly kind: 'bead' | 'pulse'; readonly from?: string; readonly to: string; readonly hue: string; readonly t0: number };
+const BEAD_MS = 1200, PULSE_MS = 900, STILL_MS = 1500;
 
 const EASE = (t: number) => 1 - (1 - t) ** 4; // close to cubic-bezier(0.22, 1, 0.36, 1)
 const LENS_RELATIONS: Partial<Record<Lens, readonly string[]>> = { AGENTS: ['step_uses_agent'], WORKFLOWS: ['depends_on', 'part_of', 'step_uses_agent'] };
@@ -39,7 +45,7 @@ const glowSprite = (hue: string) => {
   return s;
 };
 
-export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }: Props) {
+export function HudGlobe({ data, error, hidden, lens, focus, identity, motion, pulse }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
@@ -53,6 +59,9 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
   const [boot, setBoot] = useState(1);
   const [pointer, setPointer] = useState<Pt>({ x: 0, y: 0 });
   const [tick, setTick] = useState(0);
+  const lights = useRef<Light[]>([]);
+  const [lit, setLit] = useState(0); // lights started (data-lights, for the smoke)
+  const [lastLight, setLastLight] = useState<string>('');
 
   // Size: the canvas fills the centre cell.
   useEffect(() => {
@@ -165,14 +174,19 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Ambient (Cinematic only): a clock for the rim shimmer and the breathing glows; paused while the tab is hidden.
+  // The frame clock: always in Cinematic (rim shimmer, breathing glows); otherwise only while a live light is on.
+  // Paused while the tab is hidden. It stops by itself when there is nothing left to animate.
   useEffect(() => {
-    if (motion !== 'cinematic') return;
     let id = 0;
-    const loop = () => { if (!document.hidden) setTick(performance.now()); id = requestAnimationFrame(loop); };
+    const alive = () => lights.current.some((l) => performance.now() - l.t0 < (motion === 'off' ? STILL_MS : l.kind === 'bead' ? BEAD_MS : PULSE_MS));
+    const loop = () => {
+      if (!document.hidden) setTick(performance.now());
+      lights.current = lights.current.filter((l) => performance.now() - l.t0 < STILL_MS + BEAD_MS);
+      if (motion === 'cinematic' || alive()) id = requestAnimationFrame(loop);
+    };
     id = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(id);
-  }, [motion]);
+  }, [motion, lit]);
 
   const visible = useCallback((d: HudOwner) => !hidden.has(d), [hidden]);
   const relations = LENS_RELATIONS[lens];
@@ -180,6 +194,27 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
     const a = byId.get(l.from), b = byId.get(l.to);
     return a && b && L.anchors.has(l.from) && L.anchors.has(l.to) && visible(a.domain) && visible(b.domain) && (!relations || relations.includes(l.relation));
   }), [data, byId, L, visible, relations]);
+  // A live event: a bead along its real link when both ends are drawn, else a pulse on its component (or domain).
+  const lastSeq = useRef(0);
+  useEffect(() => {
+    if (!pulse || pulse.seq === lastSeq.current) return;
+    lastSeq.current = pulse.seq;
+    const e = pulse.event; const t0 = performance.now();
+    const owner = (e.domain ?? 'shared') as HudOwner;
+    if (hidden.has(owner)) return;
+    const hue = HUD_DOMAIN[owner]?.glow ?? HUD_DOMAIN.shared.glow;
+    const b = e.bead;
+    const drawn = !!b && links.some((l) => (l.from === b.from && l.to === b.to) || (l.from === b.to && l.to === b.from));
+    if (b && drawn) {
+      const src = byId.get(b.from);
+      lights.current.push({ kind: 'bead', from: b.from, to: b.to, hue: src ? HUD_DOMAIN[src.domain].glow : hue, t0 });
+    } else if (e.component && L.anchors.has(e.component)) lights.current.push({ kind: 'pulse', to: e.component, hue, t0 });
+    else if (owner !== 'shared') lights.current.push({ kind: 'pulse', to: `medallion:${owner}`, hue, t0 });
+    else return;
+    setLastLight(`${lights.current[lights.current.length - 1]!.kind}:${lights.current[lights.current.length - 1]!.to}`);
+    setLit((n) => n + 1);
+  }, [pulse, hidden, L, byId, links]);
+
   const exp = expanded ? byId.get(expanded) : undefined;
   const sats = useMemo(() => (exp && L.anchors.has(exp.id) ? satellites(L.anchors.get(exp.id)!.dot, exp.files.length) : []), [exp, L]);
 
@@ -270,6 +305,40 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
       });
       g.globalAlpha = 1;
     }
+
+    // Live lights: a bead with a short trail along its link; a ring on a component; static under Motion Off.
+    const t = performance.now();
+    const pos = (id: string): Pt | undefined => id.startsWith('medallion:') ? L.medallion[id.slice(10) as Domain] : L.anchors.get(id)?.dot;
+    g.globalCompositeOperation = 'lighter';
+    for (const l of lights.current) {
+      const age = t - l.t0; const b = pos(l.to); if (!b) continue;
+      if (motion === 'off') {
+        if (age > STILL_MS) continue;
+        g.globalAlpha = 0.9; g.strokeStyle = l.hue; g.lineWidth = 2 / view.z;
+        if (l.kind === 'bead' && l.from) { const a = pos(l.from)!; const k = bend(a, b, C); g.beginPath(); g.moveTo(a.x, a.y); g.quadraticCurveTo(k.x, k.y, b.x, b.y); g.stroke(); }
+        g.beginPath(); g.arc(b.x, b.y, 9, 0, Math.PI * 2); g.stroke();
+        continue;
+      }
+      if (l.kind === 'bead' && l.from) {
+        if (age > BEAD_MS) continue;
+        const a = pos(l.from)!; const k = bend(a, b, C); const p = EASE(age / BEAD_MS);
+        const at = (u: number) => ({ x: (1 - u) ** 2 * a.x + 2 * (1 - u) * u * k.x + u ** 2 * b.x, y: (1 - u) ** 2 * a.y + 2 * (1 - u) * u * k.y + u ** 2 * b.y });
+        for (let i = 7; i >= 0; i--) {
+          const u = Math.max(0, p - i * 0.025); const q = at(u);
+          g.globalAlpha = (1 - i / 8) * 0.9; g.fillStyle = l.hue;
+          g.beginPath(); g.arc(q.x, q.y, (3.6 - i * 0.35) / Math.sqrt(view.z), 0, Math.PI * 2); g.fill();
+        }
+        const h = at(p); g.globalAlpha = 1; g.drawImage(glowSprite(l.hue), h.x - 20, h.y - 20, 40, 40); g.fillStyle = '#FFFFFF'; g.beginPath(); g.arc(h.x, h.y, 2.2 / Math.sqrt(view.z), 0, Math.PI * 2); g.fill();
+      } else {
+        if (age > PULSE_MS) continue;
+        const p = age / PULSE_MS;
+        g.globalAlpha = 1 - p; g.strokeStyle = l.hue; g.lineWidth = 2 / view.z;
+        g.beginPath(); g.arc(b.x, b.y, 4 + 18 * p, 0, Math.PI * 2); g.stroke();
+      }
+      // Where the light lands: a short ring at the target when a bead arrives.
+      if (l.kind === 'bead' && age > BEAD_MS * 0.85 && age < BEAD_MS) { g.globalAlpha = (BEAD_MS - age) / (BEAD_MS * 0.15); g.strokeStyle = l.hue; g.lineWidth = 2 / view.z; g.beginPath(); g.arc(b.x, b.y, 10, 0, Math.PI * 2); g.stroke(); }
+    }
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   }, [size, view, L, C, links, items, byId, boot, tick, motion, pointer, rot, hover, level, focus, visible, exp, sats, hoverFile]);
 
   // Minimap: the whole orbit at 160×100 and the viewport.
@@ -370,7 +439,7 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
 
   return (
     <div ref={wrap} className="absolute inset-0 overflow-hidden outline-none" tabIndex={0} aria-label="Graph globe: + and − zoom, 0 fits, arrows pan, Shift+arrows turn"
-      data-hud-globe data-level={level} data-zoom={view.z.toFixed(2)}
+      data-hud-globe data-level={level} data-zoom={view.z.toFixed(2)} data-lights={lit} data-last-light={lastLight}
       onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
       onClick={onClick} onDoubleClick={(e) => animateTo(zoomAt(view, C, local(e), view.z * 2))} onKeyDown={onKey} onContextMenu={(e) => e.preventDefault()}
       style={{ cursor: drag.current ? 'grabbing' : hoverFile ? 'pointer' : 'grab' }}>

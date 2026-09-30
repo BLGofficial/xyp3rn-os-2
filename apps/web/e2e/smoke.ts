@@ -623,6 +623,22 @@ try {
     await hp.click('button[role=tab]:has-text("Records")');
     await hp.waitForTimeout(700);
     check(/lens=RECORDS/.test(hp.url()) && (await zoom()) > 1.4, `/hud: the Records lens turns to its sector (${hp.url()}, ${await zoom()})`);
+    // Live events: a real step run of retrieve-and-summarize (Workflow Engine → Context Engine over step_uses_agent)
+    // arrives through /api/events/stream, lands in Live activity and lights the globe.
+    await hp.goto(`${BASE}/hud`);
+    await hp.waitForSelector('[data-live=open]', { timeout: 10_000 });
+    const litBefore = Number(await hp.getAttribute('[data-hud-globe]', 'data-lights'));
+    const [liveWf] = await db.sql<{ id: string }[]>`
+      insert into workflow_runs (workflow_name, spec_sha256, spec, input, status) values ('retrieve-and-summarize', repeat('c', 64), '{}'::jsonb, '{}'::jsonb, 'running') returning id`;
+    await db.sql`insert into agent_runs (agent_name, input, workflow_run_id, step_id) values ('context-retriever', '{}'::jsonb, ${liveWf!.id}, 'retrieve')`;
+    const arrived = await hp.waitForSelector('[data-live-event=agent]', { timeout: 10_000 }).then(() => true, () => false);
+    check(arrived && (await hp.textContent('[data-live-event=agent]'))?.includes('context-retriever') === true, '/hud: a new agent run arrives through the event stream into Live activity');
+    await hp.waitForFunction((n) => Number(document.querySelector('[data-hud-globe]')?.getAttribute('data-lights')) > n, litBefore, { timeout: 5000 }).catch(() => undefined);
+    const light = await hp.getAttribute('[data-hud-globe]', 'data-last-light');
+    check(Number(await hp.getAttribute('[data-hud-globe]', 'data-lights')) > litBefore && light === 'bead:CORE:context-engine',
+      `/hud: the step run sends a bead along its real step_uses_agent link, Workflow Engine to Context Engine (${light})`);
+    const noSession = await fetch(`${BASE}/api/events/stream`);
+    check(noSession.status === 401, `/api/events/stream answers 401 without a session (${noSession.status})`);
     check(hudErrors.length === 0, `/hud: no console error (${hudErrors.join(' | ') || 'none'})`);
     await hudCtx.close();
 

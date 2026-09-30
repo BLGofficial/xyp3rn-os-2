@@ -160,3 +160,11 @@
   .hud-rail[data-drawer='left'] { display: none; }
   .hud-rail[data-drawer='left'][data-open='true'] { display: flex; position: fixed; top: 104px; bottom: 76px; left: 12px; width: 264px; z-index: 5; }
 }
+
+/* Live: a new event slides in with a flash of its domain's hue; the pipeline button sweeps while a scan runs. */
+.hud .hud-flash { animation: hud-in 450ms var(--hud-ease), hud-flash 1.2s ease-out; }
+@keyframes hud-in { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes hud-flash { from { background: var(--flash); } to { background: transparent; } }
+.hud .hud-sweepable[data-sweep='true'] { background-image: linear-gradient(100deg, transparent 30%, rgba(247, 201, 72, 0.35) 50%, transparent 70%); background-size: 200% 100%; animation: hud-sweep-bar 1.1s linear infinite; }
+@keyframes hud-sweep-bar { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+.hud[data-motion='off'] .hud-sweepable[data-sweep='true'] { animation: none; background: rgba(247, 201, 72, 0.25); }
