@@ -1,4 +1,5 @@
 import { isLoggedOut, parseClaudeResult, runClaudeCli, type ClaudeRunner } from '../../../core/llm/claude-cli.ts';
+import { MAX_REPLY_CHARS } from '../../../core/orchestrator/ask.ts';
 import { REPO_ROOT } from '../../../core/repo.ts';
 import type { SkillName } from './skills.ts';
 
@@ -22,8 +23,6 @@ export const deepArgs = (): string[] => [...BASE, '--disable-slash-commands', '-
 
 export type HeadlessOutcome = { readonly ok: boolean; readonly reply: string; readonly sessionId?: string };
 type Opts = { readonly signal?: AbortSignal; readonly run?: ClaudeRunner; readonly cwd?: string };
-/** Reply cap, matching the assistant's short-answer limit. */
-const MAX_REPLY_CHARS = 600;
 const cap = (s: string) => (s.length > MAX_REPLY_CHARS ? `${s.slice(0, MAX_REPLY_CHARS - 1)}…` : s);
 
 const launch = async (args: string[], prompt: string, timeoutMs: number, o: Opts): Promise<HeadlessOutcome> => {
