@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Domain } from '../../../../core/contracts/taxonomy';
 import type { ComponentsData } from '../../server/hud-loaders';
-import { bend, clampZoom, layout, satellites, toScreen, toWorld, zoomAt, type Item, type Pt, type View } from '../../lib/hud-layout';
+import { bend, clampZoom, layout, satellites, TITLE_H, TITLE_W, toScreen, toWorld, zoomAt, type Item, type Pt, type View } from '../../lib/hud-layout';
 import { HUD_DOMAIN, HUD_STATUS, levelAt, ORBIT_ORDER, ZOOM, type HudOwner, type Lens } from '../../lib/hud-theme';
 import { DomainIcon, XGlyph } from './hud-icons';
 import type { Motion } from './hud-shell';
@@ -45,6 +45,7 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
   const mini = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ z: 1, focus: { x: 0, y: 0 } });
+  const atFit = useRef(true); // the view is FIT until the owner zooms, pans or picks a domain
   const [rot, setRot] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
@@ -69,8 +70,35 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
   }, [comps]);
   const L = useMemo(() => layout(size.w || 1, size.h || 1, items), [size, items]);
   const C = L.centre;
-  const level = levelAt(view.z);
-  const fit = useCallback((): View => ({ z: ZOOM.fit, focus: C }), [C]);
+  // FIT: the largest zoom (at most 1×) whose bounding box of medallions, titles and labels fits the canvas. On a
+  // wide canvas that is 1× (the globe at 38% of the height); a narrow one zooms out rather than clip the orbit.
+  const labelW = (c: Comp | undefined, lvl: string) => ((c?.label.length ?? 8) + (c?.status === 'reserved' ? 11 : lvl !== 'System' ? 9 : 0)) * 9.6 + 18;
+  const fit = useCallback((): View => {
+    if (size.w === 0) return { z: ZOOM.fit, focus: C };
+    // Titles and labels are fixed-size HTML (screen px); positions scale with z. Solve for z: a few rounds converge.
+    let z: number = ZOOM.fit; let box = { x0: 0, y0: 0, x1: 0, y1: 0 };
+    for (let round = 0; round < 4; round++) {
+      const k = 1 / z;
+      let x0 = C.x - L.r, y0 = C.y - L.r, x1 = C.x + L.r, y1 = C.y + L.r;
+      const add = (a: number, b: number, c: number, d: number) => { x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, c); y1 = Math.max(y1, d); };
+      for (const d of ORBIT_ORDER) {
+        const m = L.medallion[d]; add(m.x - 32 * k, m.y - 32 * k, m.x + 32 * k, m.y + 32 * k);
+        const t = L.titles[d]; const tw = TITLE_W * k, th = TITLE_H * k;
+        const tx = t.align === 'center' ? t.at.x - tw / 2 : t.align === 'left' ? t.at.x : t.at.x - tw;
+        add(tx, t.place === 'below' ? t.at.y : t.at.y - th, tx + tw, t.place === 'below' ? t.at.y + th : t.at.y);
+      }
+      for (const a of L.anchors.values()) {
+        const w = labelW(byId.get(a.id), 'System') * k;
+        add(a.align === 'left' ? a.dot.x : a.dot.x - w - 8 * k, a.dot.y - 9 * k, a.align === 'left' ? a.dot.x + w + 8 * k : a.dot.x, a.dot.y + 9 * k);
+      }
+      box = { x0, y0, x1, y1 };
+      z = Math.max(ZOOM.min, Math.min(ZOOM.fit, (size.w - 24) / (x1 - x0), (size.h - 24) / (y1 - y0)));
+    }
+    return { z, focus: z < ZOOM.fit ? { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 } : C };
+  }, [C, L, size, byId]);
+  // Semantic levels are relative to FIT, so the default view is System on every canvas size.
+  const fitZ = useMemo(() => fit().z, [fit]);
+  const level = levelAt(view.z / fitZ);
 
   // The first view: the URL's zoom and centre (?z=1.8&c=RECORDS), else FIT.
   const inited = useRef(false);
@@ -80,14 +108,15 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
     const q = new URLSearchParams(location.search);
     const c = q.get('c') as Domain | null;
     const z = Number(q.get('z'));
-    setView({ z: Number.isFinite(z) && z > 0 ? clampZoom(z) : ZOOM.fit, focus: c && c in L.medallion ? L.medallion[c] : C });
-  }, [size.w, L, C]);
-  // Keep the focus on the centre when the canvas resizes at FIT.
-  useEffect(() => { setView((v) => (v.z === ZOOM.fit && !focus ? { ...v, focus: C } : v)); }, [C, focus]);
+    setView(Number.isFinite(z) && z > 0 ? { z: clampZoom(z), focus: c && c in L.medallion ? L.medallion[c] : C } : fit());
+  }, [size.w, L, C, fit]);
+  // Re-fit when the canvas resizes while the view is at FIT (no lens focus, never zoomed by hand).
+  useEffect(() => { if (atFit.current && !focus && inited.current) setView(fit()); }, [fit, focus]);
 
   // Animated view changes (350 ms), instant with motion off.
   const anim = useRef<number | null>(null);
   const animateTo = useCallback((to: View) => {
+    atFit.current = false;
     if (anim.current) cancelAnimationFrame(anim.current);
     if (motion === 'off') { setView(to); return; }
     const from = { ...view }; const t0 = performance.now();
@@ -107,14 +136,15 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
     if (lastLens.current === key) return;
     const first = lastLens.current === null; lastLens.current = key;
     if (first && new URLSearchParams(location.search).has('z')) return; // the URL's view wins on load
-    animateTo(focus ? { z: 1.6, focus: { x: (L.medallion[focus].x * 2 + C.x) / 3, y: (L.medallion[focus].y * 2 + C.y) / 3 } } : fit());
+    if (focus) animateTo({ z: 1.6, focus: { x: (L.medallion[focus].x * 2 + C.x) / 3, y: (L.medallion[focus].y * 2 + C.y) / 3 } });
+    else { animateTo(fit()); atFit.current = true; }
   }, [lens, focus, L, C, fit, animateTo, size.w]);
 
   // The view lives in the URL (z and the focused domain), written when it settles.
   useEffect(() => {
     const t = setTimeout(() => {
       const u = new URL(location.href);
-      if (Math.abs(view.z - ZOOM.fit) < 0.01 && Math.hypot(view.focus.x - C.x, view.focus.y - C.y) < 1) { u.searchParams.delete('z'); u.searchParams.delete('c'); }
+      if (atFit.current && !focus) { u.searchParams.delete('z'); u.searchParams.delete('c'); }
       else { u.searchParams.set('z', view.z.toFixed(2)); if (focus) u.searchParams.set('c', focus); else u.searchParams.delete('c'); }
       history.replaceState(null, '', u);
     }, 400);
@@ -257,7 +287,7 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
   // Input: wheel zooms toward the cursor; drag pans; Shift or right drag turns the wireframe; double-click zooms in.
   const drag = useRef<{ x: number; y: number; turn: boolean } | null>(null);
   const local = (e: { clientX: number; clientY: number }) => { const r = wrap.current!.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  const onWheel = (e: React.WheelEvent) => { const p = local(e); setView((v) => zoomAt(v, C, p, v.z * Math.exp(-e.deltaY * 0.0015))); };
+  const onWheel = (e: React.WheelEvent) => { atFit.current = false; const p = local(e); setView((v) => zoomAt(v, C, p, v.z * Math.exp(-e.deltaY * 0.0015))); };
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button, a, input')) return;
     drag.current = { ...local(e), turn: e.shiftKey || e.button === 2 };
@@ -268,7 +298,7 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
     const d = drag.current;
     if (d) {
       const dx = p.x - d.x, dy = p.y - d.y; drag.current = { ...d, x: p.x, y: p.y };
-      if (d.turn) setRot((r) => r + dx * 0.01); else setView((v) => ({ ...v, focus: { x: v.focus.x - dx / v.z, y: v.focus.y - dy / v.z } }));
+      if (d.turn) setRot((r) => r + dx * 0.01); else { atFit.current = false; setView((v) => ({ ...v, focus: { x: v.focus.x - dx / v.z, y: v.focus.y - dy / v.z } })); }
       return;
     }
     if (exp) { // hover a satellite: nearest within 7 px on screen
@@ -288,7 +318,7 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
     const pan = 40 / view.z;
     const k: Record<string, () => void> = {
       '+': () => animateTo(zoomAt(view, C, C, view.z * 1.25)), '=': () => animateTo(zoomAt(view, C, C, view.z * 1.25)),
-      '-': () => animateTo(zoomAt(view, C, C, view.z / 1.25)), '0': () => animateTo(fit()),
+      '-': () => animateTo(zoomAt(view, C, C, view.z / 1.25)), '0': () => { animateTo(fit()); atFit.current = true; },
       ArrowLeft: () => setView((v) => ({ ...v, focus: { ...v.focus, x: v.focus.x - pan } })), ArrowRight: () => setView((v) => ({ ...v, focus: { ...v.focus, x: v.focus.x + pan } })),
       ArrowUp: () => setView((v) => ({ ...v, focus: { ...v.focus, y: v.focus.y - pan } })), ArrowDown: () => setView((v) => ({ ...v, focus: { ...v.focus, y: v.focus.y + pan } })),
       Escape: () => { setExpanded(null); setHover(null); },
@@ -303,6 +333,36 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
   };
 
   const at = (p: Pt) => toScreen(p, view, C);
+
+  // Label collision avoidance: medallions, their titles, the hub and the zoom cluster are fixed obstacles; labels
+  // are placed by priority (built by file count, then reserved) and a label that would overlap one, another label
+  // or the canvas edge is hidden. Its dot stays; the label returns on zoom, and on focus (keyboard users reach all).
+  const collided = useMemo(() => {
+    const out = new Set<string>(); if (size.w === 0 || level === 'Constellation') return out;
+    type Box = { x0: number; y0: number; x1: number; y1: number };
+    const hit = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    const boxes: Box[] = [];
+    const s = (p: Pt) => toScreen(p, view, C);
+    const hub = s(C); boxes.push({ x0: hub.x - 50, y0: hub.y - 40, x1: hub.x + 50, y1: hub.y + 60 });
+    for (const d of ORBIT_ORDER) {
+      if (hidden.has(d)) continue;
+      const m = s(L.medallion[d]); const t = L.titles[d]; const p = s(t.at);
+      boxes.push({ x0: m.x - 32, y0: m.y - 32, x1: m.x + 32, y1: m.y + 32 });
+      const x0 = t.align === 'center' ? p.x - TITLE_W / 2 : t.align === 'left' ? p.x : p.x - TITLE_W;
+      boxes.push(t.place === 'below' ? { x0, y0: p.y, x1: x0 + TITLE_W, y1: p.y + TITLE_H } : { x0, y0: p.y - TITLE_H, x1: x0 + TITLE_W, y1: p.y });
+    }
+    boxes.push({ x0: size.w - 300, y0: size.h - 190, x1: size.w, y1: size.h }); // the zoom cluster
+    const order = [...L.anchors.values()].map((a) => ({ a, c: byId.get(a.id)! }))
+      .sort((x, y) => (x.c.status === y.c.status ? y.c.fileCount - x.c.fileCount : x.c.status === 'built' ? -1 : 1));
+    for (const { a, c } of order) {
+      if (hidden.has(a.domain)) continue;
+      const p = s(a.dot);
+      const w = labelW(c, level);
+      const b = a.align === 'left' ? { x0: p.x + 6, y0: p.y - 9, x1: p.x + 8 + w, y1: p.y + 9 } : { x0: p.x - 8 - w, y0: p.y - 9, x1: p.x - 6, y1: p.y + 9 };
+      if (b.x0 < 0 || b.x1 > size.w || b.y0 < 0 || b.y1 > size.h || boxes.some((o) => hit(b, o))) out.add(a.id); else boxes.push(b);
+    }
+    return out;
+  }, [size, view, L, C, byId, hidden, level]);
   const labelsIn = Math.min(1, Math.max(0, (boot - 0.75) / 0.25));
   const empty = data !== null && data.totals.files === 0;
   const hoverComp = hover ? byId.get(hover) : undefined;
@@ -330,8 +390,10 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
         <div className="pointer-events-auto absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{ left: at(C).x, top: at(C).y, opacity: Math.min(1, boot / 0.35) }}
           title={`${identity.name} v${identity.version}: the application itself (package.json). Configuration, not an agent or a server; never connected.`}>
           <XGlyph size={Math.round(46 * Math.min(1.6, Math.max(0.8, view.z)))} id="hub" />
-          <span className="hud-display hud-gold-text mt-1 text-[13px]">XYP3RN</span>
-          <span className="hud-label hud-2 text-[10px]">Agentic OS</span>
+          <span className="mt-1 flex flex-col items-center px-2 py-0.5" style={{ background: 'rgba(4,10,22,0.72)', boxShadow: 'inset 0 0 0 1px rgba(247,201,72,0.35)' }}>
+            <span className="hud-display hud-gold-text text-[13px]">XYP3RN</span>
+            <span className="hud-label hud-2 text-[10px]">Agentic OS</span>
+          </span>
         </div>
       )}
 
@@ -340,13 +402,15 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
         const t = HUD_DOMAIN[d]; const p = at(L.medallion[d]);
         const total = comps.filter((c) => c.domain === d).reduce((s, c) => s + c.fileCount, 0);
         const lit = Math.min(1, Math.max(0, (boot - 0.3 - i * 0.045) / 0.1));
-        const outward = L.medallion[d].y < C.y ? 'bottom' : 'top';
+        const ta = L.titles[d]; const tp = at(ta.at);
+        const opacity = lit * (hidden.has(d) ? 0 : focus && d !== focus ? 0.35 : 1);
+        const shift = `${ta.align === 'center' ? '-50%' : ta.align === 'right' ? '-100%' : '0'}, ${ta.place === 'above' ? '-100%' : '0'}`;
         return (
-          <div key={d} className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2" style={{ left: p.x, top: p.y, opacity: lit * (hidden.has(d) ? 0 : focus && d !== focus ? 0.35 : 1), transition: 'opacity 250ms' }} data-medallion={d}>
-            <div className="grid h-[60px] w-[60px] place-items-center rounded-full" style={{ background: 'rgba(4,10,22,0.72)', boxShadow: `0 0 0 1.5px ${t.base}, 0 0 18px ${t.glow}66, inset 0 0 14px ${t.glow}33` }}>
+          <div key={d} data-medallion={d}>
+            <div className="pointer-events-none absolute grid h-[60px] w-[60px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full" style={{ left: p.x, top: p.y, opacity, transition: 'opacity 250ms', background: 'rgba(4,10,22,0.72)', boxShadow: `0 0 0 1.5px ${t.base}, 0 0 18px ${t.glow}66, inset 0 0 14px ${t.glow}33` }}>
               <DomainIcon icon={t.icon} color={t.label} size={26} />
             </div>
-            <div className={`absolute left-1/2 w-56 -translate-x-1/2 text-center ${outward === 'bottom' ? 'top-[66px]' : 'bottom-[66px]'}`}>
+            <div className="pointer-events-none absolute whitespace-nowrap px-2 py-1" style={{ left: tp.x, top: tp.y, transform: `translate(${shift})`, textAlign: ta.align, opacity, transition: 'opacity 250ms', background: 'rgba(4,10,22,0.72)' }}>
               <div className="hud-display text-[15px] leading-tight" style={{ color: t.label, textShadow: `0 0 1px rgba(0,0,0,.9), 0 0 10px ${t.glow}4d` }}>{t.title}</div>
               <div className="hud-label hud-muted text-[10px]">{t.tagline}</div>
               {level === 'Constellation' && <div className="hud-data text-[12px]" style={{ color: t.label }}>{total} files</div>}
@@ -361,7 +425,7 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
         if (hidden.has(an.domain)) return null;
         return (
           <button key={an.id} type="button" data-component={c.id}
-            className="hud-label absolute !border-0 !p-0 text-[11px] leading-none"
+            className="hud-label hud-comp absolute whitespace-nowrap !border-0 !p-0 text-[11px] leading-none" data-collided={collided.has(an.id) && hover !== an.id ? 'true' : undefined}
             style={{ left: an.align === 'left' ? p.x + 8 : undefined, right: an.align === 'right' ? size.w - p.x + 8 : undefined, top: p.y - 8, background: 'rgba(4,10,22,0.72)', boxShadow: `inset 0 0 0 1px ${t.base}55`, padding: '3px 6px', color: c.status === 'built' ? t.label : '#8FA3BF', opacity: labelsIn * (focus && an.domain !== focus ? 0.35 : 1), minHeight: 18 }}
             aria-expanded={expanded === c.id}
             aria-label={`${c.label}, ${c.status === 'built' ? `${c.fileCount} files` : 'reserved, no code yet'}${c.diagnostics ? `, ${c.diagnostics} diagnostics` : ''}`}
@@ -411,16 +475,16 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion }:
 
       {/* Zoom cluster */}
       <div className="hud-panel absolute bottom-3 right-3 flex items-end gap-2 p-2" onPointerDown={(e) => e.stopPropagation()}>
-        <canvas ref={mini} width={160} height={100} className="cursor-move" aria-label="Minimap: drag to pan" role="img" onPointerDown={onMini} onPointerMove={onMini} />
+        <canvas ref={mini} width={160} height={100} className={`cursor-move ${size.w < 900 ? 'hidden' : ''}`} aria-label="Minimap: drag to pan" role="img" onPointerDown={onMini} onPointerMove={onMini} />
         <div className="flex flex-col items-center gap-1">
           <button type="button" aria-label="Zoom in" className="hud-data !px-2 !py-0.5" onClick={() => animateTo(zoomAt(view, C, C, view.z * 1.25))}>+</button>
-          <input type="range" aria-label="Zoom" min={ZOOM.min} max={ZOOM.max} step={0.05} value={view.z} onChange={(e) => setView((v) => zoomAt(v, C, C, Number(e.target.value)))}
+          <input type="range" aria-label="Zoom" min={ZOOM.min} max={ZOOM.max} step={0.05} value={view.z} onChange={(e) => { atFit.current = false; setView((v) => zoomAt(v, C, C, Number(e.target.value))); }}
             style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 64, width: 16 }} />
           <button type="button" aria-label="Zoom out" className="hud-data !px-2 !py-0.5" onClick={() => animateTo(zoomAt(view, C, C, view.z / 1.25))}>−</button>
         </div>
         <div className="flex flex-col gap-1">
           <span className="hud-data text-center text-[12px]" data-zoom-readout>{Math.round(view.z * 100)}%</span>
-          <button type="button" className="hud-label !px-2 !py-0.5 text-[11px]" onClick={() => animateTo(fit())}>Fit</button>
+          <button type="button" className="hud-label !px-2 !py-0.5 text-[11px]" onClick={() => { animateTo(fit()); atFit.current = true; }}>Fit</button>
           <button type="button" className="hud-label !px-2 !py-0.5 text-[11px]" onClick={() => animateTo({ ...view, z: 1 })}>1:1</button>
           <span className="hud-label hud-muted text-[10px]" data-level-label>{level}</span>
         </div>

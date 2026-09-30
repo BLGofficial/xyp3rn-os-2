@@ -10,11 +10,16 @@ import { HUD_BEARING, ZOOM } from './hud-theme.ts';
 export type Pt = { readonly x: number; readonly y: number };
 export type Item = { readonly id: string; readonly group?: 'x3lius' | 'ops' | null };
 export type Anchor = { readonly id: string; readonly dot: Pt; readonly align: 'left' | 'right'; readonly domain: Domain };
+/** Where a domain's title goes: a side domain's title heads its list (outer side); Core and Records face the globe. */
+export type TitleAt = { readonly at: Pt; readonly align: 'left' | 'right' | 'center'; readonly place: 'above' | 'below' };
 
 export const GLOBE_SHARE = 0.38; // the globe's diameter as a share of the canvas height, at FIT
 export const ORBIT = 1.45; // medallion ring radius / globe radius
 const ROW = 20; // label row pitch (px, world)
-const COL = 170; // label column width for the north and south lists
+const COL = 190; // label column width for the north and south lists
+/** A domain title's box on screen (px): shared by FIT, collision avoidance and the tests. */
+export const TITLE_W = 270;
+export const TITLE_H = 44;
 
 /** The globe's radius: 38% of the canvas height as a diameter, clamped to 260–420 px. */
 export const globeRadius = (height: number) => Math.min(420, Math.max(260, height * GLOBE_SHARE)) / 2;
@@ -29,6 +34,7 @@ export type Layout = {
   readonly width: number; readonly height: number; readonly centre: Pt; readonly r: number; readonly orbit: number;
   readonly medallion: Readonly<Record<Domain, Pt>>;
   readonly anchors: ReadonlyMap<string, Anchor>;
+  readonly titles: Readonly<Record<Domain, TitleAt>>;
 };
 
 /**
@@ -43,6 +49,7 @@ export const layout = (width: number, height: number, items: Readonly<Record<Dom
   const orbit = r * ORBIT;
   const medallion = {} as Record<Domain, Pt>;
   const anchors = new Map<string, Anchor>();
+  const titles = {} as Record<Domain, TitleAt>;
   for (const d of Object.keys(HUD_BEARING) as Domain[]) {
     const u = dir(HUD_BEARING[d]);
     const m = { x: centre.x + u.x * orbit, y: centre.y + u.y * orbit };
@@ -53,18 +60,23 @@ export const layout = (width: number, height: number, items: Readonly<Record<Dom
       const x3 = list.filter((i) => i.group !== 'ops'), ops = list.filter((i) => i.group === 'ops');
       const cols = [x3.slice(0, Math.ceil(x3.length / 2)), x3.slice(Math.ceil(x3.length / 2)), ...(ops.length ? [ops] : [])].filter((c) => c.length);
       const left = m.x - (cols.length * COL) / 2 + 8;
+      titles[d] = u.y < 0 ? { at: { x: m.x, y: m.y + 36 }, align: 'center', place: 'below' } : { at: { x: m.x, y: m.y - 36 }, align: 'center', place: 'above' };
       cols.forEach((col, ci) => col.forEach((it, ri) => {
         const y = u.y < 0 ? m.y - 52 - (col.length - 1 - ri) * ROW : m.y + 52 + ri * ROW;
         anchors.set(it.id, { id: it.id, dot: { x: left + ci * COL, y }, align: 'left', domain: d });
       }));
     } else {
-      // A side domain: one column outward from the medallion, centred on it vertically.
+      // A side domain: one column outward from the medallion, running away from the horizon (upper domains end
+      // level with the medallion and grow upward, lower ones start level with it and grow down), so the title,
+      // on the horizon side, never shares a row with the list.
       const align = u.x > 0 ? 'left' : 'right';
       const x = m.x + Math.sign(u.x) * 48;
-      list.forEach((it, i) => anchors.set(it.id, { id: it.id, dot: { x, y: m.y + (i - (list.length - 1) / 2) * ROW }, align, domain: d }));
+      list.forEach((it, i) => anchors.set(it.id, { id: it.id, dot: { x, y: u.y < 0 ? m.y - (list.length - 1 - i) * ROW : m.y + i * ROW }, align, domain: d }));
+      const top = u.y < 0 ? m.y - Math.max(0, list.length - 1) * ROW : m.y;
+      titles[d] = { at: { x: x + (align === 'left' ? -4 : 4), y: top - 14 }, align, place: 'above' };
     }
   }
-  return { width, height, centre, r, orbit, medallion, anchors };
+  return { width, height, centre, r, orbit, medallion, anchors, titles };
 };
 
 /** The view: zoom `z` about the world point `focus`, which sits at the canvas centre. */

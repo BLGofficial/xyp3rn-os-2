@@ -42,6 +42,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
   const [motion, setMotion] = useState<Motion>('cinematic');
   const [contrast, setContrast] = useState<'normal' | 'high'>('normal');
   const [drawer, setDrawer] = useState<'left' | 'right' | null>(null);
+  const [showGlobe, setShowGlobe] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const search = useRef<HTMLInputElement>(null);
 
@@ -119,10 +120,10 @@ export function HudShell({ identity, owner, components, componentsError, status:
       </header>
 
       {/* B. Top bar */}
-      <div className="hud-panel flex items-center gap-4 px-4" style={{ gridColumn: '2 / 4', gridRow: 1 }}>
+      <div className="hud-panel hud-bar flex items-center gap-4 px-4" style={{ gridColumn: '2 / 4', gridRow: 1 }}>
         <button type="button" className="hud-label xl:hidden" onClick={() => setDrawer(drawer === 'left' ? null : 'left')} aria-expanded={drawer === 'left'}>Map</button>
         <LensTabs lens={lens} onChoose={chooseLens} />
-        <form action="/search" method="get" role="search" aria-label="HUD search" className="flex min-w-[240px] flex-1 items-center gap-2">
+        <form action="/search" method="get" role="search" aria-label="HUD search" className="flex min-w-0 flex-1 basis-60 items-center gap-2">
           <label className="relative flex-1">
             <span className="sr-only">Search or ask</span>
             <input ref={search} id="hud-q" name="q" type="search" autoComplete="off" placeholder="Search nodes, agents, files, decisions…" />
@@ -139,7 +140,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
           onMotion={(m) => { setMotion(m); write('hud.motion', m); }}
           onContrast={(c) => { setContrast(c); write('hud.contrast', c); }} />
         <p className="hud-label hud-2 hidden text-right text-[10px] leading-tight 2xl:block">Intelligence<br />works for creators.<br /><span className="hud-gold-text">X3LIUS</span></p>
-        <button type="button" className="hud-label xl:hidden" onClick={() => setDrawer(drawer === 'right' ? null : 'right')} aria-expanded={drawer === 'right'}>Status</button>
+        <button type="button" className="hud-label lg:hidden" onClick={() => setDrawer(drawer === 'right' ? null : 'right')} aria-expanded={drawer === 'right'}>Status</button>
       </div>
 
       {/* C. Left rail */}
@@ -190,8 +191,14 @@ export function HudShell({ identity, owner, components, componentsError, status:
         </section>
       </nav>
 
+      {/* Below 960 px the list comes first; the globe waits behind a button. */}
+      <section className="hud-panel hud-narrow-only p-4" aria-label="Graph list">
+        <p className="m-0">Every entity is in the <a href="/">Graph list</a>, the globe&apos;s text twin.</p>
+        <button type="button" className="hud-label mt-2" aria-expanded={showGlobe} onClick={() => setShowGlobe((v) => !v)}>{showGlobe ? 'Hide the globe' : 'Show the globe'}</button>
+      </section>
+
       {/* D. Centre: the globe */}
-      <main id="hud-main" className="relative" style={{ gridColumn: 2, gridRow: 2 }} aria-label="Graph view">
+      <main id="hud-main" className="relative" style={{ gridColumn: 2, gridRow: 2 }} aria-label="Graph view" data-show-globe={showGlobe}>
         <HudGlobe data={components} error={componentsError} hidden={hidden} lens={lens} focus={lens in LENS_DOMAIN ? LENS_DOMAIN[lens as keyof typeof LENS_DOMAIN] ?? null : null}
           identity={identity} motion={effectiveMotion} />
       </main>
@@ -203,8 +210,9 @@ export function HudShell({ identity, owner, components, componentsError, status:
           {status ? (
             <>
               <p className="hud-label m-0 mb-2 text-[12px]" style={{ color: attention.length ? HUD_STATUS.warning.color : HUD_STATUS.ok.color }}>
-                {attention.length ? `${HUD_STATUS.warning.glyph} ${attention.length} check${attention.length > 1 ? 's' : ''} need attention` : `● All systems operational`}
+                {attention.length ? `${HUD_STATUS.warning.glyph} ${attention.length} ${attention.length > 1 ? 'checks need' : 'check needs'} attention` : `● All systems operational`}
               </p>
+              {attention.length > 0 && <ul className="hud-data hud-muted m-0 mb-2 list-none p-0 text-[11px]">{attention.map((a) => <li key={a.label}>{a.label}: {a.detail}</li>)}</ul>}
               <dl className="m-0">
                 <Row k="Agents registered" v={status.agents.registered} src="agent registry" />
                 <Row k="Workflows run / defined" v={`${status.counts.workflowsRunning} / ${status.counts.workflowsDefined}`} src="workflow_runs running / graph workflow nodes" />
@@ -241,7 +249,8 @@ export function HudShell({ identity, owner, components, componentsError, status:
         </section>
         <section className="hud-panel" aria-labelledby="files-h">
           <h2 id="files-h" className="hud-label hud-muted mb-2 mt-0">Files matched</h2>
-          <table className="hud-data w-full border-collapse text-[11px]">
+          <table className="hud-data w-full table-fixed border-collapse text-[11px]">
+            <colgroup><col className="w-[34%]" /><col /><col /><col /><col /></colgroup>
             <thead><tr className="hud-muted"><th className="text-left font-normal">Domain</th><th className="text-right font-normal">Files</th><th className="text-right font-normal">Match</th><th className="text-right font-normal">Other</th><th className="text-right font-normal">Diag</th></tr></thead>
             <tbody>
               {OWNERS.map((o) => {
@@ -265,9 +274,9 @@ export function HudShell({ identity, owner, components, componentsError, status:
       </aside>
 
       {/* F. Bottom bar */}
-      <footer className="hud-panel flex items-center gap-4 px-4" style={{ gridColumn: '1 / 4', gridRow: 3 }}>
-        <span className="hud-label hud-muted hidden text-[11px] lg:inline">XYP3RN Agentic OS · Mercury Edition</span>
-        <div className="mx-auto flex items-center gap-2">
+      <footer className="hud-panel hud-bar flex items-center gap-4 px-4" style={{ gridColumn: '1 / 4', gridRow: 3 }}>
+        <span className="hud-label hud-muted hidden text-[11px] xl:inline">XYP3RN Agentic OS · Mercury Edition</span>
+        <div className="mx-auto flex flex-wrap items-center justify-center gap-2">
           <BottomSection label="APIs & connectors">
             <p className="m-0">Graph API: <span className="hud-data">/api/graph/overview · /node · /components</span>, <span className="hud-data">/api/system/status</span>.</p>
             <p className="m-0 mt-1 hud-muted">No platform connectors yet (Prompt 11).</p>
@@ -287,7 +296,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
             <p className="m-0">Next.js on this machine; up since <span className="hud-data">{status ? new Date(status.bootedAt).toLocaleString('en-GB', { timeZone: 'Europe/Sofia' }) : '—'}</span>.</p>
           </BottomSection>
         </div>
-        <span className="hud-label hud-muted hidden text-right text-[10px] leading-tight lg:inline">Built by X3LIUS<br />for a higher tomorrow</span>
+        <span className="hud-label hud-muted hidden text-right text-[10px] leading-tight xl:inline">Built by X3LIUS<br />for a higher tomorrow</span>
       </footer>
     </div>
   );
@@ -301,7 +310,13 @@ function LensTabs({ lens, onChoose }: { lens: Lens; onChoose: (l: Lens) => void 
     if (b) setBar({ left: b.offsetLeft + 8, width: b.offsetWidth - 16 });
   }, [lens]);
   return (
-    <div role="tablist" aria-label="Graph lens" className="relative hidden shrink-0 items-center lg:flex">
+    <>
+    <label className="xl:hidden"><span className="sr-only">Graph lens</span>
+      <select value={lens} onChange={(e) => onChoose(e.target.value as Lens)} className="hud-label border border-[var(--hud-border)] bg-[rgba(4,10,22,0.72)] px-2 py-1.5 text-[12px] text-[#F4F8FF]">
+        {LENSES.map((l) => <option key={l} value={l}>{l === 'GRAPH' ? '◆ Graph' : l.charAt(0) + l.slice(1).toLowerCase()}</option>)}
+      </select>
+    </label>
+    <div role="tablist" aria-label="Graph lens" className="relative hidden shrink-0 items-center xl:flex">
       {LENSES.map((l) => (
         <button key={l} ref={(el) => { if (el) refs.current.set(l, el); }} type="button" role="tab" aria-selected={l === lens} aria-current={l === lens ? 'page' : undefined}
           className="hud-tab hud-label text-[12px]" onClick={() => onChoose(l)}>
@@ -310,11 +325,12 @@ function LensTabs({ lens, onChoose }: { lens: Lens; onChoose: (l: Lens) => void 
       ))}
       {bar && <span className="hud-underline" style={{ left: bar.left, width: bar.width }} aria-hidden="true" />}
     </div>
+    </>
   );
 }
 
 function MapItem({ active, href, onClick, children }: { active?: boolean; href?: string; onClick?: () => void; children: React.ReactNode }) {
-  const cls = `hud-label block w-full text-left text-[12px] !border-0 !bg-transparent px-2 py-1.5 no-underline ${active ? 'hud-active-bar !text-[#F4F8FF]' : '!text-[#C3D0E4]'}`;
+  const cls = `hud-label block w-full text-left text-[12px] !border-0 !bg-transparent !px-2 !py-1 no-underline ${active ? 'hud-active-bar !text-[#F4F8FF]' : '!text-[#C3D0E4]'}`;
   return <li>{href ? <a href={href} className={cls}>{children} <span className="hud-muted" aria-hidden="true">↗</span></a> : <button type="button" className={cls} aria-pressed={active} onClick={onClick}>{children}</button>}</li>;
 }
 

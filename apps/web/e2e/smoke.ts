@@ -162,7 +162,9 @@ try {
   await shot(page, '4-vault-search');
 
   // AOS-02: the Command Center, from the song's master to a released single.
-  const today = new Date().toISOString().slice(0, 10);
+  // The database's own date: its guard compares release dates with current_date in the server's time zone (a UTC
+  // date from the browser side is yesterday for the first hours of a Sofia day).
+  const today = (await db.sql<{ d: string }[]>`select current_date::text as d`)[0]!.d;
   const UPC = fixtureUpc('07000026002');
   await page.goto(`${BASE}/ingest`);
   await page.setInputFiles('input[name=files]', { name: 'night-city-master.wav', mimeType: 'audio/wav', buffer: wav() });
@@ -584,6 +586,62 @@ try {
   check(consoleErrors.length === 0, `no console error on / and the eight areas (${consoleErrors.join(' | ') || 'none'})`);
   const errLines = serverLog.slice(logFrom).split('\n').filter((l) => /\berror\b|Error:|⨯/i.test(l));
   check(errLines.length === 0, `no error line in the next start log since the Jarvis checks began (${errLines.join(' | ') || 'none'})`);
+
+  // The Mercury HUD (F52): the globe's framing, zoom and URL, semantic levels, a real component's files, lenses,
+  // reduced motion, no console error, and no sideways scroll at 390 px.
+  {
+    const state = await page.context().storageState();
+    const hudCtx = await browser.newContext({ viewport: { width: 1920, height: 1080 }, storageState: state });
+    await hudCtx.addInitScript(() => { try { sessionStorage.setItem('hud.booted', '1'); } catch { /* boot skipped either way */ } });
+    const hp = await hudCtx.newPage();
+    const hudErrors: string[] = [];
+    hp.on('console', (m) => { if (m.type() === 'error' && !/favicon/.test(m.location().url)) hudErrors.push(m.text()); });
+    hp.on('pageerror', (e) => hudErrors.push(String(e)));
+    await hp.goto(`${BASE}/hud`);
+    await hp.waitForSelector('[data-hud-globe][data-level=System] [data-component]');
+    const zoom = async () => Number(await hp.getAttribute('[data-hud-globe]', 'data-zoom'));
+    const canvasH = await hp.$eval('[data-hud-globe]', (e) => e.clientHeight);
+    const globeR = Number(await hp.getAttribute('canvas[data-globe-r]', 'data-globe-r'));
+    check(Math.abs((2 * globeR) / canvasH - 0.38) <= 0.02, `/hud: the globe is 38% ± 2% of the canvas height at FIT (${((200 * globeR) / canvasH).toFixed(1)}%)`);
+    await hp.click('button[aria-label="Zoom in"]');
+    await hp.waitForFunction(() => /[?&]z=1\.25/.test(location.search), undefined, { timeout: 3000 });
+    check((await zoom()) > 1.2, `/hud: + zooms in and the URL keeps it (${hp.url()})`);
+    await hp.focus('[data-hud-globe]');
+    await hp.keyboard.press('0');
+    await hp.waitForFunction(() => !/[?&]z=/.test(location.search), undefined, { timeout: 3000 }).catch(() => undefined);
+    check((await zoom()) === 1 && !/[?&]z=/.test(new URL(hp.url()).search), `/hud: 0 fits and clears the zoom from the URL (${await zoom()}, ${hp.url()})`);
+    await hp.mouse.move(900, 500);
+    await hp.mouse.wheel(0, -600);
+    await hp.waitForTimeout(200);
+    check((await zoom()) > 1.5 && (await hp.getAttribute('[data-hud-globe]', 'data-level')) === 'Component', `/hud: the wheel zooms toward the cursor, into the Component level (${await zoom()})`);
+    await hp.focus('[data-hud-globe]');
+    await hp.keyboard.press('0');
+    await hp.waitForTimeout(600);
+    const vocal = hp.locator('button[data-component="RECORDS:vocal-dna"]');
+    await vocal.click();
+    check((await vocal.getAttribute('aria-expanded')) === 'true', '/hud: clicking Vocal DNA expands its real files');
+    await hp.click('button[role=tab]:has-text("Records")');
+    await hp.waitForTimeout(700);
+    check(/lens=RECORDS/.test(hp.url()) && (await zoom()) > 1.4, `/hud: the Records lens turns to its sector (${hp.url()}, ${await zoom()})`);
+    check(hudErrors.length === 0, `/hud: no console error (${hudErrors.join(' | ') || 'none'})`);
+    await hudCtx.close();
+
+    const rm = await browser.newContext({ viewport: { width: 1920, height: 1080 }, storageState: state, reducedMotion: 'reduce' });
+    const rp = await rm.newPage();
+    await rp.goto(`${BASE}/hud`);
+    await rp.waitForSelector('[data-hud-root]');
+    const dur = await rp.$eval('.hud-underline', (e) => getComputedStyle(e).transitionDuration);
+    check((await rp.getAttribute('[data-hud-root]', 'data-motion')) === 'off' && dur.split(',').every((d) => parseFloat(d) === 0), `/hud: reduced motion forces Motion Off, transitions 0s (${dur})`);
+    await rm.close();
+
+    const narrow = await browser.newContext({ viewport: { width: 390, height: 844 }, storageState: state });
+    const np = await narrow.newPage();
+    await np.goto(`${BASE}/hud`);
+    await np.waitForSelector('[data-hud-root]');
+    const sw = await np.$eval('[data-hud-root]', (e) => e.scrollWidth);
+    check(sw <= 390, `/hud: no sideways scroll at 390 px (${sw})`);
+    await narrow.close();
+  }
 
   // Recorded, not gated: LCP and CLS on / (this machine, headless Chromium, the smoke's dataset).
   const perf = await browser.newContext({ viewport: { width: 1440, height: 900 }, storageState: await page.context().storageState() });

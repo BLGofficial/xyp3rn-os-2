@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DOMAINS, type Domain } from '../../../core/contracts/taxonomy.ts';
-import { bend, globeRadius, layout, ORBIT, satellites, toScreen, toWorld, zoomAt } from '../lib/hud-layout.ts';
+import { bend, globeRadius, layout, ORBIT, satellites, TITLE_H, TITLE_W, toScreen, toWorld, zoomAt } from '../lib/hud-layout.ts';
 
 const items = Object.fromEntries(DOMAINS.map((d) => [d, Array.from({ length: d === 'RECORDS' ? 14 : 6 }, (_, i) => ({ id: `${d}:c${i}`, group: d === 'RECORDS' ? (i < 10 ? 'x3lius' : 'ops') : null }))])) as Record<Domain, { id: string; group: 'x3lius' | 'ops' | null }[]>;
 
@@ -53,5 +53,18 @@ describe('HUD layout', () => {
     expect(k.y).toBeGreaterThan(0);
     expect(satellites({ x: 0, y: 0 }, 200)).toHaveLength(200);
     expect(satellites({ x: 0, y: 0 }, 0)).toHaveLength(0);
+  });
+
+  it.each([[1320, 900], [956, 620]])('no two domain titles overlap at %i×%i', (w, h) => {
+    const l = layout(w, h, items);
+    const box = (d: Domain) => {
+      const t = l.titles[d]; const x0 = t.align === 'center' ? t.at.x - TITLE_W / 2 : t.align === 'left' ? t.at.x : t.at.x - TITLE_W;
+      return t.place === 'below' ? { x0, y0: t.at.y, x1: x0 + TITLE_W, y1: t.at.y + TITLE_H } : { x0, y0: t.at.y - TITLE_H, x1: x0 + TITLE_W, y1: t.at.y };
+    };
+    for (const a of DOMAINS) for (const b of DOMAINS) {
+      if (a >= b) continue;
+      const p = box(a), q = box(b);
+      expect(p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1, `${a} × ${b}`).toBe(false);
+    }
   });
 });
