@@ -83,6 +83,11 @@ export const runClaudeCli: ClaudeRunner = (args, stdin, opts) =>
       cleanup();
       resolve({ code, stdout, stderr, ...(stoppedBy ? { stoppedBy } : {}) });
     });
+    // A child that exits before reading all of stdin (e.g. a fast failure) can make this write hit a
+    // closed pipe: unhandled, that EPIPE is an uncaught 'error' event and crashes the process. The
+    // outcome is still reported normally through 'close'/the parsed result, so the write error itself
+    // is simply swallowed.
+    child.stdin.on('error', () => {});
     child.stdin.end(stdin);
   });
 

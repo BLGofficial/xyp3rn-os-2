@@ -87,6 +87,24 @@ describe('LLM_ENGINE=claude-code', () => {
   });
 });
 
+// REAL process, any platform: a child that exits before reading stdin closes the pipe out from
+// under `child.stdin.end(stdin)`. Unhandled, that EPIPE is an uncaught 'error' event that crashes
+// the whole process; the fake ClaudeRunner used everywhere else in this file can't reproduce it
+// because nothing here actually writes to a real, closeable pipe.
+describe('runClaudeCli: EPIPE-safe stdin (F5)', () => {
+  const prevBin = process.env.CLAUDE_BIN;
+  afterEach(() => {
+    if (prevBin === undefined) delete process.env.CLAUDE_BIN;
+    else process.env.CLAUDE_BIN = prevBin;
+  });
+
+  it('resolves (no uncaught exception) when the child exits before reading a large stdin payload', async () => {
+    process.env.CLAUDE_BIN = process.execPath;
+    const out = await runClaudeCli(['-e', 'process.exit(3)'], 'x'.repeat(1_000_000), { cwd: process.cwd() });
+    expect(out.code).toBe(3);
+  });
+});
+
 // REAL process, Windows only: proves runClaudeCli's win32 tree-kill actually kills a detached
 // grandchild (like `pnpm ask`, spawned by a skill run inside `claude`), not just the immediate
 // stand-in process. `CLAUDE_BIN` is pointed at node itself so the "claude" process is a script we
