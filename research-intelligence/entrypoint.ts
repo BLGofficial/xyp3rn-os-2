@@ -2,6 +2,7 @@ import type postgres from 'postgres';
 import { stringify as toYaml } from 'yaml';
 import { quoteIdent } from '../core/db/client.ts';
 import { dispatch } from '../core/orchestrator/dispatch.ts';
+import { LLM_TIMEOUT_MS } from '../core/llm/runner.ts';
 import { compileWorkflow, runWorkflow, type EngineDeps } from '../core/workflow-engine/engine.ts';
 import type { ResearchPlan } from './orchestrator/select.ts';
 
@@ -91,7 +92,7 @@ export const runResearch = async (
   }
 
   const wf = compileWorkflow(toYaml(plan.workflow), deps.registry, `generated:${ORCHESTRATOR_AGENT}:${researchRunId}`);
-  const result = await runWorkflow(deps, wf, {}, { researchRunId, ...(options.log ? { log: options.log } : {}) });
+  const result = await runWorkflow(deps, wf, {}, { researchRunId, timeoutMs: LLM_TIMEOUT_MS, ...(options.log ? { log: options.log } : {}) });
   if (result.status === 'error') {
     const error = `specialist step ${result.failedStep} failed: ${result.error}`;
     await close('error', { error, workflowRunId: result.workflowRunId, plan });

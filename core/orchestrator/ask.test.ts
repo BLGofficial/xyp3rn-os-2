@@ -1,7 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { askFailed, formatReply, MAX_REPLY_CHARS, refsOf, runPlan, type AskResult, type RunnablePlan } from './ask.ts';
+import { LLM_TIMEOUT_MS } from '../llm/runner.ts';
 import { planRequest } from './orchestrate.ts';
 import type { EngineDeps } from '../workflow-engine/engine.ts';
+
+const engineCalls = vi.hoisted(() => ({ options: [] as { timeoutMs?: number }[] }));
+vi.mock('../workflow-engine/engine.ts', async (actual) => ({
+  ...(await actual<typeof import('../workflow-engine/engine.ts')>()),
+  loadWorkflow: (path: string) => ({
+    path, sha256: 'x', name: 'wf', requiredInput: [], output: undefined,
+    steps: path === 'llm.workflow.yaml' ? [{ id: 's1', agent: 'llm-agent' }] : [{ id: 's1', agent: 'none-agent' }],
+  }),
+  runWorkflow: async (_deps: unknown, _wf: unknown, _input: unknown, options: { timeoutMs?: number }) => {
+    engineCalls.options.push(options);
+    return { workflowRunId: 'w', status: 'success', skippedSteps: [], steps: [] };
+  },
+}));
 
 const research = planRequest('Research the best current method for controlling dark baritone vocals in Suno.', { RESEARCH_INTELLIGENCE: { service: 'run-research' } });
 const selection = { selected: [], evidence: [] } as never;
@@ -48,5 +62,17 @@ describe('ask front door: reply text comes only from the real plan/result', () =
   it('refuses an unknown entrypoint service without touching deps', async () => {
     const plan = { ...research, service: 'nope' } as RunnablePlan;
     await expect(runPlan({} as EngineDeps, plan)).rejects.toThrow('unknown entrypoint service: nope');
+  });
+
+  it('mirrors pnpm workflow: run-workflow gets the LLM timeout only when a step is model-backed', async () => {
+    const registry = { get: (name: string) => (name === 'llm-agent' ? { model: 'claude-sonnet-5' } : { model: 'none' }) };
+    const deps = { registry } as unknown as EngineDeps;
+    const llmPlan = { ...research, action: 'run-workflow', workflow: 'llm.workflow.yaml', input: { request: 'x' } } as RunnablePlan;
+    const nonePlan = { ...research, action: 'run-workflow', workflow: 'none.workflow.yaml', input: { request: 'x' } } as RunnablePlan;
+    engineCalls.options.length = 0;
+    await runPlan(deps, llmPlan);
+    await runPlan(deps, nonePlan);
+    expect(engineCalls.options[0]).toMatchObject({ timeoutMs: LLM_TIMEOUT_MS });
+    expect(engineCalls.options[1]).not.toHaveProperty('timeoutMs');
   });
 });

@@ -1,6 +1,7 @@
 import { runResearch, type ResearchResult } from '../../research-intelligence/entrypoint.ts';
 import { runMusicSystem, type MusicSystemResult } from '../../records/x3lius/entrypoint.ts';
-import { loadWorkflow, runWorkflow, type EngineDeps, type WorkflowResult } from '../workflow-engine/engine.ts';
+import { hasLlmSteps, loadWorkflow, runWorkflow, type EngineDeps, type WorkflowResult } from '../workflow-engine/engine.ts';
+import { LLM_TIMEOUT_MS } from '../llm/runner.ts';
 import type { RequestPlan } from './orchestrate.ts';
 
 /**
@@ -29,7 +30,10 @@ export const runPlan = async (
   const log = options.log ? { log: options.log } : {};
   const request = plan.input.request;
   if (plan.action === 'run-workflow') {
-    return { kind: 'workflow', result: await runWorkflow(deps, loadWorkflow(plan.workflow, deps.registry), plan.input, log) };
+    const wf = loadWorkflow(plan.workflow, deps.registry);
+    // Mirrors `pnpm workflow`'s cli.ts: a workflow with any LLM-backed step gets the LLM per-step
+    // timeout (dispatch's 30s default is for deterministic steps).
+    return { kind: 'workflow', result: await runWorkflow(deps, wf, plan.input, { ...log, ...(hasLlmSteps(wf, deps.registry) ? { timeoutMs: LLM_TIMEOUT_MS } : {}) }) };
   }
   if (plan.service === 'run-research') {
     return { kind: 'research', result: await runResearch(deps, { question: request, projectSlug: options.projectSlug ?? 'ad-hoc' }, log) };
