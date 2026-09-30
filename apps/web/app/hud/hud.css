@@ -1,0 +1,145 @@
+/* The Mercury HUD (/hud, F52). Everything is scoped under .hud; the rest of the app keeps the shell's styles.
+   Fonts: pinned @fontsource packages, bundled by the Next build (no CDN). Notices: apps/web/FONT-NOTICES.md. */
+@import '@fontsource/orbitron/700.css';
+@import '@fontsource/chakra-petch/600.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
+.hud {
+  --hud-glass: rgba(12, 24, 46, 0.62);
+  --hud-border: rgba(148, 190, 255, 0.18);
+  --hud-gold-border: rgba(247, 201, 72, 0.35);
+  --hud-text: #f4f8ff;
+  --hud-text-2: #c3d0e4;
+  --hud-muted: #8fa3bf;
+  --hud-gold: linear-gradient(180deg, #fff1b8 0%, #f7c948 38%, #d4912a 72%, #8a5a12 100%);
+  --hud-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  color: var(--hud-text);
+  font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background: radial-gradient(ellipse at 50% 46%, #0b1a33 0%, #061022 48%, #02050b 100%);
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr) 288px;
+  grid-template-rows: 80px minmax(0, 1fr) 52px;
+  gap: 12px;
+  padding: 12px;
+}
+/* Hex grid 3% and grain 2%, above the gradient and below every panel; vignette at the edges. No star dots. */
+.hud::before,
+.hud::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.hud::before {
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 0 56 16v32L28 64 0 48V16zM28 64v33M0 48l-28 16M56 48l28 16' fill='none' stroke='%23cfe3ff' stroke-width='1'/%3E%3C/svg%3E");
+}
+.hud::after {
+  background:
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.02'/%3E%3C/svg%3E");
+}
+.hud > * { position: relative; z-index: 1; min-width: 0; min-height: 0; }
+
+/* Glass panel: chamfered top-left corner, a hairline border, an inner top highlight, tactical corner brackets. */
+.hud-panel {
+  --chamfer: 10px;
+  position: relative;
+  background: var(--hud-glass);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  clip-path: polygon(var(--chamfer) 0, 100% 0, 100% 100%, 0 100%, 0 var(--chamfer));
+  box-shadow: inset 0 0 0 1px var(--hud-border), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.hud-panel.gold { box-shadow: inset 0 0 0 1px var(--hud-gold-border), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 24px rgba(247, 201, 72, 0.12); }
+.hud-panel::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--hud-border), var(--hud-border)) top right / 10px 1px no-repeat,
+    linear-gradient(var(--hud-border), var(--hud-border)) top right / 1px 10px no-repeat,
+    linear-gradient(var(--hud-border), var(--hud-border)) bottom left / 10px 1px no-repeat,
+    linear-gradient(var(--hud-border), var(--hud-border)) bottom left / 1px 10px no-repeat,
+    linear-gradient(var(--hud-border), var(--hud-border)) bottom right / 10px 1px no-repeat,
+    linear-gradient(var(--hud-border), var(--hud-border)) bottom right / 1px 10px no-repeat;
+}
+.hud-sep { height: 1px; background: var(--hud-border); margin: 10px 0; }
+
+/* Type roles. */
+.hud-display { font-family: Orbitron, 'Space Grotesk Variable', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.hud-label { font-family: 'Chakra Petch', 'Inter Variable', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; font-size: 12px; }
+.hud-data { font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace; font-weight: 500; font-variant-numeric: tabular-nums; }
+.hud-muted { color: var(--hud-muted); }
+.hud-2 { color: var(--hud-text-2); }
+.hud-gold-text { background: var(--hud-gold); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hud-metric { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 32px; line-height: 1; }
+
+/* Controls. */
+.hud button, .hud a.hud-btn {
+  font: inherit;
+  color: var(--hud-text);
+  background: rgba(20, 38, 70, 0.55);
+  border: 1px solid var(--hud-border);
+  border-radius: 0;
+  padding: 6px 12px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 150ms var(--hud-ease), border-color 150ms var(--hud-ease);
+}
+.hud button:hover, .hud a.hud-btn:hover { background: rgba(32, 58, 102, 0.7); border-color: rgba(148, 190, 255, 0.4); }
+.hud a { color: #b8d4ff; }
+.hud :focus-visible { outline: 2px solid #a7d9ff; outline-offset: 2px; box-shadow: 0 0 12px rgba(167, 217, 255, 0.5); }
+.hud input[type='search'] {
+  font: inherit;
+  width: 100%;
+  color: var(--hud-text);
+  background: rgba(4, 10, 22, 0.72);
+  border: 1px solid var(--hud-border);
+  border-radius: 0;
+  padding: 8px 12px;
+}
+.hud input[type='search']:focus { border-color: rgba(247, 201, 72, 0.6); box-shadow: 0 0 16px rgba(247, 201, 72, 0.18); outline: none; }
+
+/* Tabs: the gold underline slides between tabs (a positioned bar the client moves). */
+.hud-tab { position: relative; background: transparent !important; border: 0 !important; padding: 8px 10px !important; color: var(--hud-text-2) !important; }
+.hud-tab[aria-current='page'] { color: var(--hud-text) !important; }
+.hud-underline { position: absolute; bottom: 2px; height: 2px; background: var(--hud-gold); box-shadow: 0 0 8px rgba(247, 201, 72, 0.6); transition: left 300ms var(--hud-ease), width 300ms var(--hud-ease); }
+
+/* Rails scroll inside themselves, never the page. */
+.hud-rail { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; scrollbar-width: thin; }
+.hud-rail > .hud-panel { padding: 14px; flex-shrink: 0; }
+.hud-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.hud-active-bar { box-shadow: inset 3px 0 0 #f7c948; }
+
+/* High contrast: opaque panels, stronger borders, no blur. */
+.hud[data-contrast='high'] { --hud-glass: #0a1426; --hud-border: rgba(148, 190, 255, 0.45); }
+.hud[data-contrast='high'] .hud-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* Motion Off (and reduced motion): every transition instant. */
+.hud[data-motion='off'] *, .hud[data-motion='off'] *::before, .hud[data-motion='off'] *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; }
+
+/* Below 1280 px the rails become drawers; below 960 px the list comes first (the globe behind a button). */
+@media (max-width: 1279px) {
+  .hud { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; overflow-y: auto; position: fixed; }
+  .hud-rail[data-drawer] { display: none; }
+  .hud-rail[data-drawer][data-open='true'] { display: flex; position: fixed; top: 12px; bottom: 12px; width: min(320px, 88vw); z-index: 5; }
+  .hud-rail[data-drawer='left'][data-open='true'] { left: 12px; }
+  .hud-rail[data-drawer='right'][data-open='true'] { right: 12px; }
+}
+
+/* Motion: the sparkline draws in; the hub's specular sweep every 12 s (Cinematic only). */
+.hud .hud-spark { stroke-dasharray: 1; stroke-dashoffset: 1; animation: hud-draw 1.2s var(--hud-ease) forwards; }
+@keyframes hud-draw { to { stroke-dashoffset: 0; } }
+.hud[data-motion='cinematic'] .hud-specular { animation: hud-sweep 12s linear infinite; }
+.hud:not([data-motion='cinematic']) .hud-specular { opacity: 0; }
+@keyframes hud-sweep { 0%, 88% { opacity: 0; transform: translateX(-30%); } 94% { opacity: 1; } 100% { opacity: 0; transform: translateX(30%); } }

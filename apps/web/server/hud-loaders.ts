@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type postgres from 'postgres';
 import type { AgentRegistry } from '../../../core/agent-registry/registry.ts';
 import type { Sql } from '../../../core/db/client.ts';
@@ -10,6 +12,12 @@ import { activity, metrics, pulse } from './shell-loaders.ts';
  * activity) and adds only the counts the HUD shows; every number names its source. Secret values never leave
  * the server: provider keys are reported as configured or not, by the pulse.
  */
+
+/** The application identity (package.json): configuration, not an agent or a server. Never hard-coded. */
+export const hudIdentity = async () => {
+  const pkg = JSON.parse(await readFile(join(import.meta.dirname, '..', '..', '..', 'package.json'), 'utf8')) as { name: string; version: string };
+  return { name: pkg.name, version: pkg.version };
+};
 
 const BOOTED_AT = new Date(Date.now() - process.uptime() * 1000).toISOString();
 

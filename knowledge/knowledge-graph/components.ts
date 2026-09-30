@@ -116,13 +116,14 @@ export type ComponentRow = {
   readonly status: 'built' | 'reserved';
   readonly rules: readonly string[];
   readonly fileCount: number;
-  /** The first FILE_ID_LIMIT graph node ids (`file:repo/<path>`), path order. */
-  readonly fileIds: readonly string[];
+  /** The first FILE_ID_LIMIT files, path order: graph node id, indexed_files id (the file viewer's), path, sha256 prefix. */
+  readonly files: readonly ComponentFile[];
   /** Up to five files by edge count (edges touching the file or a node it declares). */
   readonly topFiles: readonly { readonly id: string; readonly path: string; readonly edges: number }[];
   /** graph_diagnostics rows (unresolved or dangling) raised from this component's nodes. */
   readonly diagnostics: number;
 };
+export type ComponentFile = { readonly nodeId: string; readonly fileId: string; readonly path: string; readonly sha: string | null };
 export type ComponentLink = { readonly from: string; readonly to: string; readonly relation: string; readonly count: number };
 export type Components = {
   readonly components: readonly ComponentRow[];
@@ -149,6 +150,8 @@ export const components = async (tx: postgres.TransactionSql): Promise<Component
     select id, kind, owner_domain, path from graph_nodes where kind <> 'domain'`;
   const edges = await tx<{ relation: string; from_id: string; to_id: string }[]>`select relation, from_id, to_id from graph_edges`;
   const diags = await tx<{ from_id: string | null }[]>`select from_id from graph_diagnostics`;
+  const indexed = await tx<{ id: string; root: string; path: string; sha256: string | null }[]>`select id, root, path, sha256 from indexed_files`;
+  const fileRow = new Map(indexed.map((f) => [`file:${f.root}/${f.path}`, f]));
   const now = (await tx<{ now: string }[]>`select now()::text as now`)[0]!.now;
 
   // A node's component; its file is the one at its path (agents, workflows and steps are declared in a file).
@@ -193,7 +196,11 @@ export const components = async (tx: postgres.TransactionSql): Promise<Component
     const ids = [...(files.get(id) ?? [])].sort();
     const topFiles = ids.map((fid) => ({ id: fid, path: pathOf.get(fid)!, edges: degree.get(pathOf.get(fid)!) ?? 0 }))
       .filter((f) => f.edges > 0).sort((x, y) => y.edges - x.edges || x.path.localeCompare(y.path)).slice(0, TOP_FILES);
-    return { id, domain, slug, label, group, status: ids.length > 0 ? 'built' : 'reserved', rules, fileCount: ids.length, fileIds: ids.slice(0, FILE_ID_LIMIT), topFiles, diagnostics: diagCount.get(id) ?? 0 };
+    const listed = ids.slice(0, FILE_ID_LIMIT).map((nodeId): ComponentFile => {
+      const f = fileRow.get(nodeId);
+      return { nodeId, fileId: f?.id ?? '', path: pathOf.get(nodeId)!, sha: f?.sha256?.slice(0, 12) ?? null };
+    });
+    return { id, domain, slug, label, group, status: ids.length > 0 ? 'built' : 'reserved', rules, fileCount: ids.length, files: listed, topFiles, diagnostics: diagCount.get(id) ?? 0 };
   };
   const rows: ComponentRow[] = [
     ...COMPONENTS.map((c) => row(componentId(c.domain, c.slug), c.domain, c.slug, c.label, c.group ?? null, c.rules)),

@@ -46,14 +46,16 @@ describe('hudComponents', () => {
     const n = (await db.sql<{ n: number }[]>`select count(*)::int as n from graph_nodes where kind = 'file'`)[0]!.n;
     expect(c.totals.files).toBe(n);
     expect(c.components.reduce((s, r) => s + r.fileCount, 0)).toBe(n);
-    const all = c.components.flatMap((r) => r.fileIds);
+    const all = c.components.flatMap((r) => r.files.map((f) => f.nodeId));
     expect(new Set(all).size).toBe(all.length);
     const byId = new Map(c.components.map((r) => [r.id, r]));
     expect(byId.get('CORE:orchestrator')).toMatchObject({ status: 'built', fileCount: 2 });
-    expect(byId.get('RECORDS:vocal-dna')?.fileIds).toEqual(['file:repo/agents/x3lius-vocal-dna.agent.md', 'file:repo/records/x3lius/vocal-dna/v.ts']);
-    expect(byId.get('RECORDS:other')?.fileIds).toContain('file:repo/records/x3lius/music-system.ts');
-    expect(byId.get('shared')?.fileIds).toContain('file:repo/docs/notes.md');
-    expect(byId.get('GOVERNANCE:legal')).toMatchObject({ status: 'reserved', fileCount: 0, fileIds: [] });
+    expect(byId.get('RECORDS:vocal-dna')?.files.map((f) => f.nodeId)).toEqual(['file:repo/agents/x3lius-vocal-dna.agent.md', 'file:repo/records/x3lius/vocal-dna/v.ts']);
+    expect(byId.get('RECORDS:other')?.files.map((f) => f.nodeId)).toContain('file:repo/records/x3lius/music-system.ts');
+    expect(byId.get('shared')?.files.map((f) => f.nodeId)).toContain('file:repo/docs/notes.md');
+    expect(byId.get('GOVERNANCE:legal')).toMatchObject({ status: 'reserved', fileCount: 0, files: [] });
+    // Each listed file carries the viewer's id and a hash prefix.
+    expect(byId.get('CORE:orchestrator')?.files[0]).toMatchObject({ path: 'core/orchestrator/a.ts', fileId: expect.stringMatching(/^[0-9a-f-]{36}$/), sha: expect.stringMatching(/^[0-9a-f]{12}$/) });
   });
 
   it('discloses its links as aggregates of graph_edges: aggregated + internal + unmapped = every edge', async () => {
