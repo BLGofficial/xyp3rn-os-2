@@ -44,11 +44,7 @@ const releasesAnswer = async (sql: Queryable): Promise<LookupAnswer> => {
   const rows = await sql<{ title: string; kind: string; status: string; release_date: string | null }[]>`
     select title, kind, status, to_char(release_date, 'YYYY-MM-DD') release_date from releases order by coalesce(release_date, created_at::date) desc limit 5`;
   if (rows.length === 0) return NONE;
-  let reply = `Latest releases: ${rows.map(r => `${r.title} (${r.kind}, ${r.status}${r.release_date ? `, ${r.release_date}` : ''})`).join('; ')}.`;
-  const pendingRows = await sql<{ n: number }[]>`select count(*)::int n from release_schedule_requests where applied_at is null`;
-  const pending = pendingRows[0]!.n;
-  if (pending > 0) reply += ` ${pending} schedule request(s) pending.`;
-  return { reply, source: 'template' };
+  return { reply: `Latest releases: ${rows.map(r => `${r.title} (${r.kind}, ${r.status}${r.release_date ? `, ${r.release_date}` : ''})`).join('; ')}.`, source: 'template' };
 };
 
 const workflowAnswer = async (sql: Queryable): Promise<LookupAnswer> => {

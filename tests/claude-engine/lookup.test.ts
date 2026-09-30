@@ -23,13 +23,10 @@ describe('answerLookup: read-only answers from stored data', () => {
   it('answers every branch from stored data, honestly, without a model', async () => {
     await db.sql`insert into approval_queue (item_type, item_id, request) values ('knowledge_candidate', ${randomUUID()}, '{}'::jsonb)`;
 
-    // Schema note: public.releases guards status via trg_releases_guard (migration
-    // 20260925115000) — a fresh row must be inserted as 'draft' (only xyp_apply_release_decision,
-    // via a full tracks/splits/approval workflow, can move it to 'scheduled'). That workflow is out
-    // of scope for this read-only lookup test, so the fixture and expected reply use 'draft' in
-    // place of the brief's literal 'scheduled', while still exercising the same template path.
-    const [release] = await db.sql<{ id: string }[]>`insert into releases (title, kind, status, release_date) values ('Night Drive', 'single', 'draft', '2026-11-01') returning id`;
-    await db.sql`insert into release_schedule_requests (release_id, release_date) values (${release!.id}, '2026-11-01')`;
+    // A fresh release is a draft (only the release-decision path schedules one); every release
+    // carries the agent run that created it.
+    const [creator] = await db.sql<{ id: string }[]>`insert into agent_runs (agent_name, input, status, completed_at) values ('records-catalog', '{}'::jsonb, 'success', now()) returning id`;
+    await db.sql`insert into releases (title, artist, kind, status, release_date, agent_run_id) values ('Night Drive', 'XYP3RN', 'single', 'draft', '2026-11-01', ${creator!.id})`;
 
     await db.sql`
       insert into workflow_runs (workflow_name, spec_sha256, spec, input, status, failed_step, error_detail, completed_at)
@@ -59,7 +56,7 @@ describe('answerLookup: read-only answers from stored data', () => {
       .toEqual({ reply: '1 approval is pending: knowledge_candidate.', source: 'template' });
 
     expect(await answerLookup(db.sql, 'what releases are pending', spy))
-      .toEqual({ reply: 'Latest releases: Night Drive (single, draft, 2026-11-01). 1 schedule request(s) pending.', source: 'template' });
+      .toEqual({ reply: 'Latest releases: Night Drive (single, draft, 2026-11-01).', source: 'template' });
 
     expect(await answerLookup(db.sql, 'status of the last workflow run', spy))
       .toEqual({ reply: 'Recent runs: publish-release error at notify. 1 agent run(s) failed in the last 24 hours.', source: 'template' });
@@ -84,7 +81,6 @@ describe('answerLookup: read-only answers from stored data', () => {
       (select count(*) from research_findings)::int research_findings,
       (select count(*) from approval_queue)::int approval_queue,
       (select count(*) from releases)::int releases,
-      (select count(*) from release_schedule_requests)::int release_schedule_requests,
       (select count(*) from research_runs)::int research_runs,
       (select count(*) from workflow_runs)::int workflow_runs,
       (select count(*) from agent_runs)::int agent_runs`;

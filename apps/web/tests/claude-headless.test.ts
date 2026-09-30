@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { ClaudeRunner } from '../../../core/llm/claude-cli';
-import { REPO_ROOT } from '../../../core/repo';
+import type { ClaudeRunner } from '../../../core/llm/claude-cli.ts';
+import { REPO_ROOT } from '../../../core/repo.ts';
 import { DEEP_TIMEOUT_MS, runDeep, runSkill, SKILL_TIMEOUT_MS } from '../lib/claude-headless';
 
 const ok = (text: string, sessionId = 'sess-1') => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: text, session_id: sessionId, usage: {} });

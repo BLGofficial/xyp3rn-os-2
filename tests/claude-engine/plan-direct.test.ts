@@ -10,7 +10,7 @@ describe('planDirect: a skill has already chosen the target', () => {
     expect(p).toMatchObject({ action: 'run-service', service: 'run-research', input: { request: 'write a hook about research' } });
   });
   it('holds a domain with no entrypoint', () => {
-    expect(planDirect('x', { domain: 'TECH' })).toMatchObject({ action: 'hold' });
+    expect(planDirect('x', { domain: 'GOVERNANCE' })).toMatchObject({ action: 'hold' });
   });
   it('runs a registered workflow by id and refuses unknown ids', () => {
     expect(planDirect('a song', { workflow: 'song-to-suno' })).toMatchObject({ action: 'run-workflow', workflow: WORKFLOWS['song-to-suno']!.path });
