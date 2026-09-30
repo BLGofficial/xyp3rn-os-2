@@ -48,7 +48,7 @@ export const cancelJob = (userId: string, requestId: string): 'cancelled' | 'not
   const job = jobs.get(keyOf(userId, requestId));
   if (!job || job.view.state !== 'running') return 'not-found';
   if (job.view.action !== 'skill' && job.view.action !== 'deep') return 'not-cancellable';
-  job.view = { ...job.view, state: 'done', status: 'cancelled', reply: 'Cancelled. Anything it already started is listed in Live Events.' };
+  job.view = { ...job.view, state: 'done', status: 'cancelled', reply: 'Cancelled. Runs it had already started may stay marked running in Live Events.' };
   job.controller.abort(new Error('cancelled'));
   return 'cancelled';
 };

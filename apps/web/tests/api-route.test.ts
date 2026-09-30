@@ -35,11 +35,29 @@ const ask = (body: Record<string, unknown>, { token = 'operator', origin = base 
 const status = (requestId: string, token = 'operator') => GET(new NextRequest(`${base}/api/ask/${requestId}`, { headers: { cookie: `mercury_session=${token}` } }));
 const until = async (requestId: string, token = 'operator') => { for (let i = 0; i < 50; i++) { const b = await (await status(requestId, token)).json(); if (b.state === 'done') return b; await new Promise(r => setTimeout(r, 10)); } throw new Error('still running'); };
 const RECORDS = 'Write a hook and two verses for the new X3LIUS track';
-const RESEARCH = 'Find the best current method for controlling dark baritone vocals in Suno research.';
+// F2: with LLM_ENGINE unset (this suite's default), the engine is off, so the spoken-skill wording
+// this text would otherwise trigger (tier 1) is no longer recognised: it goes through planRequest.
+const RESEARCH = 'Research the best current method for controlling dark baritone vocals in Suno.';
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const selection = { selected: [], evidence: [] } as never;
 let release: () => void;
 beforeEach(() => { run.calls = []; run.impl = null; });
+
+describe('GET /api/session: exposes the claude-code engine flag (F2)', () => {
+  it('reports engine: true only when LLM_ENGINE=claude-code', async () => {
+    const saved = process.env.LLM_ENGINE;
+    try {
+      delete process.env.LLM_ENGINE;
+      const off = await GET(new NextRequest(`${base}/api/session`, { headers: { cookie: 'mercury_session=operator' } }));
+      expect(await off.json()).toMatchObject({ engine: false });
+      process.env.LLM_ENGINE = 'claude-code';
+      const on = await GET(new NextRequest(`${base}/api/session`, { headers: { cookie: 'mercury_session=operator' } }));
+      expect(await on.json()).toMatchObject({ engine: true });
+    } finally {
+      if (saved === undefined) delete process.env.LLM_ENGINE; else process.env.LLM_ENGINE = saved;
+    }
+  });
+});
 
 describe('POST /api/ask: access and validation', () => {
   it('denies cross-origin, anonymous and non-runtime roles before planning or running', async () => {

@@ -12,7 +12,7 @@ export async function GET(request:NextRequest){
   try{
     const identity=await authenticate(sql,tokenOf(request));if(!identity)return json({error:'Authentication required'},401);
     const path=request.nextUrl.pathname;
-    if(path==='/api/session')return json({identity});
+    if(path==='/api/session')return json({identity,engine:process.env.LLM_ENGINE==='claude-code'});
     if(path==='/api/projection')return json(await buildProjection(sql,identity));
     if(path.startsWith('/api/ask/')){
       // Run status for the caller's own request; other users' request ids are indistinguishable from unknown ones.
@@ -69,8 +69,9 @@ export async function POST(request:NextRequest){
       if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId))return json({error:'requestId must be a UUID'},400);
       if(typeof projectSlug!=='string'||!/^[a-z0-9][a-z0-9-]{0,63}$/.test(projectSlug))return json({error:'projectSlug must be a lowercase slug'},400);
       const {selectTier}=await import('../../../lib/tiers');const {runSkill,runDeep}=await import('../../../lib/claude-headless');
-      const tier=selectTier(request,{...(input.skill!==undefined?{skill:input.skill}:{}),deep:input.deep===true});
+      const tier=selectTier(request,{...(input.skill!==undefined?{skill:input.skill}:{}),deep:input.deep===true,engine:process.env.LLM_ENGINE==='claude-code'});
       if(tier.kind==='invalid-skill')return json({error:'unknown skill'},400);
+      if(tier.kind==='engine-off')return json({error:'Skills and deep tasks need LLM_ENGINE=claude-code on the Mercury server'},400);
       const {ENTRYPOINTS,planRequest}=await import('../../../../../core/orchestrator/orchestrate');const {formatReply,refsOf,runPlan}=await import('../../../../../core/orchestrator/ask');
       const {createJob,findJob,runningCount,MAX_RUNNING_PER_USER,MAX_DEEP_PER_USER}=await import('../../../lib/ask-jobs');const {createRuntimeDeps}=await import('../../../../../core/runtime/deps');
       // From here to createJob there is no await: a duplicate submission cannot slip in and start a second run.

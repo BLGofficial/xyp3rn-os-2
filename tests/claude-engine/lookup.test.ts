@@ -74,7 +74,7 @@ describe('answerLookup: read-only answers from stored data', () => {
 
     // Keywords given, nothing stored matches them: say so honestly, never substitute an unrelated row.
     expect(await answerLookup(db.sql, 'what did the research find about tempo drift issues'))
-      .toEqual({ reply: 'No stored findings match that yet. Send it as a normal request to start a research run.', source: 'none' });
+      .toEqual({ reply: 'No stored findings match that yet. Press Research (or say "research …") to start a research run.', source: 'none' });
 
     expect(called).toBe(false);
   });

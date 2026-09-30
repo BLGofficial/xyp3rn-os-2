@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AskResult, RunnablePlan } from '../../../core/orchestrator/ask';
 
 vi.mock('../lib/db', () => ({ sql: {} }));
@@ -47,6 +47,12 @@ const status = (id: string) => GET(new NextRequest(`${base}/api/ask/${id}`, { he
 const until = async (id: string) => { for (let i = 0; i < 50; i++) { const b = await (await status(id)).json(); if (b.state === 'done') return b; await new Promise(r => setTimeout(r, 10)); } throw new Error('still running'); };
 const untilCalled = async () => { for (let i = 0; i < 50 && lookup.calls.length === 0; i++) await new Promise(r => setTimeout(r, 5)); };
 beforeEach(() => { cli.calls = []; cli.hold = false; cli.deferred = null; lookup.calls = []; lookup.throwError = null; lookup.hold = null; run.impl = null; });
+
+// These tiers require LLM_ENGINE=claude-code (F2: the skill/deep child's ANTHROPIC_API_KEY is
+// stripped, so with the engine off every Anthropic agent a skill touches would have no credentials).
+const prevEngine = process.env.LLM_ENGINE;
+beforeAll(() => { process.env.LLM_ENGINE = 'claude-code'; });
+afterAll(() => { if (prevEngine === undefined) delete process.env.LLM_ENGINE; else process.env.LLM_ENGINE = prevEngine; });
 
 describe('POST /api/ask tiers', () => {
   it('tier 1: button skill and spoken skill run the skill with the session id', async () => {
@@ -114,7 +120,8 @@ describe('POST /api/ask tiers', () => {
     expect((await cancel(randomUUID())).status).toBe(404);
     expect((await cancel(id)).status).toBe(200);
     expect(cli.calls[0]!.signal!.aborted).toBe(true);
-    expect(await until(id)).toMatchObject({ state: 'done', status: 'cancelled' });
+    // F10: the reply names the risk plainly instead of implying everything is accounted for.
+    expect(await until(id)).toMatchObject({ state: 'done', status: 'cancelled', reply: 'Cancelled. Runs it had already started may stay marked running in Live Events.' });
     expect((await cancel(id)).status).toBe(404);
   });
 
@@ -144,5 +151,18 @@ describe('POST /api/ask tiers', () => {
     const r = await ask({ request: 'zzz qqq', requestId: randomUUID() });
     expect(await r.json()).toMatchObject({ action: 'clarify' });
     expect(cli.calls).toHaveLength(0);
+  });
+
+  it('F2: with LLM_ENGINE unset, an explicit skill is refused with a 400 and runSkill never runs', async () => {
+    const saved = process.env.LLM_ENGINE;
+    delete process.env.LLM_ENGINE;
+    try {
+      const r = await ask({ request: 'dark vocals', requestId: randomUUID(), skill: 'xyp-research' });
+      expect(r.status).toBe(400);
+      expect(await r.json()).toEqual({ error: 'Skills and deep tasks need LLM_ENGINE=claude-code on the Mercury server' });
+      expect(cli.calls).toHaveLength(0);
+    } finally {
+      if (saved === undefined) delete process.env.LLM_ENGINE; else process.env.LLM_ENGINE = saved;
+    }
   });
 });
