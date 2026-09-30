@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ClaudeRunner } from '../../../core/llm/claude-cli';
+import { REPO_ROOT } from '../../../core/repo';
 import { DEEP_TIMEOUT_MS, runDeep, runSkill, SKILL_TIMEOUT_MS } from '../lib/claude-headless';
 
 const ok = (text: string, sessionId = 'sess-1') => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: text, session_id: sessionId, usage: {} });
@@ -93,5 +96,43 @@ describe('runDeep', () => {
     expect(c.args.indexOf('--disallowedTools')).toBeGreaterThan(-1);
     expect(c.args.indexOf('--disallowedTools')).toBeLessThan(c.args.indexOf('--allowedTools'));
     expect(c.args.slice(c.args.indexOf('--disallowedTools') + 1, c.args.indexOf('--allowedTools'))).toEqual(['Read(./**/.env*)', 'Read(./.env*)']);
+  });
+});
+
+describe('F11: default cwd is the shared, frozen REPO_ROOT, not a live env lookup', () => {
+  it('runSkill and runDeep ignore a later XYP_REPO_ROOT change and still use core/repo.ts\'s REPO_ROOT', async () => {
+    const saved = process.env.XYP_REPO_ROOT;
+    process.env.XYP_REPO_ROOT = 'Z:/somewhere-else';
+    try {
+      const f = fake(ok('done'));
+      await runSkill('xyp-music', 'x', { run: f.run });
+      expect(f.calls[0]!.cwd).toBe(REPO_ROOT);
+      expect(f.calls[0]!.cwd).not.toBe('Z:/somewhere-else');
+      const g = fake(ok('done'));
+      await runDeep('x', { run: g.run });
+      expect(g.calls[0]!.cwd).toBe(REPO_ROOT);
+    } finally {
+      if (saved === undefined) delete process.env.XYP_REPO_ROOT; else process.env.XYP_REPO_ROOT = saved;
+    }
+  });
+});
+
+describe('F4: project permissions must not widen headless skill/deep runs', () => {
+  // skillArgs/deepArgs run with --setting-sources project, so .claude/settings.json merges into
+  // every headless skill/deep run. Its own explicit --tools/--allowedTools/--disallowedTools list
+  // is the only thing this guarantees the permission surface stays inside; a `permissions.allow`
+  // rule, a looser `permissions.defaultMode`, or an `additionalDirectories` entry in the checked-in
+  // project settings would widen that surface underneath it. This test fails loudly if that
+  // ever happens, rather than relying on someone noticing during review.
+  it('.claude/settings.json has no permissions.allow, defaultMode, or additionalDirectories', () => {
+    const path = join(import.meta.dirname, '../../../.claude/settings.json');
+    const settings = JSON.parse(readFileSync(path, 'utf8')) as { permissions?: { allow?: unknown[]; defaultMode?: unknown; additionalDirectories?: unknown[] } };
+    const permissions = settings.permissions ?? {};
+    expect(Array.isArray(permissions.allow) ? permissions.allow.length : 0,
+      '.claude/settings.json sets permissions.allow, which merges into headless skill/deep runs (--setting-sources project) and would widen what they can do').toBe(0);
+    expect(permissions.defaultMode,
+      '.claude/settings.json sets permissions.defaultMode, which merges into headless skill/deep runs (--setting-sources project) and could relax --permission-mode dontAsk').toBeUndefined();
+    expect(Array.isArray(permissions.additionalDirectories) ? permissions.additionalDirectories.length : 0,
+      '.claude/settings.json sets permissions.additionalDirectories, which merges into headless skill/deep runs (--setting-sources project) and would widen the repo-scoped Read/Grep/Glob rules').toBe(0);
   });
 });

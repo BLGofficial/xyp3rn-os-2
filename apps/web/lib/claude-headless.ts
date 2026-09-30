@@ -1,5 +1,6 @@
 import { isLoggedOut, parseClaudeResult, runClaudeCli, type ClaudeRunner } from '../../../core/llm/claude-cli';
 import { MAX_REPLY_CHARS } from '../../../core/orchestrator/ask';
+import { REPO_ROOT } from '../../../core/repo';
 import type { SkillName } from './skills';
 
 /**
@@ -28,7 +29,7 @@ const launch = async (args: string[], prompt: string, timeoutMs: number, o: Opts
   const run = o.run ?? runClaudeCli;
   let out;
   try {
-    out = await run(args, prompt, { cwd: o.cwd ?? process.env.XYP_REPO_ROOT ?? process.cwd(), timeoutMs, ...(o.signal ? { signal: o.signal } : {}) });
+    out = await run(args, prompt, { cwd: o.cwd ?? REPO_ROOT, timeoutMs, ...(o.signal ? { signal: o.signal } : {}) });
   } catch (e) {
     const err = e as NodeJS.ErrnoException & { name?: string };
     if (err.code === 'ENOENT') return { ok: false, reply: 'Claude Code is not installed on this PC (claude not found).' };
