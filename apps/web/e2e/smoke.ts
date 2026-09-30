@@ -83,7 +83,8 @@ const db = await createTestDb('aos01_web_smoke', { migrated: true });
 const vaultDir = mkdtempSync(join(tmpdir(), 'aos01-smoke-vault-'));
 const url = new URL(databaseUrl());
 url.pathname = `/${db.name}`;
-const server = spawn(join(REPO_ROOT, 'apps', 'web', 'node_modules', '.bin', 'next'), ['start', '-H', '127.0.0.1', '-p', String(PORT)], {
+// Next's JS entry under this Node (portable: the .bin shim is a .cmd on Windows).
+const server = spawn(process.execPath, [join(REPO_ROOT, 'apps', 'web', 'node_modules', 'next', 'dist', 'bin', 'next'), 'start', '-H', '127.0.0.1', '-p', String(PORT)], {
   cwd: join(REPO_ROOT, 'apps', 'web'),
   env: { ...process.env, XYP_DATABASE_URL: url.toString(), XYP_VAULT_DIR: vaultDir, XYP_WEB_TOKEN: TOKEN, XYP_OWNER: 'owner (smoke)' },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -556,6 +557,14 @@ try {
   await page.press('#command-q', 'Enter');
   await page.waitForURL(/\/search\?q=instrumentation-node/);
   check((await page.locator('[data-search-group=file] li', { hasText: 'apps/web/instrumentation-node.ts' }).count()) === 1, 'the command input searches the whole index (a GET to /search)');
+
+  // Ask: a question about stored data is answered at once from the DB (tier 2, no model), on its own page.
+  await page.goto(`${BASE}/`);
+  await page.fill('#command-q', 'how many approvals are pending');
+  await page.click('form[aria-label="Command input"] button:has-text("Ask")');
+  await page.waitForURL(/\/ask\/[0-9a-f-]{36}$/);
+  check((await page.textContent('main'))?.includes('Stored data') === true && (await page.locator('main .card[aria-live]').count()) === 1,
+    'Ask answers a stored-data question on /ask/[id]');
 
   // Reduced motion: no transition on a mark, and a far-side selection turns at once (no 550 ms turn).
   await page.emulateMedia({ reducedMotion: 'reduce' });

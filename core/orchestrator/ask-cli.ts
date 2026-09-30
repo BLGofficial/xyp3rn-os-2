@@ -1,14 +1,10 @@
 import { join } from 'node:path';
 import { createAgentRegistry } from '../agent-registry/registry.ts';
 import { connect } from '../db/client.ts';
-import { LLM_TIMEOUT_MS } from '../llm/runner.ts';
 import { HANDLERS } from '../runtime/handlers.ts';
 import { createRuntimeLlmRunner } from '../runtime/programs.ts';
 import { createRuntimeTools } from '../runtime/tools.ts';
-import { hasLlmSteps, loadWorkflow, runWorkflow } from '../workflow-engine/engine.ts';
-import { runResearch } from '../../research-intelligence/entrypoint.ts';
-import { runMusicSystem } from '../../records/x3lius/entrypoint.ts';
-import { runTechSystem } from '../../tech/entrypoint.ts';
+import { askFailed, runPlan } from './ask.ts';
 import { ENTRYPOINTS, planDirect, planRequest, WORKFLOWS } from './orchestrate.ts';
 import { ROUTABLE_DOMAINS, type RoutableDomain } from './router.ts';
 
@@ -47,26 +43,9 @@ const sql = connect(undefined, { max: 3 });
 try {
   const registry = createAgentRegistry({ dir: join(import.meta.dirname, '..', '..', 'agents') });
   const deps = { sql, registry, tools: createRuntimeTools({ sql }), handlers: HANDLERS, llmRunner: createRuntimeLlmRunner() };
-  if (plan.action === 'run-service' && plan.service === 'run-research') {
-    const r = await runResearch(deps, { question: request!, projectSlug });
-    console.log(JSON.stringify(r, null, 2));
-    if (r.status === 'error') process.exitCode = 1;
-  } else if (plan.action === 'run-service' && plan.service === 'x3lius-music-system') {
-    const r = await runMusicSystem(deps, { request: request! });
-    console.log(JSON.stringify(r, null, 2));
-    if (r.status !== 'success') process.exitCode = 1;
-  } else if (plan.action === 'run-service' && plan.service === 'tech-system') {
-    const r = await runTechSystem(deps, { request: request! });
-    console.log(JSON.stringify(r, null, 2));
-    if (r.status !== 'success') process.exitCode = 1;
-  } else if (plan.action === 'run-workflow') {
-    const wf = loadWorkflow(plan.workflow, registry);
-    const r = await runWorkflow(deps, wf, plan.input, hasLlmSteps(wf, registry) ? { timeoutMs: LLM_TIMEOUT_MS } : {});
-    console.log(JSON.stringify(r, null, 2));
-    if (r.status === 'error') process.exitCode = 1;
-  } else {
-    throw new Error(`unknown entrypoint service: ${plan.service}`);
-  }
+  const outcome = await runPlan(deps, plan, { projectSlug });
+  console.log(JSON.stringify(outcome.result, null, 2));
+  if (askFailed(outcome)) process.exitCode = 1;
 } finally {
   await sql.end();
 }
