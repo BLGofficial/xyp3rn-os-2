@@ -173,7 +173,9 @@ const saveHistory=(h:Entry[])=>{try{sessionStorage.setItem(HISTORY_KEY,JSON.stri
 /** The state shown for an entry, taken only from the server's view (or the transport error). */
 const stateOf=(e:Entry):[string,string]=>e.error?['error','Request failed']:!e.view||e.view.state==='running'?['running','Running']
   :e.view.action==='clarify'||e.view.status==='clarify'?['clarify','Needs clarification']:e.view.action==='hold'?['hold','On hold']
-  :e.view.status==='error'?['error','Failed']:e.view.approvalRequired?['approval','Approval required']:['success','Succeeded'];
+  :e.view.status==='cancelled'?['hold','Cancelled']
+  :e.view.status==='error'?['error','Failed']:e.view.approvalRequired?['approval','Approval required']
+  :(e.view.action==='skill'||e.view.action==='deep')?['success','Finished']:['success','Succeeded'];
 const approvalHref=(id:string)=>`?view=graph&domain=governance&node=${encodeURIComponent(`approval_queue:${id}`)}`;
 
 /** Assistant panel: typed, pasted or externally dictated text (e.g. Wispr Flow). Only the Send button submits. */
@@ -192,16 +194,18 @@ function CommandPanel({canRun,post,onDone}:{canRun:boolean;post:(path:string,inp
   const send=async(e:FormEvent|null,skill?:string)=>{e?.preventDefault();
     // Ref guard: a double click lands before React re-renders the disabled button.
     if(inFlight.current||!text.trim())return;inFlight.current=true;setBusy(true);
-    const sent=text;
+    const sent=text;const wasDeep=deep&&!skill;
     // One request id per submitted text and mode: re-sending after a failure dedupes on the server instead of running twice; a different button is a new request.
     const mode=`${skill??''}|${deep}`;if(submission.current?.text!==sent||submission.current.mode!==mode)submission.current={text:sent,id:crypto.randomUUID(),mode};const id=submission.current.id;
     change(h=>h.some(x=>x.id===id)?h.map(x=>x.id===id?{...x,error:undefined}:x):[...h,{id,request:sent,at:new Date().toISOString()}]);
-    try{const r=await track(id,await post('ask',{request:sent,requestId:id,...(skill?{skill}:{}),...(deep&&!skill?{deep:true}:{})}));
+    try{const r=await track(id,await post('ask',{request:sent,requestId:id,...(skill?{skill}:{}),...(wasDeep?{deep:true}:{})}));
       submission.current=null;
       // Clear only what was sent, and only once work ran: clarify/hold keep the draft for editing; newer dictation is kept. Lookups are already answered.
       if(r.action.startsWith('run-')||r.action==='skill'||r.action==='deep'||r.action==='lookup')setText(t=>t===sent?'':t);if(speech.enabled)void speech.speak(r.reply);onDone();}
     catch(err){update(id,{error:`${(err as Error).message||'Request failed'}. Your draft is kept; press Send to retry (it will not run twice).`});}
-    finally{inFlight.current=false;setBusy(false);if(document.activeElement===document.body||document.activeElement===sendButton.current)box.current?.focus();}};
+    // A deep send's checkbox does not track any one run: leaving it checked after Send would make
+    // the next, unrelated request deep too. Cleared once this send is done, whatever the outcome.
+    finally{if(wasDeep)setDeep(false);inFlight.current=false;setBusy(false);if(document.activeElement===document.body||document.activeElement===sendButton.current)box.current?.focus();}};
   const lastReply=[...history].reverse().find(e=>e.view?.state==='done')?.view?.reply;
   return <section className="panel-frame command-panel" aria-labelledby="command-title"><h2 id="command-title">Assistant</h2>
     <form onSubmit={send}>
