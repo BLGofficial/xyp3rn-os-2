@@ -13,8 +13,22 @@ describe('planDirect: a skill has already chosen the target', () => {
     expect(planDirect('x', { domain: 'TECH' })).toMatchObject({ action: 'hold' });
   });
   it('runs a registered workflow by id and refuses unknown ids', () => {
-    expect(planDirect('a song', { workflow: 'song-to-suno' })).toMatchObject({ action: 'run-workflow', workflow: WORKFLOWS['song-to-suno'] });
+    expect(planDirect('a song', { workflow: 'song-to-suno' })).toMatchObject({ action: 'run-workflow', workflow: WORKFLOWS['song-to-suno']!.path });
     expect(() => planDirect('a song', { workflow: '../etc/passwd' })).toThrow('unknown workflow');
+  });
+  it('retrieve-and-summarize plan input carries query equal to the request text', () => {
+    const p = planDirect('vocal production notes', { workflow: 'retrieve-and-summarize' });
+    expect(p).toMatchObject({ action: 'run-workflow', input: { request: 'vocal production notes', query: 'vocal production notes' } });
+  });
+  it('song-to-suno plan input picks the named Suno version as sunoModel, lower-cased', () => {
+    const named = planDirect('a pop song for v4.5', { workflow: 'song-to-suno' });
+    expect(named).toMatchObject({ action: 'run-workflow', input: { request: 'a pop song for v4.5', sunoModel: 'v4.5' } });
+
+    const upperCase = planDirect('a song for V3.5A', { workflow: 'song-to-suno' });
+    expect(upperCase).toMatchObject({ action: 'run-workflow', input: { request: 'a song for V3.5A', sunoModel: 'v3.5a' } });
+
+    const none = planDirect('a pop song', { workflow: 'song-to-suno' });
+    expect(none).toMatchObject({ action: 'run-workflow', input: { request: 'a pop song', sunoModel: 'v5' } });
   });
   it('uses the registered entrypoints by default', () => {
     expect(planDirect('x', { domain: 'RECORDS' })).toMatchObject({ service: (ENTRYPOINTS.RECORDS as { service: string }).service });
