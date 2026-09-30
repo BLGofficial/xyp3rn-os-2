@@ -17,3 +17,6 @@
 .command-reply .approval-note{color:#f0d49b}
 .assistant-log{list-style:none;margin:8px 0 0;padding:0;max-height:220px;overflow:auto;scrollbar-width:thin;scrollbar-color:#28414d transparent}.assistant-log li{border-top:1px solid #27404b;padding:6px 0}.assistant-log p{margin:2px 0}.assistant-request{color:#a7cce0;white-space:pre-wrap;word-break:break-word}.assistant-log small{display:flex;flex-wrap:wrap;gap:4px 8px}.assistant-log a{color:#d3bd8c}.assistant-log code{font-size:8px;word-break:break-all}.assistant-state{display:inline-block;padding:0 5px;border:1px solid currentColor;border-radius:2px;font-size:8px;letter-spacing:1px;text-transform:uppercase}.assistant-state.running{color:#59bee4}.assistant-state.success{color:#6fd3a0}.assistant-state.approval{color:#f0d49b}.assistant-state.clarify,.assistant-state.hold{color:#c9b3f0}.assistant-state.error{color:#f19a8a}
 .speech-controls input[type=range]{width:100%;accent-color:#d3bd8c}.speech-controls output{color:#e6eef2;margin-left:4px}
+.command-panel .skill-row{display:flex;flex-wrap:wrap;gap:.4rem;border:0;padding:0;margin:.5rem 0 0}
+.command-panel .skill-row legend{font-size:.7rem;letter-spacing:.08em;opacity:.7;margin-bottom:.25rem}
+.command-panel .deep-toggle{display:flex;gap:.4rem;align-items:center;font-size:.8rem;margin-top:.4rem}

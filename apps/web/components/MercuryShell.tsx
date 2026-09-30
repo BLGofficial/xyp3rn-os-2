@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { DOMAIN_META, DOMAINS, type Domain } from '../../../core/contracts/taxonomy';
 import { radialLayout } from '../lib/layout';
 import { speechChunks, speechText } from '../lib/speech-text';
+import { SKILLS } from '../lib/skills';
 import type { GraphNode, Projection } from '../lib/types';
 
 const NAV=['Graph','Agents','Workflows','Knowledge','Research','Records','Tech','Governance'];
@@ -105,7 +106,7 @@ export function MercuryShell(){
     {selected&&<aside className="inspector panel-frame" aria-label="Entity inspector"><header><span>ENTITY INSPECTOR</span><button aria-label="Close inspector" onClick={close}>×</button></header>{current?<><p className="eyebrow" style={{color:DOMAIN_META[current.domain].color}}>{current.entityType} / {DOMAIN_META[current.domain].label}</p><h2>{current.label}</h2><span className={`state ${current.status}`}>{current.status}</span><dl><dt>Source</dt><dd><code>{current.sourceRef}</code></dd><dt>Entity ID</dt><dd><code>{current.entityId}</code></dd></dl>{current.kind==='domain'&&<button className="gold-button" onClick={()=>navigate('list',current.domain)}>Open domain view</button>}{Object.entries(current.metadata).map(([key,value])=><section className="inspector-field" key={key}><h3>{words(key)}</h3>{typeof value==='object'?<pre>{JSON.stringify(value,null,2)}</pre>:<p>{value===null?'Not measured':String(value)}</p>}</section>)}{current.entityType==='approval'&&current.status==='pending'&&data.identity.permissions.includes('approval.decide')&&<form onSubmit={e=>{e.preventDefault();void decide('approve');}}><label htmlFor="decision-reason">Decision reason</label><textarea id="decision-reason" value={reason} onChange={e=>setReason(e.target.value)} required/><div className="decision-buttons"><button className="gold-button" disabled={busy||!reason.trim()}>Approve</button><button type="button" disabled={busy||!reason.trim()} onClick={()=>void decide('reject')}>Reject</button></div></form>}<a className="deep-link" href={current.href}>Open entity deep link ↗</a></>:<Empty message="Entity unavailable or access restricted"/>}</aside>}
   </main>;
 }
-type AskReply={requestId:string;state:'running'|'done';action:string;route:{status:string;domain?:string};status:string;reply:string;approvalRequired?:boolean;
+type AskReply={requestId:string;state:'running'|'done';action:string;route:{status:string;domain?:string};status:string;reply:string;approvalRequired?:boolean;sessionId?:string;
   refs?:{workflowRunId?:string;researchRunId?:string;agentRunIds:string[];artifactIds:string[];approvalIds:string[]}};
 const getJson=async(path:string)=>{const r=await fetch(path,{cache:'no-store'});const body=await r.json();if(!r.ok)throw new Error(body.error);return body;};
 
@@ -177,8 +178,8 @@ const approvalHref=(id:string)=>`?view=graph&domain=governance&node=${encodeURIC
 
 /** Assistant panel: typed, pasted or externally dictated text (e.g. Wispr Flow). Only the Send button submits. */
 function CommandPanel({canRun,post,onDone}:{canRun:boolean;post:(path:string,input:unknown)=>Promise<AskReply>;onDone:()=>void}){
-  const [text,setText]=useState('');const [busy,setBusy]=useState(false);const [history,setHistory]=useState<Entry[]>([]);
-  const speech=useSpeech();const submission=useRef<{text:string;id:string}|null>(null);const inFlight=useRef(false);
+  const [text,setText]=useState('');const [busy,setBusy]=useState(false);const [history,setHistory]=useState<Entry[]>([]);const [deep,setDeep]=useState(false);
+  const speech=useSpeech();const submission=useRef<{text:string;id:string;mode:string}|null>(null);const inFlight=useRef(false);
   const box=useRef<HTMLTextAreaElement>(null);const sendButton=useRef<HTMLButtonElement>(null);
   const change=useCallback((f:(h:Entry[])=>Entry[])=>setHistory(h=>{const n=f(h).slice(-HISTORY_MAX);saveHistory(n);return n;}),[]);
   const update=useCallback((id:string,patch:Partial<Entry>)=>change(h=>h.map(e=>e.id===id?{...e,...patch}:e)),[change]);
@@ -188,17 +189,17 @@ function CommandPanel({canRun,post,onDone}:{canRun:boolean;post:(path:string,inp
     update(id,{view:r,error:undefined});return r;},[update]);
   useEffect(()=>{const restored=loadHistory();setHistory(restored);
     for(const e of restored)if(!e.error&&e.view?.state==='running')track(e.id).catch(()=>update(e.id,{error:'Run status is no longer available (the server may have restarted). Check Live Events.'}));},[track,update]);
-  const send=async(e:FormEvent)=>{e.preventDefault();
+  const send=async(e:FormEvent|null,skill?:string)=>{e?.preventDefault();
     // Ref guard: a double click lands before React re-renders the disabled button.
     if(inFlight.current||!text.trim())return;inFlight.current=true;setBusy(true);
     const sent=text;
-    // One request id per submitted text: re-sending after a failure dedupes on the server instead of running twice.
-    if(submission.current?.text!==sent)submission.current={text:sent,id:crypto.randomUUID()};const id=submission.current.id;
+    // One request id per submitted text and mode: re-sending after a failure dedupes on the server instead of running twice; a different button is a new request.
+    const mode=`${skill??''}|${deep}`;if(submission.current?.text!==sent||submission.current.mode!==mode)submission.current={text:sent,id:crypto.randomUUID(),mode};const id=submission.current.id;
     change(h=>h.some(x=>x.id===id)?h.map(x=>x.id===id?{...x,error:undefined}:x):[...h,{id,request:sent,at:new Date().toISOString()}]);
-    try{const r=await track(id,await post('ask',{request:sent,requestId:id}));
+    try{const r=await track(id,await post('ask',{request:sent,requestId:id,...(skill?{skill}:{}),...(deep&&!skill?{deep:true}:{})}));
       submission.current=null;
-      // Clear only what was sent, and only once work ran: clarify/hold keep the draft for editing; newer dictation is kept.
-      if(r.action.startsWith('run-'))setText(t=>t===sent?'':t);if(speech.enabled)void speech.speak(r.reply);onDone();}
+      // Clear only what was sent, and only once work ran: clarify/hold keep the draft for editing; newer dictation is kept. Lookups are already answered.
+      if(r.action.startsWith('run-')||r.action==='skill'||r.action==='deep'||r.action==='lookup')setText(t=>t===sent?'':t);if(speech.enabled)void speech.speak(r.reply);onDone();}
     catch(err){update(id,{error:`${(err as Error).message||'Request failed'}. Your draft is kept; press Send to retry (it will not run twice).`});}
     finally{inFlight.current=false;setBusy(false);if(document.activeElement===document.body||document.activeElement===sendButton.current)box.current?.focus();}};
   const lastReply=[...history].reverse().find(e=>e.view?.state==='done')?.view?.reply;
@@ -210,13 +211,19 @@ function CommandPanel({canRun,post,onDone}:{canRun:boolean;post:(path:string,inp
       <ul id="command-processing" className="processing-note" aria-label="Where processing happens">
         <li><b>Dictation</b> Wispr Flow desktop app, cloud processing by Wispr. Mercury only receives the inserted text.</li>
         <li><b>Speech</b> Kokoro, runs locally on this PC. Reply text is not sent out.</li>
-        <li><b>Reasoning</b> Routing is local; agents use their configured provider (Anthropic, Groq or OpenRouter cloud APIs).</li>
+        <li><b>Reasoning</b> Routing is local. Skills and deep tasks run Claude Code on this PC with your subscription; agents use Claude Code when LLM_ENGINE=claude-code, otherwise their configured cloud API.</li>
       </ul>
       <button ref={sendButton} className="run-check" disabled={!canRun||busy||!text.trim()}>{busy?'Working… agent run in progress':'Send ↗'}</button>
+      <fieldset className="skill-row" aria-label="Run a skill with this text"><legend>Skills</legend>
+        {SKILLS.map(s=><button key={s.name} type="button" className="run-check" disabled={!canRun||busy||!text.trim()} onClick={()=>void send(null,s.name)}>{s.label}</button>)}
+      </fieldset>
+      <label className="deep-toggle"><input type="checkbox" checked={deep} onChange={e=>setDeep(e.target.checked)} disabled={!canRun||busy}/> Deep task (Claude Code, read-only, up to 20 min)</label>
     </form>
     {history.length>0&&<ol className="command-reply assistant-log" role="log" aria-label="Assistant messages (this browser session)">{[...history].reverse().map(e=>{const [key,label]=stateOf(e);const refs=e.view?.refs;return <li key={e.id}>
       <p className="assistant-request">{e.request}</p>
       <p><span className={`assistant-state ${key}`}>{label}</span> {e.error?<span role="alert">{e.error}</span>:e.view?.reply??'Sending…'}</p>
+      {e.view?.state==='running'&&!e.error&&(e.view.action==='skill'||e.view.action==='deep')&&<button type="button" className="run-check" onClick={()=>void post(`ask/${e.id}/cancel`,{}).then(()=>track(e.id)).catch(()=>undefined)}>Cancel</button>}
+      {e.view?.sessionId&&<small>Claude session <code>{e.view.sessionId}</code> (reopen: <code>claude --resume {e.view.sessionId}</code>)</small>}
       {refs&&(refs.approvalIds.length>0||refs.workflowRunId||refs.researchRunId||refs.artifactIds.length>0)&&<small>
         {refs.approvalIds.map(a=><a key={a} href={approvalHref(a)}>Decide approval {a.slice(0,8)} ↗</a>)}
         {refs.workflowRunId&&<span>workflow run <code>{refs.workflowRunId}</code></span>}{refs.researchRunId&&<span>research run <code>{refs.researchRunId}</code></span>}
