@@ -56,6 +56,9 @@ export const compileWorkflow = (source: string, registry: AgentRegistry, label: 
   return { ...r.spec, path: label, sha256: createHash('sha256').update(source).digest('hex') };
 };
 
+/** True when any step's agent is LLM-backed (`model !== 'none'`): such a run needs the LLM per-step timeout, not dispatch's 30s default. */
+export const hasLlmSteps = (wf: LoadedWorkflow, registry: AgentRegistry): boolean => wf.steps.some((s) => registry.get(s.agent)?.model !== 'none');
+
 const asRuntime = <T>(deps: EngineDeps, fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> =>
   deps.sql.begin(async (tx) => {
     await tx.unsafe(`set local role ${quoteIdent(RUNTIME_ROLE)}`);

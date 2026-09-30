@@ -1,10 +1,11 @@
 import { join } from 'node:path';
 import { createAgentRegistry } from '../agent-registry/registry.ts';
 import { connect } from '../db/client.ts';
+import { LLM_TIMEOUT_MS } from '../llm/runner.ts';
 import { HANDLERS } from '../runtime/handlers.ts';
 import { createRuntimeLlmRunner } from '../runtime/programs.ts';
 import { createRuntimeTools } from '../runtime/tools.ts';
-import { loadWorkflow, runWorkflow } from '../workflow-engine/engine.ts';
+import { hasLlmSteps, loadWorkflow, runWorkflow } from '../workflow-engine/engine.ts';
 import { runResearch } from '../../research-intelligence/entrypoint.ts';
 import { runMusicSystem } from '../../records/x3lius/entrypoint.ts';
 import { runTechSystem } from '../../tech/entrypoint.ts';
@@ -59,7 +60,8 @@ try {
     console.log(JSON.stringify(r, null, 2));
     if (r.status !== 'success') process.exitCode = 1;
   } else if (plan.action === 'run-workflow') {
-    const r = await runWorkflow(deps, loadWorkflow(plan.workflow, registry), plan.input);
+    const wf = loadWorkflow(plan.workflow, registry);
+    const r = await runWorkflow(deps, wf, plan.input, hasLlmSteps(wf, registry) ? { timeoutMs: LLM_TIMEOUT_MS } : {});
     console.log(JSON.stringify(r, null, 2));
     if (r.status === 'error') process.exitCode = 1;
   } else {

@@ -15,10 +15,10 @@ import { createLlmClient } from '../llm/providers.ts';
  */
 
 export type LookupAnswer = { readonly reply: string; readonly source: 'template' | 'model' | 'none' };
-export type Summarize = (question: string, facts: string) => Promise<string>;
+export type Summarize = (question: string, facts: string, signal?: AbortSignal) => Promise<string>;
 
-const NONE: LookupAnswer = { reply: 'Nothing stored yet about that. Send it as a normal request to start a run.', source: 'none' };
-const NO_MATCH: LookupAnswer = { reply: 'No stored findings match that yet. Send it as a normal request to start a research run.', source: 'none' };
+const NONE: LookupAnswer = { reply: 'Nothing stored yet about that. Press Research (or say "research …") to start a run.', source: 'none' };
+const NO_MATCH: LookupAnswer = { reply: 'No stored findings match that yet. Press Research (or say "research …") to start a research run.', source: 'none' };
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const STOP = new Set(['what', 'which', 'about', 'latest', 'research', 'find', 'found', 'findings', 'there', 'their', 'would', 'should', 'yesterday', 'today']);
 
@@ -82,7 +82,9 @@ const findingsAnswer = async (sql: Queryable, question: string, summarize?: Summ
     picked = matched.slice(0, 8);
   }
   const facts = picked.map(r => `- ${r.claim} (confidence ${r.confidence})`).join('\n');
-  if (summarize) return { reply: await summarize(question, facts), source: 'model' };
+  // Bounded so a stuck model call can't hang the request forever; a timeout rejects like any other
+  // summarizer failure and lands in the caller's lookup-error catch (a fixed, safe reply).
+  if (summarize) return { reply: await summarize(question, facts, AbortSignal.timeout(60_000)), source: 'model' };
   return { reply: `Latest findings: ${picked.slice(0, 3).map(r => r.claim).join(' ')}`, source: 'template' };
 };
 
@@ -102,12 +104,13 @@ const MAX_ANSWER_LENGTH = 500;
 export const summarizerFromEnv = (env: Readonly<Record<string, string | undefined>>): Summarize | undefined => {
   if (env.LLM_ENGINE !== 'claude-code' && !env.ANTHROPIC_API_KEY) return undefined;
   const llm = createLlmClient({ model: 'claude-haiku-4-5-20251001', agentName: 'mercury-lookup', env });
-  return async (question, facts) => {
+  return async (question, facts, signal) => {
     const r = await llm.complete({
       system: 'Answer the question using only the stored findings given. Plain sentences, at most 500 characters, suitable to be read aloud. If the findings do not answer it, say so.',
       user: `Question: ${question}\n\nStored findings:\n${facts}`,
       schema: { name: 'lookup_answer', schema: { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'], additionalProperties: false } },
       maxTokens: 800,
+      ...(signal ? { signal } : {}),
     });
     const answer = (r.json as { answer: string }).answer;
     // Belt and braces: the prompt asks for at most 500 characters, but nothing stops a model from
