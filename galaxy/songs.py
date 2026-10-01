@@ -95,7 +95,8 @@ def advance(run_id):
     extra = ["--allowedTools", TOOLS, "--max-turns", "12"]
     if stage == "humanize" and HUMANIZER.exists():
         extra += ["--add-dir", str(HUMANIZER)]
-    runs.update(run_id, status="running", progress=[f"Writing: {stage}"])
+    if not runs.transition(run_id, "running", progress=[f"Writing: {stage}"]):
+        return   # stopped before the worker began
     try:
         out = runs.stream_claude(run_id, prompt, RULES, "agent", tools=TOOLS, extra=extra, timeout=600)
     except runs.Stopped:
@@ -122,10 +123,16 @@ def _title(r):
     return concept.split("\n", 1)[0].strip()[:60] or r["text"][:60]
 
 
+GONE = {"answer": "That song is no longer waiting for you, sir.", "nodes": [], "route": "song"}
+
+
 def _restart(run_id, **fields):
-    runs.update(run_id, status="running", **fields)
+    """review -> running atomically: a stop or a second click in between never starts a worker."""
+    if not runs.transition(run_id, "review", status="running", **fields):
+        return False
     run = next(x for x in desk.read("runs") if x["id"] == run_id)
     runs.start(run)
+    return True
 
 
 def reply(text):
@@ -144,9 +151,12 @@ def reply(text):
                 return {"answer": f"There are only {len(r['options'])} concepts, sir.", "nodes": [], "route": "song"}
             drafts = {**r["drafts"], "concept": r["options"][n - 1]}
             title = drafts["concept"].split("\n", 1)[0].strip()
-            _restart(r["id"], drafts=drafts, stage="lyrics", title=title, draft=None, options=None)
+            if not _restart(r["id"], drafts=drafts, stage="lyrics", title=title, draft=None, options=None):
+                return GONE
             return {"answer": f"{title} it is, sir. Writing the lyrics.", "nodes": [], "route": "song"}
     elif APPROVE.match(text) and not pending:
+        if not r.get("draft"):   # the last generation failed: there is nothing to approve, only to retry
+            return {"answer": "There's no draft to approve yet, sir. Say rewrite to try again.", "nodes": [], "route": "song"}
         stage, title = r["stage"], _title(r)
         drafts = {**r["drafts"], stage: r["draft"]}
         link = f"\n\n[[song {title}]]"
@@ -158,9 +168,11 @@ def reply(text):
                     "route": "song"}
         server.write_note("songs", f"{title} {stage}", r["draft"] + link)
         nxt = STAGES[STAGES.index(stage) + 1]
-        _restart(r["id"], drafts=drafts, stage=nxt, draft=None)
+        if not _restart(r["id"], drafts=drafts, stage=nxt, draft=None):
+            return GONE
         return {"answer": f"Approved, sir. On to the {nxt} stage.", "nodes": [], "route": "song"}
     if REVISE.match(text) or (r["stage"] == "concept" and not PICK.search(text) and REVISE.search(text)):
-        _restart(r["id"], feedback=text)
+        if not _restart(r["id"], feedback=text):
+            return GONE
         return {"answer": "Very good, sir. Revising.", "nodes": [], "route": "song"}
     return None
