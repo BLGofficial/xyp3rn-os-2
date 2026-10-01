@@ -1,0 +1,8 @@
+{
+  "name": "Release prep",
+  "aliases": ["release prep", "release"],
+  "steps": [
+    {"kind": "agent", "label": "Latest songs", "text": "Read the newest notes under captures/songs and list each song's title, its current stage and what is missing before release."},
+    {"kind": "os", "label": "Suno best practice", "domain": "RESEARCH_INTELLIGENCE", "text": "research the current best practice for preparing a Suno song for release"}
+  ]
+}

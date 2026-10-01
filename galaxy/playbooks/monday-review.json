@@ -1,0 +1,9 @@
+{
+  "name": "Monday review",
+  "aliases": ["monday review", "monday", "weekly review"],
+  "schedule": {"days": ["mon"], "time": "09:00"},
+  "steps": [
+    {"kind": "whatchanged", "text": "this week", "label": "What changed this week"},
+    {"kind": "agent", "label": "Stalled work", "text": "Read the newest files in docs/handoffs and docs/plans. List anything marked pending, blocked, remaining or not verified, oldest first, with the file it comes from."}
+  ]
+}
