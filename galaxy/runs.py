@@ -48,6 +48,34 @@ def _get(s, run_id):
     return next((r for r in s["runs"] if r["id"] == run_id), None)
 
 
+LIVE = ("pending", "running", "review")
+HISTORY_CAP = 100
+
+
+def trim(rows):
+    """Cap the history at 100 records by dropping the oldest FINISHED ones; a live run is never dropped."""
+    excess = len(rows) - HISTORY_CAP
+    if excess <= 0:
+        return rows
+    out = []
+    for r in rows:
+        if excess > 0 and r["status"] not in LIVE:
+            excess -= 1
+            continue
+        out.append(r)
+    return out
+
+
+def transition(run_id, expect, **fields):
+    """Change a run only if it is still in the state we expect: a stop pressed meanwhile always wins."""
+    with desk.edit() as s:
+        r = _get(s, run_id)
+        if not r or r["status"] != expect:
+            return False
+        r.update(fields)
+        return True
+
+
 def update(run_id, **fields):
     with desk.edit() as s:
         r = _get(s, run_id)
@@ -110,7 +138,7 @@ def propose(kind, text, domain=None, **extra):
         for r in s["runs"]:   # one proposal at a time: a new one replaces the old
             if r["status"] == "pending":
                 r.update(status="expired", ended=time.time())
-        s["runs"] = (s["runs"] + [run])[-100:]
+        s["runs"] = trim(s["runs"] + [run])
     detail = ""
     if kind == "playbook":
         detail = " Steps: " + "; ".join(f"{i + 1}. {st.get('label') or st.get('text') or st['kind']}"
@@ -278,13 +306,17 @@ def finish(run_id, ok, headline, title, body, note_folder="runs", speak=True):
     """Shared ending: the run note (a new star), the run record, one desk card, an optional call."""
     status = "done" if ok else "failed"
     node = None
+    if stopped(run_id):   # stopped during the final summary: no note, no card, no call
+        return None
     try:
         node = server.write_note(note_folder, title, f"Status: {status}\n\n{headline}\n\n{body}")
     except Exception as e:
         headline += f" (The run note did not save: {e})"
     with desk.edit() as s:
         r = _get(s, run_id)
-        if r is None:   # the run aged out of the 100-run window: keep the result as a card anyway
+        if r is not None and r["status"] in ("stopped", "cancelled"):
+            return None   # a stop that landed while the note was written still wins
+        if r is None:   # the record is gone: keep the result as a card anyway
             notify = None
         else:
             r.update(status=status, ended=time.time(), headline=headline, node=node)

@@ -101,8 +101,8 @@ def advance(run_id):
     except runs.Stopped:
         return
     except Exception as e:
-        runs.update(run_id, status="review", progress=[f"Failed: {e}"[:160]])
-        desk.raise_card(f"The {stage} draft failed, sir: {e}. Say rewrite to try again.", speak=True, push=False,
+        if runs.transition(run_id, "running", status="review", progress=[f"Failed: {e}"[:160]]):
+            desk.raise_card(f"The {stage} draft failed, sir: {e}. Say rewrite to try again.", speak=True, push=False,
                         source="song", kind="song")
         return
     options = None
@@ -113,8 +113,8 @@ def advance(run_id):
                + ". Which one?") if len(options) >= 2 else "The concepts came back garbled, sir. Say rewrite."
     else:
         ask = ASK[stage]
-    runs.update(run_id, status="review", draft=out, options=options, feedback=None, progress=[])
-    desk.raise_card(ask, speak=True, push=False, source="song", kind="song")
+    if runs.transition(run_id, "running", status="review", draft=out, options=options, feedback=None, progress=[]):
+        desk.raise_card(ask, speak=True, push=False, source="song", kind="song")   # never for a song you stopped
 
 
 def _title(r):
