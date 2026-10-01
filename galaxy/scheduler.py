@@ -27,10 +27,15 @@ def ingest_inbox():
         except ValueError:
             pass
     with desk.edit() as s:
-        for r in rows:
+        for r in rows:   # one bad row is skipped, never the whole batch
+            try:
+                due = float(r["due"])
+            except (KeyError, TypeError, ValueError):
+                print("scheduler: skipped a malformed reminder", str(r)[:120])
+                continue
             channel = r.get("channel") if r.get("channel") in ("desk", "call", "telegram") else "desk"
             s["reminders"].append({"id": desk.new_id("rem"), "text": str(r.get("text", ""))[:300],
-                                   "due": float(r["due"]), "channel": channel, "fired": False})
+                                   "due": due, "channel": channel, "fired": False})
     taken.unlink(missing_ok=True)
 
 

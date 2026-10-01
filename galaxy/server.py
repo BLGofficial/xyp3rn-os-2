@@ -637,7 +637,7 @@ def write_note(subfolder, title, body):
         rel = path.relative_to(build.NOTES_DIR).as_posix()
         new_id = len(brain)
         texts = [n["text"] for n in brain]
-        patterns = [build.mention_pattern(n["label"], n["path"].rsplit("/", 1)[-1]) for n in brain]
+        patterns = [build.mention_pattern(n["label"], build.describe(build.NOTES_DIR / n["path"])[2]) for n in brain]
         wikis = [{w.strip().lower() for w in build.WIKILINK.findall(t)} for t in texts]
         linked = build.linked(md, build.mention_pattern(label, mention),
                               {w.strip().lower() for w in build.WIKILINK.findall(md)}, texts, patterns, wikis)
@@ -660,7 +660,7 @@ def remember(raw_text):
     body = body[0].upper() + body[1:]
     title = " ".join(re.findall(r"[\w'-]+", body)[:7]).rstrip(".,") or "Note"
     for n in load_index()["notes"]:   # the same thought twice is one note, not two
-        if n["path"].startswith(build.CAPTURES + "/") and body in n["text"]:
+        if n["path"].startswith(build.CAPTURES + "/") and n["text"].rstrip().endswith("\n\n" + body):
             return {"answer": REMEMBERED.format(title=n["label"]), "existing": True, "node": n["id"],
                     "links": [], "near": None, "route": "remember"}
     return {"answer": REMEMBERED.format(title=title), "route": "remember", **write_note("", title, body)}
@@ -670,9 +670,9 @@ def desk_snapshot():
     import phone, pocket, runs
     state["last_desk_poll"] = time.time()
     cfg = config()
-    with desk._lock:
-        s = desk._load()
-        return {
+    with desk._lock:   # copy under the lock; slow probes happen outside it
+        s = json.loads(json.dumps({k: desk._load()[k] for k in ("runs", "cards", "urgent_line", "briefing", "reminders", "approvals")}))
+    return {
             "model": current_model(cfg), "config_model": cfg.get("model"), "greeting": GREETING,
             "models": [{"id": m, "name": pretty(m)} for m in KNOWN_MODELS],
             "runs": runs.public(s["runs"][-30:]),
@@ -755,7 +755,7 @@ class Handler(BaseHTTPRequestHandler):
     sys_version = ""
 
     def log_message(self, fmt, *args):
-        if "/desk" not in (args[0] if args else ""):
+        if "/desk" not in str(args[0] if args else ""):
             sys.stderr.write("%s %s\n" % (self.log_date_time_string(), fmt % args))
 
     def end_headers(self):

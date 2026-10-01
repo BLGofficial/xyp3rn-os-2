@@ -43,8 +43,9 @@ def _load():
 
 def _save():
     tmp = STATE.with_name(STATE.name + f".{secrets.token_hex(4)}.tmp")
-    tmp.write_text(json.dumps(_state, ensure_ascii=False, indent=1), encoding="utf-8")
-    lock_down(tmp)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)   # owner-only from the first byte
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(json.dumps(_state, ensure_ascii=False, indent=1))
     os.replace(tmp, STATE)
     lock_down(STATE)
 

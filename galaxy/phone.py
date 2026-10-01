@@ -82,6 +82,8 @@ _call_lock = threading.Lock()
 _active = {}        # call_id -> record, while ringing or talking
 _staged_quiet = threading.Event()   # set while a staged call is live: no desk voice, no pushes
 _misses = {}        # caller number -> (count, locked_until)
+_global_misses = [] # every miss, any caller: caller ID can be spoofed or rotated
+GLOBAL_MAX_MISSES = 10
 _verified = {}      # call_id -> expires
 _tunnel = {"url": None}
 
@@ -332,7 +334,10 @@ def hook(tool, body):
         _verified.pop(cid)
     if tool == "verify_code":
         count, until = _misses.get(caller, (0, 0))
-        if until > now:
+        probe = caller.startswith("preflight-")
+        recent = [t for t in _global_misses if now - t < LOCKOUT_S]
+        _global_misses[:] = recent
+        if until > now or (len(recent) >= GLOBAL_MAX_MISSES and not probe):   # rotating caller IDs hit a global limit
             return {"verified": False, "locked": True, "result": "Locked out. Offer to take a message."}
         code = str(tel().get("hotline_code") or "")
         said = re.sub(r"\D", "", str(args.get("code", "")))
@@ -343,6 +348,8 @@ def hook(tool, body):
                     "result": "Verified. Greet him warmly; use fetch_brain for anything else."}
         count += 1
         _misses[caller] = (count, now + LOCKOUT_S if count >= MAX_MISSES else 0)
+        if not probe:
+            _global_misses.append(now)
         if count >= MAX_MISSES:
             if not caller.startswith("preflight-"):   # preflight's own lockout probe raises no card
                 desk.raise_card(f"Hotline: three wrong codes from {caller}. Locked out for fifteen minutes.",

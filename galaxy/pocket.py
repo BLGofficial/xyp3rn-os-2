@@ -136,11 +136,22 @@ def send(text, card_id=None):
             if card_id in s["pushed"]:
                 return False
             s["pushed"] = (s["pushed"] + [card_id])[-500:]
-    tg("sendMessage", {"chat_id": chat_id, "text": text})
+    for chunk in chunks(text):   # Telegram rejects anything over 4096 characters
+        tg("sendMessage", {"chat_id": chat_id, "text": chunk})
     audio = voice_note(text)
     if audio:
         tg("sendVoice", {"chat_id": chat_id}, files={"voice": ("jarvis.ogg", audio, "audio/ogg")})
     return True
+
+
+def chunks(text, size=4000):
+    out = []
+    while len(text) > size:
+        cut = text.rfind("\n", 0, size)
+        cut = cut if cut > size // 2 else size
+        out.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return out + [text] if text else out
 
 
 def on_card(card):

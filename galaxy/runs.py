@@ -284,8 +284,11 @@ def finish(run_id, ok, headline, title, body, note_folder="runs", speak=True):
         headline += f" (The run note did not save: {e})"
     with desk.edit() as s:
         r = _get(s, run_id)
-        r.update(status=status, ended=time.time(), headline=headline, node=node)
-        notify = r.get("notify")
+        if r is None:   # the run aged out of the 100-run window: keep the result as a card anyway
+            notify = None
+        else:
+            r.update(status=status, ended=time.time(), headline=headline, node=node)
+            notify = r.get("notify")
     desk.raise_card(headline, priority="normal" if ok else "high", speak=speak, source="run", push=False, kind="run")
     if notify == "call":
         import phone

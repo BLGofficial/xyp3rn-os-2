@@ -457,7 +457,7 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
 </div>
 
 <script src="graph-data.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.80.1/dist/3d-force-graph.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.80.1/dist/3d-force-graph.min.js" integrity="sha384-i98VDQKdpyVrtyuFn0fjUWJBLBmxnqHqOANcvYe9HLJUgT2wPixa4ZkLd7Dh3VEk" crossorigin="anonymous"></script>
 <script type="module">
 // ── Voice: the single most personal number in the build. ─────────────────────────
 const FINISH_MS = 900;           // pause that ends a thought; tune after a day of real use
@@ -1052,7 +1052,8 @@ function renderRuns(runs, cards) {
                  ...(desk.approvals || []).map(approvalRow),
                  ...cards.filter(c => !c.seen && (c.priority === 'high' || c.kind === 'message')).slice(-4).reverse().map(cardRow)];
   const active = runs.filter(r => r.status === 'running').map(runRow);
-  const hist = runs.filter(r => !['pending', 'running', 'expired', 'cancelled'].includes(r.status))   // never-started proposals aren't history.slice(-6).reverse().map(runRow);
+  // never-started proposals (cancelled, expired) aren't history
+  const hist = runs.filter(r => !['pending', 'running', 'expired', 'cancelled'].includes(r.status)).slice(-6).reverse().map(runRow);
   $('needs').replaceChildren(...needs); $('needs-h').textContent = needs.length ? `Needs you · ${needs.length}` : '';
   $('active').replaceChildren(...active); $('active-h').textContent = active.length ? `Active · ${active.length}` : '';
   $('history').replaceChildren(...hist); $('history-h').textContent = hist.length ? `History · ${hist.length}` : '';

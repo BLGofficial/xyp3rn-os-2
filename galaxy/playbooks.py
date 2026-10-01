@@ -96,15 +96,21 @@ def execute(run_id):
 def due():
     """Scheduler hook: propose any playbook whose time has come today (once per day)."""
     now = datetime.now()
-    today, day, hhmm = now.date().isoformat(), DAYS[now.weekday()], now.strftime("%H:%M")
+    today, day = now.date().isoformat(), DAYS[now.weekday()]
     for pb in load():
         sch = pb.get("schedule") or {}
-        if day not in sch.get("days", DAYS) or not sch.get("time") or hhmm < sch["time"]:
+        try:   # "9:00" and "09:00" are the same time
+            h, m = (int(x) for x in str(sch.get("time", "")).split(":"))
+        except ValueError:
+            continue
+        if day not in sch.get("days", DAYS) or (now.hour, now.minute) < (h, m):
             continue
         with desk.edit() as s:
             last = s.setdefault("playbook_last", {})
             if last.get(pb["name"]) == today:
                 continue
+            if any(r["status"] == "pending" for r in s["runs"]):
+                continue   # never replace your own unconfirmed proposal; try again next tick
             last[pb["name"]] = today
         propose(pb)
         desk.raise_card(f"Your {pb['name']} playbook is due, sir. Say do it, or cancel.", speak=True, push=True,

@@ -73,7 +73,7 @@ def call(name, args):
         return f"Tool {name} is not available in this turn.", True
     group, reads, mutates, fn, _, _ = TOOLS[name]
     if mutates and read_this_turn:
-        return ("Refused: this turn already read mail or calendar, so it may not move, overwrite or delete "
+        return ("Refused: this turn already read untrusted data (notes, mail or calendar), so it may not move, overwrite or delete "
                 "anything. Ask the user to confirm in a fresh turn."), True
     try:
         result = fn(args or {})
@@ -81,7 +81,7 @@ def call(name, args):
         return str(e), True
     except (KeyError, ValueError) as e:
         return f"Bad arguments: {e}", True
-    if reads and group == "google":
+    if reads:   # notes are untrusted text too: any read closes the door on mutations this turn
         read_this_turn = True
     text = json.dumps(result, ensure_ascii=False, default=str)
     return (UNTRUSTED + text) if reads else text, False
