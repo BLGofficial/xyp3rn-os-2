@@ -20,7 +20,9 @@ const Unlink = ({ songId, linkId }: { songId: string; linkId: string }) => (
   </form>
 );
 
-export default async function Song({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Song({ params: pendingParams, searchParams: pendingSearchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await pendingParams;
+  const searchParams = await pendingSearchParams;
   const rt = await runtime();
   const [d, w] = await Promise.all([(await loaders()).songDetail(rt.sql, params.id), (await catalogLoaders()).songWorkspace(rt.sql, params.id)]);
   if (!d || !w) notFound();

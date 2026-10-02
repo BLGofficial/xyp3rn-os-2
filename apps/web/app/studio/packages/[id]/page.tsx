@@ -7,7 +7,9 @@ export const dynamic = 'force-dynamic';
 
 const SOURCE_PAGE: Readonly<Record<string, string>> = { lyrics: '/vault/lineages', 'style-recipe': '/studio/recipes', 'meta-tag-set': '/studio/tags' };
 
-export default async function Package({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Package({ params: pendingParams, searchParams: pendingSearchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await pendingParams;
+  const searchParams = await pendingSearchParams;
   const p = await (await studioLoaders()).packageDetail((await runtime()).sql, params.id);
   if (!p) notFound();
   const e = p.export;

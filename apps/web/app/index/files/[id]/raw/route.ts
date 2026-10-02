@@ -5,7 +5,8 @@ export const dynamic = 'force-dynamic';
 // A repository file's bytes (AOS-04 Plan C1 Task 7), under the Vault raw route's rules: nosniff and a sandbox CSP,
 // so nothing served here runs as a document on this origin. Text is served as plain text; images inline; anything
 // else as a download. A file that changed since the scan is refused, never served under the old checksum.
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   const r = await (await graphFiles()).openRepoFile((await runtime()).sql, params.id);
   if (!r.ok) {
     const [status, why] = r.reason === 'changed' ? [409, 'changed since the last scan'] : r.reason === 'missing' ? [410, 'no longer at its indexed path']

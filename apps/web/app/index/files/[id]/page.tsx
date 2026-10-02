@@ -13,7 +13,8 @@ const REFUSED: Readonly<Record<string, string>> = {
   unreadable: 'This file could not be read.',
 };
 
-export default async function IndexedFile({ params }: { params: { id: string } }) {
+export default async function IndexedFile({ params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   const sql = (await runtime()).sql;
   const r = await (await graphFiles()).openRepoFile(sql, params.id);
   if (!r.ok && (r.reason === 'not-found' || r.reason === 'escaped')) notFound();

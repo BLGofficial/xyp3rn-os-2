@@ -9,7 +9,9 @@ export const dynamic = 'force-dynamic';
 const Items = ({ items }: { items: readonly string[] | undefined }) =>
   items && items.length > 0 ? <ul className="list-inside list-disc">{items.map((x, i) => <li key={i}>{x}</li>)}</ul> : <span className="meta">none</span>;
 
-export default async function Recipe({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Recipe({ params: pendingParams, searchParams: pendingSearchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await pendingParams;
+  const searchParams = await pendingSearchParams;
   const l = await (await studioLoaders()).studioLineage((await runtime()).sql, params.id);
   if (!l || l.kind !== 'recipe') notFound();
   const research = await (await researchLoaders()).researchFor((await runtime()).sql, { lineageId: l.lineageId });

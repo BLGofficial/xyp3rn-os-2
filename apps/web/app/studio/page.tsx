@@ -5,7 +5,8 @@ import { RecipeForm, TagSetForm } from './studio-ui';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Studio({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Studio({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const sl = await studioLoaders();
   const s = await sl.studioIndex((await runtime()).sql);
   return (

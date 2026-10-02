@@ -39,7 +39,9 @@ const LinkForm = ({ releaseId, trackId }: { releaseId: string; trackId?: string 
 
 // The release workspace (AOS-02 §6): every field the checks ask for is set from here, and each write
 // is an agent run (records-catalog, records-tasks) or a Records workflow (register-track, schedule-release).
-export default async function Release({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Release({ params: pendingParams, searchParams: pendingSearchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await pendingParams;
+  const searchParams = await pendingSearchParams;
   const rt = await runtime();
   const loaders = await catalogLoaders();
   const d = await loaders.releaseDetail(rt.sql, params.id);

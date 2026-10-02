@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 
 // The Findings Library (AOS-04 design §17): accepted findings, filtered by target and topic. Accepted is not
 // canonical: each card shows the library decision and the canonical status as two separate badges.
-export default async function Library({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Library({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const kind = first(searchParams.kind);
   const target = first(searchParams.target);
   const topic = first(searchParams.topic);

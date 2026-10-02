@@ -5,7 +5,8 @@ import { ErrorBanner, ScrollTable, Status, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Releases({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Releases({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const rt = await runtime();
   const [releases, options] = await Promise.all([(await catalogLoaders()).releaseList(rt.sql), (await catalogLoaders()).recordingOptions(rt.sql)]);
   return (

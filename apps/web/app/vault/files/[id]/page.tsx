@@ -5,7 +5,9 @@ import { ErrorBanner, ScrollTable, SongLinks, Tags, Time } from '../../../ui';
 
 export const dynamic = 'force-dynamic';
 
-export default async function File({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
+export default async function File({ params: pendingParams, searchParams: pendingSearchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await pendingParams;
+  const searchParams = await pendingSearchParams;
   const f = await (await loaders()).fileDetail((await runtime()).sql, params.id);
   if (!f) notFound();
   const raw = `/vault/files/${f.id}/raw`;

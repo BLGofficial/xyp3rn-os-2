@@ -3,7 +3,8 @@ import { ErrorBanner, first } from '../ui';
 
 export const dynamic = 'force-dynamic';
 
-export default function Login({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Login({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   return (
     <section className="max-w-md">
       <h1>Owner access</h1>

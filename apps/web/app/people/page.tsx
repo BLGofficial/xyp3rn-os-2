@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 
 // People and their aliases (AOS-02 B1): one case-insensitive namespace, so a credit can name anyone by
 // any of their names. Names are never edited in place (F39); a wrong one is a new alias.
-export default async function People({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function People({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const people = await (await catalogLoaders()).peopleList((await runtime()).sql);
   return (
     <section>

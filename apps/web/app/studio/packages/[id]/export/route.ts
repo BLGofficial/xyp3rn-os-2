@@ -4,7 +4,8 @@ export const dynamic = 'force-dynamic';
 
 // The package as the owner takes it to Suno (AOS-03, S3): xyp-suno-package/v1 as a JSON download, or
 // ?format=text for the copy-paste blocks. Read only; the middleware requires a session.
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   const sl = await studioLoaders();
   const p = await sl.packageDetail((await runtime()).sql, params.id);
   if (!p) return new Response('no such package', { status: 404 });

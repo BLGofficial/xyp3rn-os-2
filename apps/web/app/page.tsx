@@ -15,7 +15,8 @@ const PULSE_WORD: Readonly<Record<string, string>> = { ok: 'ok', failed: 'failed
 // The Command Center (AOS-02 §6, AOS-04 §13.1): the metric strip, then what is in flight, blocked or due;
 // the system pulse and recent activity in the right rail. Every figure is read from the database at the
 // time shown; nothing is cached, estimated or filled in.
-export default async function Command({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Command({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const rt = await runtime();
   const sl = await shellLoaders();
   const [d, m, pulse, activity] = await Promise.all([

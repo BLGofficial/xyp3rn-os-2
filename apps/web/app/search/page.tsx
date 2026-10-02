@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 
 // Search everything (AOS-04 design §16): every entity in the index whose title or path contains the words,
 // grouped by type. A result focuses its neighbourhood on the graph; "Open" goes to its own page.
-export default async function Search({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Search({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const q = first(searchParams.q) ?? '';
   const r = q.trim() ? await (await graphLoaders()).search((await runtime()).sql, q) : null;
   return (

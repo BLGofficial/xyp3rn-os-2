@@ -12,7 +12,8 @@ type Counts = {
 // System Admin (Jarvis Prompt 01, J1): the pulse, migrations, registries, roles and secrets (configured or not, never
 // a value), then the index's scope and freshness (AOS-04 design §15.2 item 1, §13.1 "infrastructure details live
 // under System"): what is indexed, what was left out and why (counted, never named), what failed, what doesn't resolve.
-export default async function System({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function System({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const rt = await runtime();
   const sql = rt.sql;
   const gl = await graphLoaders();

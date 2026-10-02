@@ -14,7 +14,9 @@ const TIER: Record<string, string> = {
 // One Ask request (JARVIS Prompt 04 gap: the assistant surface). The reply is built only from the real result;
 // runs point to their own pages. Jobs live in the server process: after a restart this page is a 404, never a
 // false "done".
-export default async function Ask({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Ask({ params: pendingParams, searchParams: pendingSearchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await pendingParams;
+  const searchParams = await pendingSearchParams;
   const v = (await askOps()).getAsk((await runtime()).owner, params.id);
   if (!v) notFound();
   const running = v.state === 'running';

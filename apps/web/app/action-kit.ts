@@ -13,7 +13,7 @@ export const back = (path: string, error?: string): never =>
 
 export const guard = async (): Promise<void> => {
   const token = process.env.XYP_WEB_TOKEN;
-  if (tokenProblem(token) || !(await verifySession(token!, cookies().get(SESSION_COOKIE)?.value, Date.now()))) redirect('/login');
+  if (tokenProblem(token) || !(await verifySession(token!, (await cookies()).get(SESSION_COOKIE)?.value, Date.now()))) redirect('/login');
 };
 
 /** Runs a write; on failure returns to `path` with the refusal, on success to `done` (default `path`). */

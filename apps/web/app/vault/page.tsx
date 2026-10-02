@@ -5,7 +5,8 @@ export const dynamic = 'force-dynamic';
 
 const KINDS = ['lyrics', 'lyric_sheet', 'document', 'audio', 'image', 'other'];
 
-export default async function Vault({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Vault({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const q = first(searchParams.q);
   const filter = { kind: first(searchParams.kind), songId: first(searchParams.song), tag: first(searchParams.tag), language: first(searchParams.language) };
   const defined = Object.fromEntries(Object.entries(filter).filter(([, v]) => v !== undefined));

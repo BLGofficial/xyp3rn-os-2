@@ -5,7 +5,8 @@ import { ErrorBanner, ScrollTable, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Songs({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Songs({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const songs = await (await loaders()).songList((await runtime()).sql);
   return (
     <section>

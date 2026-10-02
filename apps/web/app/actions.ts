@@ -16,14 +16,14 @@ export async function login(form: FormData) {
   const next = text(form, 'next');
   const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/vault';
   if (tokenProblem(token) || !(await tokenMatches(token!, text(form, 'token')))) back(`/login?next=${encodeURIComponent(safeNext)}`, 'wrong token');
-  cookies().set(SESSION_COOKIE, await issueSession(token!, Date.now()), {
+  (await cookies()).set(SESSION_COOKIE, await issueSession(token!, Date.now()), {
     httpOnly: true, sameSite: 'strict', path: '/', maxAge: SESSION_MAX_AGE_S, secure: false,
   });
   redirect(safeNext);
 }
 
 export async function logout() {
-  cookies().delete(SESSION_COOKIE);
+  (await cookies()).delete(SESSION_COOKIE);
   redirect('/login');
 }
 

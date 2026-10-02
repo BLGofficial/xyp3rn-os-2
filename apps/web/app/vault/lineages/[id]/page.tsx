@@ -6,7 +6,9 @@ import { ErrorBanner, first, ScrollTable, SongLinks, Status, Time } from '../../
 
 export const dynamic = 'force-dynamic';
 
-export default async function Lineage({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Lineage({ params: pendingParams, searchParams: pendingSearchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await pendingParams;
+  const searchParams = await pendingSearchParams;
   const l = await (await loaders()).lineageDetail((await runtime()).sql, params.id);
   if (!l) notFound();
   const latest = l.versions.at(-1)!;

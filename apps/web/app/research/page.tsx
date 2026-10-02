@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 
 // The brief list (AOS-04 design §17): filters by latest-run status and target, readable rows with intended
 // use, targets and latest run, then the new-brief form with the specialist preview.
-export default async function Research({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Research({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const rl = await researchLoaders();
   const rt = await runtime();
   const status = first(searchParams.status);
