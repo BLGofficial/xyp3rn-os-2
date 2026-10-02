@@ -5,7 +5,8 @@ import type { Domain } from '../../../../core/contracts/taxonomy';
 import type { ComponentsData, HudEvent } from '../../server/hud-loaders';
 import { bend, clampZoom, layout, satellites, TITLE_H, TITLE_W, toScreen, toWorld, zoomAt, type Item, type Pt, type View } from '../../lib/hud-layout';
 import { HUD_DOMAIN, HUD_STATUS, levelAt, ORBIT_ORDER, ZOOM, type HudOwner, type Lens } from '../../lib/hud-theme';
-import { DomainIcon, XGlyph } from './hud-icons';
+import { DomainIcon } from './hud-icons';
+import { BrandLogo } from '../brand/logo';
 import type { Motion } from './hud-shell';
 
 /**
@@ -458,7 +459,7 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion, p
       {size.w > 0 && (
         <div className="pointer-events-auto absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{ left: at(C).x, top: at(C).y, opacity: Math.min(1, boot / 0.35) }}
           title={`${identity.name} v${identity.version}: the application itself (package.json). Configuration, not an agent or a server; never connected.`}>
-          <XGlyph size={Math.round(46 * Math.min(1.6, Math.max(0.8, view.z)))} id="hub" />
+          <BrandLogo size={Math.round(72 * Math.min(1.6, Math.max(0.8, view.z)))} />
           <span className="mt-1 flex flex-col items-center px-2 py-0.5" style={{ background: 'rgba(4,10,22,0.72)', boxShadow: 'inset 0 0 0 1px rgba(247,201,72,0.35)' }}>
             <span className="hud-display hud-gold-text text-[13px]">XYP3RN</span>
             <span className="hud-label hud-2 text-[10px]">Agentic OS</span>

@@ -108,6 +108,12 @@ try {
 
   await page.goto(`${BASE}/vault`);
   await page.waitForURL(`${BASE}/login?next=%2Fvault`);
+  const brand = page.locator('a[aria-label="XYP3RN Mercury, Command"] img');
+  await brand.evaluate((img: HTMLImageElement) => img.decode());
+  check(await brand.evaluate((img: HTMLImageElement) => img.naturalWidth > 0 && img.currentSrc.includes('xyp3rn-logo')),
+    'the approved logo loads before login');
+  const iconHref = await page.locator('link[rel=icon]').getAttribute('href');
+  check(Boolean(iconHref) && (await fetch(new URL(iconHref!, BASE))).ok, 'the browser icon is available without a session');
   check(true, 'without a session, /vault answers 401 and sends the browser to /login on the same host');
   check((await fetch(`${BASE}/vault/files/00000000-0000-4000-8000-000000000000/raw`)).status === 401, 'the raw file route is guarded too (401)');
   await page.fill('input[name=token]', 'a-wrong-token-of-enough-length');
@@ -599,6 +605,10 @@ try {
     hp.on('pageerror', (e) => hudErrors.push(String(e)));
     await hp.goto(`${BASE}/hud`);
     await hp.waitForSelector('[data-hud-globe][data-level=System] [data-component]');
+    const hudBrands = hp.locator('[data-hud-root] img');
+    check(await hudBrands.count() === 2, '/hud uses the approved logo in its header and hub');
+    for (const img of await hudBrands.all()) await img.evaluate((e: HTMLImageElement) => e.decode());
+    await shot(hp, 'hud-brand-desktop');
     const zoom = async () => Number(await hp.getAttribute('[data-hud-globe]', 'data-zoom'));
     const canvasH = await hp.$eval('[data-hud-globe]', (e) => e.clientHeight);
     const globeR = Number(await hp.getAttribute('canvas[data-globe-r]', 'data-globe-r'));
@@ -656,6 +666,7 @@ try {
     await np.waitForSelector('[data-hud-root]');
     const sw = await np.$eval('[data-hud-root]', (e) => e.scrollWidth);
     check(sw <= 390, `/hud: no sideways scroll at 390 px (${sw})`);
+    await shot(np, 'hud-brand-mobile');
     await narrow.close();
   }
 

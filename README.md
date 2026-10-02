@@ -7,6 +7,8 @@ A six-domain agent operating system: CORE, KNOWLEDGE, RESEARCH_INTELLIGENCE, REC
 - Naming: [docs/NAMING.md](docs/NAMING.md)
 - Agent file template: [agents/_template.agent.md](agents/_template.agent.md)
 - Phase handoffs: [docs/handoffs/](docs/handoffs/)
+- Approved logo: [docs/BRAND.md](docs/BRAND.md)
+- Latest engineering audit and next steps: [2026-10-02](docs/PROJECT-AUDIT-2026-10-02.md)
 
 ## Develop
 

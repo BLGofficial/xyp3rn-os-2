@@ -1,12 +1,17 @@
 import './fonts.css';
 import './globals.css';
 import { logout } from './actions';
-import { Icon, Mark } from './shell/icons';
+import { Icon } from './shell/icons';
+import { BrandLogo } from './brand/logo';
+import logo from './brand/xyp3rn-logo.png';
 import { NavLinks } from './shell/nav';
 import { NavDrawer } from './shell/nav-drawer';
 import { SofiaClock } from './shell/sofia-clock';
 
-export const metadata = { title: 'XYP3RN Mercury · Artist OS' };
+export const metadata = {
+  title: 'XYP3RN Mercury · Artist OS',
+  icons: { icon: { url: logo.src, type: 'image/png' }, apple: logo.src },
+};
 
 // The Mercury shell (AOS-04 design §13): top bar (mark, search everything, Sofia clock, identity), the left rail
 // (a drawer below 1280 px), and the page. A page adds its own right rail with <WithRail>. The inline script
@@ -24,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="flex h-[72px] items-center gap-3 px-4 lg:gap-5 xl:px-5">
             <NavDrawer />
             <a href="/" className="flex shrink-0 items-center gap-2.5 no-underline" aria-label="XYP3RN Mercury, Command">
-              <Mark />
+              <BrandLogo priority />
               <span className="hidden flex-col leading-tight md:flex">
                 <span className="font-display text-[15px] font-semibold tracking-[0.12em] text-ink-1">XYP3RN</span>
                 <span className="text-[11px] uppercase tracking-[0.08em] text-ink-3">Mercury</span>

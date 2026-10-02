@@ -91,3 +91,9 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+/* BrandSplash: the official logo (docs/BRAND.md) with a gold aura; the reduced-motion rule above stills it. */
+.brand-splash { display: flex; min-height: 50vh; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; }
+.brand-splash h1 { margin: 0; }
+.brand-aura { display: inline-flex; border-radius: 9999px; animation: brand-aura 2.4s ease-in-out infinite alternate; }
+@keyframes brand-aura { from { box-shadow: 0 0 18px rgba(216, 171, 85, .18); } to { box-shadow: 0 0 46px rgba(216, 171, 85, .5); } }

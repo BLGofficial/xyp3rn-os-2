@@ -5,7 +5,8 @@ import type { ComponentsData, HudEvent, StatusData } from '../../server/hud-load
 import { HUD_DOMAIN, HUD_STATUS, LENS_DOMAIN, LENSES, ORBIT_ORDER, type HudOwner, type Lens } from '../../lib/hud-theme';
 import { askAction } from '../ask-actions';
 import { HudGlobe } from './hud-globe';
-import { DomainIcon, XGlyph } from './hud-icons';
+import { DomainIcon } from './hud-icons';
+import { BrandLogo } from '../brand/logo';
 
 export type Motion = 'cinematic' | 'calm' | 'off';
 type Props = {
@@ -136,7 +137,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
     <div className="hud" data-motion={effectiveMotion} data-contrast={contrast} data-hud-root>
       {/* A. Brand block */}
       <header className="hud-panel gold flex items-center gap-3 px-4" style={{ gridColumn: 1, gridRow: 1 }} aria-label="XYP3RN Agentic OS">
-        <XGlyph size={42} id="brand" />
+        <BrandLogo size={52} priority />
         <div className="leading-tight">
           <div className="hud-display hud-gold-text text-[22px]">XYP3RN</div>
           <div className="hud-label hud-2 text-[11px]">Agentic OS <span className="hud-data">v{identity.version}</span></div>
@@ -454,4 +455,3 @@ function BottomSection({ label, children, sweep }: { label: string; children: Re
     </details>
   );
 }
-
