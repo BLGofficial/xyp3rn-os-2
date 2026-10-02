@@ -1,0 +1,19 @@
+{
+  "model": "claude-opus-5-5",
+  "telephony": {
+    "api_key": "PUT-YOUR-RETELL-KEY-HERE",
+    "from": "+1 your Retell number, E.164",
+    "callback": "+1 your cell, E.164",
+    "voice_id": "11labs-Adrian"
+  },
+  "google": {
+    "client_id": "PUT-YOUR-GOOGLE-CLIENT-ID-HERE",
+    "client_secret": "PUT-YOUR-GOOGLE-CLIENT-SECRET-HERE"
+  },
+  "telegram": {
+    "bot_token": "PUT-YOUR-BOTFATHER-TOKEN-HERE"
+  },
+  "speech": {
+    "openai_api_key": "PUT-AN-OPENAI-KEY-HERE-FOR-VOICE-NOTES"
+  }
+}

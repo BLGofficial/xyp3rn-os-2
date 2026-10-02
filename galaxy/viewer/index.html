@@ -1,0 +1,1422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XYP3RN Jarvis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;600&family=Josefin+Sans:wght@700&family=Raleway:wght@400;500;600&display=swap">
+<style>
+/* XYP3RN Mercury · holographic glass. Desktop first: tuned for 1280–2560 wide, degrades to tablet below 1180. */
+:root {
+  --bg-primary: #04040b; --bg-elevated: #131225;
+  --text-headline: #f4f2fc; --text-body: #d6d3e8; --text-muted: #a8a2e2; --text-faint: #7d78a8;
+  --plum: #b258a5; --amber: #d8ab55; --silver: #dcdae6; --steel: #53a2ce; --cyan: #72d6f7; --navy: #07014c; --alert: #e8706e; --ok: #5fcf95;
+  --on-amber: #060610;
+  --glass: linear-gradient(155deg, rgba(26, 30, 60, .58), rgba(9, 11, 26, .46));
+  --glass-strong: linear-gradient(155deg, rgba(24, 28, 56, .82), rgba(9, 11, 26, .74));
+  --edge: linear-gradient(140deg, rgba(114, 214, 247, .55), rgba(145, 136, 223, .16) 34%, rgba(178, 88, 165, .12) 62%, rgba(216, 171, 85, .42));
+  --glass-edge: rgba(114, 214, 247, .2);
+  --hairline: rgba(145, 136, 223, .2);
+  --blur: blur(16px) saturate(165%);
+  --shadow: 0 24px 60px -12px rgba(0, 0, 0, .6), 0 2px 6px rgba(0, 0, 0, .35);
+  --mercury: linear-gradient(90deg, var(--plum), var(--amber), var(--silver), var(--steel), var(--navy), var(--plum));
+  --font-display: "Josefin Sans", sans-serif;
+  --font-heading: "Bebas Neue", Impact, sans-serif;
+  --font-body: "Raleway", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --radius-sm: 7px; --radius-md: 14px;
+  --gap: 14px; --top: 86px; --navw: 60px;
+  --rail: 312px; --panel: 440px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --spring: cubic-bezier(.34, 1.4, .5, 1);
+}
+@media (min-width: 1800px) { :root { --rail: 352px; --panel: 500px; } html { font-size: 17px; } }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(114, 214, 247, .28) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-thumb { background: rgba(114, 214, 247, .28); border-radius: 6px; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg-primary); color: var(--text-body);
+  font: 500 16px/1.6 var(--font-body); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; font-feature-settings: "lnum" 1; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+::selection { background: rgba(114, 214, 247, .3); color: #fff; }
+#galaxy { position: fixed; inset: 0; }
+
+/* ambience: drifting aurora, vignette and a whisper of film grain over the galaxy */
+.aurora { position: fixed; inset: -20%; z-index: 1; pointer-events: none; opacity: .5; mix-blend-mode: screen;
+  background: radial-gradient(38% 30% at 22% 28%, rgba(83, 162, 206, .16), transparent 70%),
+              radial-gradient(34% 28% at 78% 72%, rgba(178, 88, 165, .13), transparent 70%),
+              radial-gradient(30% 24% at 70% 18%, rgba(216, 171, 85, .07), transparent 70%);
+  animation: drift 48s ease-in-out infinite alternate; }
+@keyframes drift { to { transform: translate3d(3%, -2%, 0) rotate(4deg) scale(1.06); } }
+.vignette { position: fixed; inset: 0; pointer-events: none; z-index: 1;
+  background: radial-gradient(ellipse at center, transparent 52%, rgba(2, 2, 8, .72) 100%); }
+.grain { position: fixed; inset: 0; z-index: 9; pointer-events: none; opacity: .045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+/* glass: gradient edge (masked ::before) and a top sheen (::after) */
+.glass { position: relative; background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  border: 1px solid transparent; border-radius: var(--radius-md); box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .06); isolation: isolate; }
+.glass::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none; background: var(--edge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.glass::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .055), transparent 38%); }
+
+.label { display: inline-flex; align-items: center; gap: 8px; font: 600 11.5px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
+.steel { color: var(--cyan); }
+.muted { color: var(--text-muted); }
+.mercury { height: 2px; background: var(--mercury); background-size: 200% 100%; animation: flow 9s linear infinite; }
+@keyframes flow { to { background-position: -200% 0; } }
+.swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 8px currentColor; }
+kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 2px; border-radius: 4px; font: 600 10.5px/1.2 var(--font-mono); color: var(--text-body); background: rgba(255, 255, 255, .03); }
+
+/* ── boot sequence ─────────────────────────────────────────────────────────── */
+.boot { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: radial-gradient(ellipse at center, #0b0b1f 0%, #04040b 70%);
+  transition: opacity 700ms var(--ease), visibility 0s 700ms, filter 700ms; cursor: pointer; }
+.boot.done { opacity: 0; visibility: hidden; filter: blur(8px); }
+.boot-core { display: flex; flex-direction: column; align-items: center; gap: 26px; width: min(460px, 86vw); }
+.boot-ring { position: relative; width: 132px; height: 132px; }
+.boot-ring i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid transparent; }
+.boot-ring i:nth-child(1) { border-top-color: var(--cyan); border-right-color: rgba(114, 214, 247, .3); animation: spin 1.6s linear infinite; }
+.boot-ring i:nth-child(2) { inset: 14px; border-bottom-color: var(--amber); border-left-color: rgba(216, 171, 85, .3); animation: spin 2.4s linear infinite reverse; }
+.boot-ring i:nth-child(3) { inset: 30px; border-top-color: var(--plum); animation: spin 3.2s linear infinite; }
+.boot-ring b { position: absolute; inset: 52px; border-radius: 50%; background: radial-gradient(circle, #fff 0%, var(--cyan) 35%, transparent 70%); filter: blur(1px); animation: breathe 1.8s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(.7); opacity: .6; } }
+.boot-word { font: 700 34px/1 var(--font-display); letter-spacing: .42em; padding-left: .42em; color: var(--silver);
+  background: linear-gradient(90deg, var(--silver), #fff, var(--cyan), var(--silver)); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: shimmer 3s linear infinite, rise 900ms var(--ease) both; }
+@keyframes shimmer { to { background-position: -300% 0; } }
+.boot-sub { margin-top: -14px; font: 600 11px/1 var(--font-mono); letter-spacing: .34em; color: var(--text-muted); text-transform: uppercase; animation: rise 900ms 120ms var(--ease) both; }
+.boot-bar { width: 100%; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.boot-bar span { display: block; height: 100%; width: 0; background: var(--mercury); background-size: 200% 100%; animation: flow 2s linear infinite; transition: width 500ms var(--ease); box-shadow: 0 0 12px var(--cyan); }
+.boot-log { width: 100%; min-height: 110px; margin: 0; padding: 0; list-style: none; font: 500 12px/1.9 var(--font-mono); color: var(--text-muted); }
+.boot-log li { display: flex; gap: 10px; animation: rise 360ms var(--ease) both; }
+.boot-log li::before { content: "›"; color: var(--cyan); }
+.boot-log li b { margin-left: auto; font-weight: 600; color: var(--ok); }
+.boot-skip { font: 500 10.5px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); }
+/* the interface waits behind the boot screen, then assembles itself */
+.booting .bar, .booting .nav, .booting .side, .booting .dock { animation-play-state: paused; }
+
+/* ── top bar ───────────────────────────────────────────────────────────────── */
+.bar { position: fixed; top: var(--gap); left: var(--gap); right: var(--gap); z-index: 5; animation: drop 800ms var(--ease) both; }
+.bar-row { display: flex; align-items: center; gap: 22px; height: 58px; padding: 0 18px 0 22px; }
+.wordmark { font: 700 21px/1 var(--font-display); letter-spacing: .2em; color: var(--silver); padding-top: 4px; text-shadow: 0 0 22px rgba(114, 214, 247, .4); }
+.bar-title { display: flex; flex-direction: column; gap: 6px; padding-left: 22px; border-left: 1px solid var(--hairline); }
+.stats { display: flex; gap: 24px; padding-left: 22px; border-left: 1px solid var(--hairline); }
+.stat { display: flex; align-items: baseline; gap: 8px; }
+.stat b { font: 400 27px/1 var(--font-heading); letter-spacing: .04em; color: var(--silver); font-variant-numeric: tabular-nums; }
+.bar-end { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.leds { display: flex; align-items: center; gap: 12px; padding-right: 14px; border-right: 1px solid var(--hairline); }
+.led { display: inline-flex; align-items: center; gap: 6px; font: 600 10px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-faint); cursor: help; }
+.led::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #3a3858; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); transition: background 300ms, box-shadow 300ms; }
+.led.on { color: var(--text-body); } .led.on::before { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.led.warn { color: var(--text-body); } .led.warn::before { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.clock { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding-right: 14px; border-right: 1px solid var(--hairline); }
+.clock b { font: 600 15px/1 var(--font-mono); letter-spacing: .06em; color: var(--text-headline); font-variant-numeric: tabular-nums; }
+.clock span { font: 600 9.5px/1 var(--font-mono); letter-spacing: .16em; color: var(--text-faint); }
+.pill { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 13px; border-radius: 999px;
+  border: 1px solid var(--glass-edge); background: rgba(114, 214, 247, .06); font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); white-space: nowrap; }
+.pill.brain { color: var(--silver); cursor: pointer; transition: border-color 200ms, background 200ms; }
+.pill.brain:hover { border-color: var(--cyan); background: rgba(114, 214, 247, .1); }
+.pill.brain b { color: var(--amber); font-weight: 600; }
+.pill.swapped { border-color: rgba(216, 171, 85, .55); }
+.pill.live { color: #ffdcdc; background: rgba(232, 112, 110, .18); border-color: rgba(232, 112, 110, .7); animation: live 1.4s ease-in-out infinite; }
+.pill.live[hidden], .pill.armed[hidden] { display: none; }
+.pill.armed { color: var(--amber); border-color: rgba(216, 171, 85, .55); }
+@keyframes live { 50% { box-shadow: 0 0 0 6px rgba(232, 112, 110, 0); background: rgba(232, 112, 110, .3); } 0%, 100% { box-shadow: 0 0 0 0 rgba(232, 112, 110, .5); } }
+.rec { width: 8px; height: 8px; border-radius: 50%; background: var(--alert); }
+
+/* status orb: idle, listening, thinking, speaking */
+.status { display: inline-flex; align-items: center; gap: 10px; min-width: 112px; }
+.orb { position: relative; width: 12px; height: 12px; border-radius: 50%; background: var(--steel); box-shadow: 0 0 12px var(--steel); transition: background 200ms; }
+.orb::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1px solid transparent; }
+[data-status="listening"] .orb { background: var(--cyan); }
+[data-status="listening"] .orb::after { border-color: var(--cyan); animation: ripple 1.2s ease-out infinite; }
+[data-status="thinking"] .orb { background: var(--amber); box-shadow: 0 0 14px var(--amber); }
+[data-status="thinking"] .orb::after { inset: -4px; border: 2px solid transparent; border-top-color: var(--amber); border-right-color: var(--amber); animation: spin .8s linear infinite; }
+[data-status="speaking"] .orb { background: var(--plum); box-shadow: 0 0 16px var(--plum); animation: beat .45s ease-in-out infinite alternate; }
+@keyframes ripple { from { transform: scale(.6); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
+@keyframes spin { to { transform: rotate(1turn); } }
+@keyframes beat { to { transform: scale(1.25); } }
+
+/* ── areas + domains dock ─────────────────────────────────────────────────── */
+.nav { position: fixed; z-index: 6; top: var(--top); left: var(--gap); bottom: var(--gap); width: var(--navw); display: flex; flex-direction: column; gap: 2px; padding: 10px 8px;
+  overflow-x: hidden; overflow-y: auto; transition: width 320ms var(--ease), box-shadow 320ms; animation: slide-r 800ms 80ms var(--ease) both; }
+.nav:hover, .nav:focus-within { width: 258px; box-shadow: var(--shadow), 0 0 50px rgba(114, 214, 247, .14); }
+.nav a, .nav button { display: flex; align-items: center; gap: 14px; min-height: 38px; padding: 0 12px; border: 0; flex: none; border-radius: var(--radius-sm); background: none; color: var(--text-body); text-decoration: none; text-align: left; white-space: nowrap; font: 500 14px/1 var(--font-body); transition: background 160ms, color 160ms, transform 200ms var(--ease); }
+.nav a:hover, .nav button:hover, .nav a:focus-visible, .nav button:focus-visible { background: rgba(114, 214, 247, .09); color: var(--text-headline); transform: translateX(2px); }
+.nav .ico { width: 18px; flex: none; text-align: center; font: 600 15px/1 var(--font-mono); color: var(--cyan); filter: drop-shadow(0 0 6px rgba(114, 214, 247, .45)); }
+.nav .txt { opacity: 0; transform: translateX(-6px); transition: opacity 200ms, transform 240ms var(--ease); }
+.nav:hover .txt, .nav:focus-within .txt { opacity: 1; transform: none; }
+.nav .ext { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.nav h4:first-child { margin-top: 0; padding-top: 4px; border-top: 0; }
+.nav h4 { flex: none; margin: 10px 0 4px; padding: 10px 12px 0; border-top: 1px solid var(--hairline); white-space: nowrap; }
+.nav h4 .txt { font: 600 10.5px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); }
+.nav .dom { display: inline-block; vertical-align: middle; width: 12px; height: 12px; margin: 0 3px; border-radius: 50%; flex: none; border: 2px solid currentColor; box-shadow: 0 0 10px currentColor; }
+.nav button[aria-pressed="true"] { background: rgba(114, 214, 247, .11); color: var(--text-headline); box-shadow: inset 2px 0 0 var(--cyan); }
+.nav button[aria-pressed="true"] .dom { background: currentColor; }
+.nav.offline a { opacity: .55; }
+.nav .note { margin: auto 0 0; padding: 8px 12px 2px; font: 500 11px/1.45 var(--font-mono); color: var(--text-faint); white-space: normal; opacity: 0; transition: opacity 200ms; }
+.nav:hover .note { opacity: 1; }
+
+/* ── side panel: Runs | Groups tabs ───────────────────────────────────────── */
+.side { position: fixed; z-index: 4; top: var(--top); left: calc(var(--gap) * 2 + var(--navw)); bottom: var(--gap); width: var(--rail); display: flex; flex-direction: column;
+  animation: slide-r 800ms 160ms var(--ease) both; }
+.tabs { position: relative; display: flex; gap: 4px; margin: 10px 10px 0; padding: 4px; border-radius: 10px; background: rgba(0, 0, 0, .25); box-shadow: inset 0 0 0 1px var(--hairline); }
+.tabs button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 34px; border: 0; border-radius: 7px; background: none;
+  font: 600 11.5px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); transition: color 200ms; z-index: 1; }
+.tabs button[aria-selected="true"] { color: var(--text-headline); }
+.tabs .count { min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px; display: inline-grid; place-items: center; font-size: 10px; background: rgba(114, 214, 247, .12); color: var(--cyan); }
+.tabs .count.hot { background: var(--alert); color: #fff; box-shadow: 0 0 10px rgba(232, 112, 110, .6); }
+.tabs .thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 6px); border-radius: 7px; background: linear-gradient(180deg, rgba(114, 214, 247, .16), rgba(114, 214, 247, .06));
+  box-shadow: inset 0 0 0 1px rgba(114, 214, 247, .3), 0 0 18px rgba(114, 214, 247, .12); transition: transform 380ms var(--spring); }
+.tabs[data-tab="groups"] .thumb { transform: translateX(calc(100% + 4px)); }
+.tabpanel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 12px 14px 14px; }
+.tabpanel[hidden] { display: none; }
+.tabpanel.enter { animation: rise 340ms var(--ease) both; }
+.side .hint { margin: 0; padding: 10px 16px 14px; border-top: 1px solid var(--hairline); font: 500 11px/1.5 var(--font-mono); color: var(--text-faint); }
+.empty-state { display: grid; place-items: center; gap: 10px; padding: 40px 10px; text-align: center; color: var(--text-faint); font-size: 13.5px; }
+.empty-state[hidden] { display: none; }
+.empty-state b { font: 400 22px/1 var(--font-heading); letter-spacing: .06em; color: var(--text-muted); }
+
+.legend ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.legend button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; background: none; border: 1px solid transparent; border-radius: var(--radius-sm); text-align: left; font: 500 12.5px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-body); transition: background 160ms, border-color 160ms, color 160ms; }
+.legend button:hover, .legend button[aria-pressed="true"] { background: rgba(114, 214, 247, .07); border-color: var(--glass-edge); color: var(--text-headline); }
+.legend .count { margin-left: auto; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.rail h3 { margin: 16px 0 8px; display: flex; justify-content: space-between; }
+.rail h3:first-of-type { margin-top: 0; }
+.rail h3:empty, .rail ul:empty { display: none; }
+.rail ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.run { position: relative; padding: 11px 12px; border: 1px solid var(--hairline); border-left: 2px solid var(--steel); border-radius: var(--radius-sm); background: rgba(114, 214, 247, .035); transition: border-color 200ms, background 200ms, transform 200ms var(--ease); }
+.run.fresh { animation: rise 360ms var(--ease) both; }
+.run.needs { border-color: rgba(232, 112, 110, .5); border-left-color: var(--alert); background: rgba(232, 112, 110, .07); }
+.run.pending { border-left-color: var(--amber); }
+.run.running { border-left-color: var(--cyan); overflow: hidden; }
+.run.running::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(114, 214, 247, .12), transparent); transform: translateX(-100%); animation: sweep 1.8s ease-in-out infinite; pointer-events: none; }
+.run.done { border-left-color: var(--ok); }
+.run.failed, .run.interrupted { border-left-color: var(--alert); }
+.run.review { border-left-color: var(--plum); background: rgba(178, 88, 165, .08); }
+.run p { margin: 0 0 7px; font-size: 13.5px; line-height: 1.5; color: var(--text-headline); overflow-wrap: anywhere; }
+.run .meta { display: flex; align-items: center; gap: 8px; font: 500 10.5px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.run .trace { margin: 0 0 7px; padding-left: 8px; border-left: 1px solid var(--glass-edge); font: 500 11px/1.55 var(--font-mono); color: var(--cyan); opacity: .88; overflow-wrap: anywhere; }
+.run .trace span { display: block; }
+.tag { padding: 3px 6px; border: 1px solid currentColor; border-radius: 4px; }
+.pending .tag { color: var(--amber); } .running .tag { color: var(--cyan); } .done .tag { color: var(--ok); }
+.failed .tag, .interrupted .tag, .needs .tag { color: var(--alert); } .expired .tag, .cancelled .tag, .stopped .tag { color: var(--text-muted); } .review .tag { color: var(--plum); }
+.run .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.run .acts button { height: 30px; padding: 0 11px; border-radius: 5px; font: 600 11px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.run .acts .pick { min-width: 34px; }
+.run.clickable { cursor: pointer; }
+.run.clickable:hover { border-color: var(--glass-edge); transform: translateX(2px); }
+@keyframes sweep { to { transform: translateX(100%); } }
+
+/* ── note panel ───────────────────────────────────────────────────────────── */
+.panel { position: fixed; z-index: 4; top: var(--top); right: var(--gap); bottom: var(--gap); width: var(--panel); display: flex; flex-direction: column; background: var(--glass-strong);
+  transform: translateX(calc(100% + 32px)); opacity: 0; transition: transform 460ms var(--ease), opacity 320ms; }
+.panel.open { transform: none; opacity: 1; }
+.panel.open .panel-body > * { animation: rise 520ms var(--ease) both; }
+.panel.open .panel-body > :nth-child(2) { animation-delay: 60ms; }
+.panel.open .panel-body > :nth-child(3) { animation-delay: 110ms; }
+.panel.open .panel-body > :nth-child(n+4) { animation-delay: 160ms; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 12px 0 24px; }
+.icon-btn { width: 40px; height: 40px; display: grid; place-items: center; background: none; border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--text-muted); transition: color 160ms, border-color 160ms, transform 200ms var(--ease); }
+.icon-btn:hover { color: var(--text-headline); border-color: var(--glass-edge); transform: rotate(90deg); }
+.panel-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 4px 24px 26px; }
+.panel h1 { margin: 6px 0 10px; font: 400 44px/1.02 var(--font-heading); letter-spacing: .03em; color: var(--text-headline); overflow-wrap: anywhere; text-shadow: 0 0 28px rgba(114, 214, 247, .22); }
+.path { font: 400 12.5px/1.45 var(--font-mono); color: var(--cyan); overflow-wrap: anywhere; }
+.panel .mercury { margin: 18px 0; }
+.excerpt { margin: 0; font-size: 15.5px; line-height: 1.75; color: var(--text-body); }
+.excerpt.draft { white-space: pre-wrap; font-size: 15px; line-height: 1.8; color: var(--text-headline); }
+.section-label { margin-top: 26px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chips:empty { display: none; }
+.chip { display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 6px 10px; background: rgba(114, 214, 247, .05); border: 1px solid var(--glass-edge); border-radius: var(--radius-sm); font: 500 11.5px/1.2 var(--font-mono); letter-spacing: .04em; color: var(--cyan); text-align: left; text-decoration: none; transition: border-color 160ms, color 160ms, box-shadow 160ms, transform 160ms var(--ease); }
+.chip:hover { color: var(--text-headline); border-color: var(--cyan); box-shadow: 0 0 16px rgba(114, 214, 247, .22); transform: translateY(-1px); }
+
+/* ── command dock ─────────────────────────────────────────────────────────── */
+.dock { position: fixed; z-index: 5; left: calc(var(--gap) * 3 + var(--navw) + var(--rail)); right: var(--gap); bottom: var(--gap);
+  display: flex; flex-direction: column; gap: 10px; max-width: 980px; margin: 0 auto; transition: right 460ms var(--ease); animation: rise 800ms 240ms var(--ease) both; }
+.panel-open .dock { right: calc(var(--panel) + var(--gap) * 2); }
+.answer { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; padding: 16px 22px 18px; animation: reveal 440ms var(--ease) both; }
+.answer[hidden] { display: none; }
+.answer.error::before { background: linear-gradient(140deg, rgba(216, 171, 85, .8), rgba(232, 112, 110, .4)); }
+.answer-head { display: flex; gap: 14px; margin-bottom: 8px; }
+.answer p { margin: 0; font-size: 17.5px; line-height: 1.62; font-weight: 500; color: var(--text-headline); }
+.answer p span { display: inline-block; white-space: pre; animation: word 380ms var(--ease) both; }
+.answer.pending p { color: var(--text-muted); font-style: italic; }
+.answer.pending p::after { content: "▍"; margin-left: 2px; color: var(--cyan); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes word { from { opacity: 0; filter: blur(4px); transform: translateY(4px); } }
+.ask { display: flex; align-items: center; gap: 10px; height: 66px; padding: 0 9px 0 12px; transition: box-shadow 260ms; }
+.ask:focus-within { box-shadow: var(--shadow), 0 0 0 4px rgba(114, 214, 247, .09), 0 0 40px rgba(114, 214, 247, .12); }
+.ask input { flex: 1; min-width: 0; height: 100%; padding-left: 6px; background: none; border: 0; outline: none; font-size: 17px; font-weight: 500; color: var(--text-headline); }
+.ask input::placeholder { color: var(--text-faint); font-weight: 400; }
+.ask .kbd-hint { display: inline-flex; gap: 4px; align-items: center; height: 30px; padding: 0 8px; border: 0; background: none; color: var(--text-faint); white-space: nowrap; }
+.ask .kbd-hint:hover kbd { border-color: var(--cyan); color: var(--text-headline); }
+.btn { height: 46px; padding: 0 18px; border-radius: var(--radius-sm); font: 600 12.5px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; transition: transform 140ms var(--ease), box-shadow 220ms, border-color 220ms, color 220ms, background 220ms; }
+.btn:active { transform: scale(.95); }
+.btn-primary { background: linear-gradient(180deg, #ecc271, var(--amber) 55%, #b98a3a); color: var(--on-amber); border: 0; box-shadow: 0 0 22px rgba(216, 171, 85, .28), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.btn-primary:hover { box-shadow: 0 0 32px rgba(216, 171, 85, .5), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.btn-primary:disabled { opacity: .5; cursor: progress; }
+.btn-ghost { background: rgba(255, 255, 255, .02); color: var(--cyan); border: 1px solid var(--glass-edge); }
+.btn-ghost:hover { color: var(--text-headline); border-color: var(--cyan); background: rgba(114, 214, 247, .07); }
+.btn-icon { width: 46px; padding: 0; display: grid; place-items: center; }
+.btn-icon[aria-pressed="true"] { color: var(--bg-primary); background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 24px rgba(114, 214, 247, .55); }
+#screen[aria-pressed="true"] { background: var(--alert); border-color: var(--alert); box-shadow: 0 0 24px rgba(232, 112, 110, .55); }
+
+/* ── toasts ───────────────────────────────────────────────────────────────── */
+.toasts { position: fixed; z-index: 8; top: var(--top); right: var(--gap); width: 360px; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.panel-open .toasts { right: calc(var(--panel) + var(--gap) * 2); }
+.toast { pointer-events: auto; display: flex; gap: 12px; padding: 14px 16px; cursor: pointer; animation: toast-in 520ms var(--spring) both; }
+.toast.out { animation: toast-out 320ms var(--ease) both; }
+.toast i { width: 3px; flex: none; border-radius: 3px; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+.toast.high i { background: var(--alert); box-shadow: 0 0 10px var(--alert); }
+.toast.song i { background: var(--plum); box-shadow: 0 0 10px var(--plum); }
+.toast p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text-headline); }
+.toast small { display: block; margin-bottom: 4px; font: 600 10px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+@keyframes toast-in { from { opacity: 0; transform: translateX(40px) scale(.96); } }
+@keyframes toast-out { to { opacity: 0; transform: translateX(40px); } }
+
+/* ── command palette ──────────────────────────────────────────────────────── */
+.palette { position: fixed; inset: 0; z-index: 20; display: grid; place-items: start center; padding: 13vh 16px 16px; background: rgba(3, 3, 10, .5); backdrop-filter: blur(4px); animation: fade 180ms both; }
+.palette[hidden] { display: none; }
+.palette-box { width: min(680px, 100%); overflow: hidden; animation: reveal 280ms var(--ease) both; background: var(--glass-strong); }
+.palette input { width: 100%; height: 60px; padding: 0 22px; background: none; border: 0; border-bottom: 1px solid var(--hairline); outline: none; font-size: 18px; font-weight: 500; color: var(--text-headline); }
+.palette ul { list-style: none; margin: 0; padding: 6px; max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; }
+.palette li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); cursor: pointer; color: var(--text-body); }
+.palette li[aria-selected="true"] { background: rgba(114, 214, 247, .1); color: var(--text-headline); box-shadow: inset 2px 0 0 var(--cyan); }
+.palette li .kind { margin-left: auto; font: 600 10.5px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.palette li mark { background: none; color: var(--cyan); font-weight: 700; }
+.palette .ico { width: 22px; text-align: center; color: var(--amber); font-family: var(--font-mono); }
+.pal-foot { display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--hairline); font: 500 11px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+@keyframes fade { from { opacity: 0; } }
+
+/* hover tooltip from 3d-force-graph */
+.float-tooltip-kap, .scene-tooltip { background: rgba(14, 16, 34, .86) !important; backdrop-filter: var(--blur); border: 1px solid var(--glass-edge); border-radius: var(--radius-sm) !important; padding: 8px 10px !important; font: 500 12.5px/1.3 var(--font-mono) !important; letter-spacing: .04em; color: var(--text-headline) !important; box-shadow: var(--shadow); }
+.tip span { display: block; margin-bottom: 4px; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); }
+
+.empty { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+@keyframes drop { from { opacity: 0; transform: translateY(-18px); } }
+@keyframes slide-r { from { opacity: 0; transform: translateX(-22px); } }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes reveal { from { opacity: 0; transform: translateY(10px) scale(.985); filter: blur(6px); } }
+
+/* compact desktop (1280–1480): drop the subtitle and secondary labels, keep every control */
+.bar-title .label { white-space: nowrap; }
+@media (max-width: 1680px) { .bar-title { display: none; } }
+@media (max-width: 1480px) {
+  .led span { display: none; }
+  .leds { gap: 9px; }
+}
+@media (max-width: 1320px) {
+  .stat + .stat { display: none; }
+  .clock span { display: none; }
+}
+/* tablet and below: the galaxy first, one column of controls */
+@media (max-width: 1180px) {
+  .nav, .leds, .clock, .stats { display: none; }
+  .side { top: 84px; left: var(--gap); bottom: auto; max-height: 34vh; width: min(var(--rail), calc(100vw - 32px)); }
+  .dock, .panel-open .dock { left: var(--gap); right: var(--gap); bottom: var(--gap); max-width: none; }
+  .panel { top: 84px; right: var(--gap); bottom: 256px; width: min(var(--panel), calc(100vw - 32px)); }
+  .answer { max-height: 26vh; }
+  .panel-open .answer { max-height: 150px; }
+  .toasts { top: auto; bottom: 100px; width: min(360px, calc(100vw - 32px)); }
+  .ask .kbd-hint { display: none; }
+}
+@media (max-width: 640px) {
+  .bar { left: 8px; right: 8px; }
+  .bar-row { gap: 12px; padding: 0 12px; }
+  .pill.brain, #reset { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  .aurora { display: none; }
+}
+</style>
+</head>
+<body data-status="idle" class="booting">
+<div class="boot" id="boot" role="status" aria-live="polite" title="Click to skip">
+  <div class="boot-core">
+    <div class="boot-ring" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+    <div class="boot-word">XYP3RN</div>
+    <div class="boot-sub">Agentic OS 2 · Jarvis</div>
+    <div class="boot-bar"><span id="boot-bar"></span></div>
+    <ul class="boot-log" id="boot-log"></ul>
+    <div class="boot-skip">Click or press any key to skip</div>
+  </div>
+</div>
+
+<div id="galaxy" aria-label="3D galaxy of your notes"></div>
+<div class="aurora" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="bar glass">
+  <div class="bar-row">
+    <span class="wordmark">XYP3RN</span>
+    <div class="bar-title">
+      <span class="label">Jarvis · Knowledge Galaxy</span>
+      <span class="label muted">Agentic OS 2 · Engine</span>
+    </div>
+    <div class="stats">
+      <span class="stat"><b id="stat-notes">0</b><span class="label steel">Notes</span></span>
+      <span class="stat"><b id="stat-links">0</b><span class="label steel">Links</span></span>
+      <span class="stat"><b id="stat-groups">0</b><span class="label steel">Groups</span></span>
+    </div>
+    <div class="bar-end">
+      <span class="pill live" id="live" hidden><i class="rec"></i>Screen live</span>
+      <span class="pill armed" id="armed" hidden title="Standing order: only urgent calls">Urgent line</span>
+      <div class="leds" id="leds" aria-label="System status">
+        <span class="led" data-led="brain"><span>Brain</span></span>
+        <span class="led" data-led="voice"><span>Voice</span></span>
+        <span class="led" data-led="web"><span>Web</span></span>
+        <span class="led" data-led="google"><span>Google</span></span>
+        <span class="led" data-led="phone"><span>Phone</span></span>
+        <span class="led" data-led="pocket"><span>Pocket</span></span>
+      </div>
+      <div class="clock" aria-hidden="true"><b id="clock-time">--:--:--</b><span id="clock-date"></span></div>
+      <button class="pill brain" id="brain" type="button" title="Current brain: click to swap">Brain <b id="brain-name">…</b></button>
+      <span class="pill status" role="status"><span class="orb"></span><span id="status-label">Idle</span></span>
+    </div>
+  </div>
+  <div class="mercury"></div>
+</header>
+
+<nav class="nav glass" id="nav" aria-label="XYP3RN areas and domains"></nav>
+
+<aside class="side glass" aria-label="Runs and groups">
+  <div class="tabs" id="tabs" role="tablist" data-tab="runs">
+    <span class="thumb" aria-hidden="true"></span>
+    <button type="button" role="tab" id="tab-runs" aria-selected="true" aria-controls="rail">Runs <span class="count" id="runs-count">0</span></button>
+    <button type="button" role="tab" id="tab-groups" aria-selected="false" aria-controls="groups">Groups <span class="count" id="groups-count">0</span></button>
+  </div>
+  <section class="tabpanel rail" id="rail" role="tabpanel" aria-labelledby="tab-runs">
+    <div class="empty-state" id="runs-empty"><b>All quiet</b>Say “research …”, “agent …” or “write a song about …” to start a run.</div>
+    <h3 class="label" id="needs-h"></h3><ul id="needs"></ul>
+    <h3 class="label steel" id="active-h"></h3><ul id="active"></ul>
+    <h3 class="label muted" id="history-h"></h3><ul id="history"></ul>
+  </section>
+  <section class="tabpanel legend" id="groups" role="tabpanel" aria-labelledby="tab-groups" hidden>
+    <ul id="legend"></ul>
+  </section>
+  <p class="hint">Click a star to read it · drag to orbit · scroll to zoom · <kbd>Ctrl</kbd> <kbd>K</kbd> commands</p>
+</aside>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<aside class="panel glass" id="panel" aria-label="Selected note" aria-hidden="true" inert>
+  <div class="panel-head">
+    <span class="label" id="note-group"></span>
+    <button class="icon-btn" id="close" type="button" aria-label="Close note">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+    </button>
+  </div>
+  <div class="panel-body">
+    <h1 id="note-title"></h1>
+    <div class="path" id="note-path"></div>
+    <div class="mercury"></div>
+    <p class="excerpt" id="note-excerpt"></p>
+    <div class="label section-label" id="note-links-label"></div>
+    <div class="chips" id="note-links"></div>
+  </div>
+</aside>
+
+<div class="dock">
+  <section class="answer glass" id="answer" hidden aria-live="polite">
+    <div class="answer-head"><span class="label">Jarvis</span><span class="label steel" id="answer-model"></span></div>
+    <p id="answer-text"></p>
+    <div class="chips" id="answer-sources"></div>
+  </section>
+  <form class="ask glass" id="ask">
+    <label class="sr" for="q">Ask</label>
+    <button class="btn btn-ghost btn-icon" type="button" id="mic" aria-pressed="false" aria-label="Talk to Jarvis">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <button class="btn btn-ghost btn-icon" type="button" id="screen" aria-pressed="false" aria-label="Share your screen with Jarvis">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+    </button>
+    <input id="q" autocomplete="off" maxlength="2000" placeholder="Ask your notes, start a run, or say “remember that …”">
+    <button class="kbd-hint" type="button" id="pal-open" aria-label="Open the command palette"><kbd>Ctrl</kbd><kbd>K</kbd></button>
+    <button class="btn btn-ghost" type="button" id="reset">New thread</button>
+    <button class="btn btn-primary" type="submit" id="send">Send</button>
+  </form>
+</div>
+<video id="frame-src" muted playsinline hidden></video>
+<div class="palette" id="palette" hidden role="dialog" aria-modal="true" aria-label="Command palette">
+  <div class="palette-box glass">
+    <input id="pal-q" autocomplete="off" placeholder="Search notes or run a command…" aria-controls="pal-list">
+    <ul id="pal-list" role="listbox"></ul>
+    <div class="pal-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> run</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
+
+<script src="graph-data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.80.1/dist/3d-force-graph.min.js" integrity="sha384-i98VDQKdpyVrtyuFn0fjUWJBLBmxnqHqOANcvYe9HLJUgT2wPixa4ZkLd7Dh3VEk" crossorigin="anonymous"></script>
+<script type="module">
+// ── Voice: the single most personal number in the build. ─────────────────────────
+const FINISH_MS = 900;           // pause that ends a thought; tune after a day of real use
+const INTERRUPT = /^(stop|wait|hold on|quiet|shush|enough)\W*$/i;
+const REMEMBER = /^\W*(?:jarvis\W+)?(?:remember that|note to self|don'?t let me forget|log this)\b/i;
+const MODEL_CMD = /\b(?:try on|switch (?:back )?to|swap (?:your brain )?to|change (?:your brain )?to|go back to (?:your )?(?:normal|usual|default) brain)\b/i;
+const MUTE = new URLSearchParams(location.search).get('mute') === '1';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ── Boot sequence: each line is a real step finishing; it lifts when the galaxy and the desk are ready.
+const boot = { el: $('boot'), log: $('boot-log'), bar: $('boot-bar'), t0: performance.now(), done: false, n: 0 };
+const BOOT_STEPS = 6;
+function bootStep(text, ok = 'OK') {
+  if (boot.done) return;
+  const li = document.createElement('li');
+  const t = document.createElement('span'); t.textContent = text;
+  const b = document.createElement('b'); b.textContent = ok; if (ok !== 'OK') b.style.color = 'var(--amber)';
+  li.append(t, b);
+  boot.log.append(li);
+  boot.bar.style.width = `${Math.min(100, (++boot.n / BOOT_STEPS) * 100)}%`;
+}
+function bootFinish() {
+  if (boot.done) return;
+  boot.done = true;
+  const wait = Math.max(0, 1400 - (performance.now() - boot.t0));   // long enough to read, never a fake delay beyond that
+  setTimeout(() => {
+    boot.bar.style.width = '100%';
+    boot.el.classList.add('done');
+    document.body.classList.remove('booting');
+    setTimeout(() => boot.el.remove(), 900);
+  }, wait);
+}
+const bootReady = new Set();
+function bootMark(k) { bootReady.add(k); if (bootReady.has('graph') && bootReady.has('desk')) bootFinish(); }
+boot.el.addEventListener('click', bootFinish);
+addEventListener('keydown', () => { if (!boot.done) bootFinish(); });
+setTimeout(bootFinish, 8000);   // a slow CDN or a sleeping server never traps you behind the boot screen
+bootStep('Mercury core online');
+
+if (typeof GRAPH === 'undefined' || typeof ForceGraph3D === 'undefined') {
+  bootFinish();
+  const msg = typeof GRAPH === 'undefined' ? 'No galaxy yet. Run python build.py, then reload.' : '3d-force-graph did not load. Check your connection, then reload.';
+  document.body.insertAdjacentHTML('beforeend', `<div class="empty"><p class="label">${esc(msg)}</p></div>`);
+  throw new Error(msg);
+}
+
+// Mercury colours, largest groups first: amber, steel, plum, silver, then blends between them.
+const PALETTE = ['#d2a44e', '#53a2ce', '#b258a5', '#d5d3de', '#9188df', '#d4bc96', '#94bad6', '#c27e7a', '#7295d7', '#a8803a', '#3d86b5', '#8e4d86'];
+const DIM = '#22203a';
+const { nodes, links } = GRAPH;
+const count = {};
+nodes.forEach(n => { count[n.group] = (count[n.group] || 0) + 1; n.neighbors = []; n.links = []; });
+const groups = Object.keys(count).sort((a, b) => count[b] - count[a] || a.localeCompare(b));
+const colorOf = Object.fromEntries(groups.map((g, i) => [g, PALETTE[i % PALETTE.length]]));
+function wire(l) {
+  const a = typeof l.source === 'object' ? l.source : nodes[l.source], b = typeof l.target === 'object' ? l.target : nodes[l.target];
+  a.neighbors.push(b); b.neighbors.push(a); a.links.push(l); b.links.push(l);
+}
+links.forEach(wire);
+
+// Odometer counts: numbers roll to their value instead of jumping.
+function roll(el, to) {
+  const from = Number(el.textContent) || 0, t0 = performance.now(), ms = 900;
+  const step = t => { const k = Math.min(1, (t - t0) / ms); el.textContent = Math.round(from + (to - from) * (1 - (1 - k) ** 3)); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+  setTimeout(() => { el.textContent = to; }, ms + 50);   // rAF sleeps in hidden tabs; the real count still lands
+}
+function updateStats() {
+  roll($('stat-notes'), nodes.length); roll($('stat-links'), links.length); roll($('stat-groups'), Object.keys(count).length);
+  $('groups-count').textContent = Object.keys(count).length;
+}
+updateStats();
+bootStep(`Indexed ${nodes.length} notes · ${links.length} links`);
+
+let hiNodes = new Set(), hiLinks = new Set();
+const el = $('galaxy'), panel = $('panel');
+const Graph = new ForceGraph3D(el, { controlType: 'orbit' })
+  .backgroundColor('#05050d')
+  .showNavInfo(false)
+  .graphData({ nodes, links })
+  .nodeLabel(n => `<div class="tip"><span>${esc(n.group)}</span>${esc(n.label)}</div>`)
+  .nodeVal(n => 1 + n.neighbors.length / 3)
+  .nodeRelSize(3)
+  .nodeResolution(12)
+  .nodeOpacity(1)
+  .nodeColor(n => !hiNodes.size || hiNodes.has(n) ? colorOf[n.group] : DIM)
+  .linkOpacity(1)
+  .linkColor(l => hiLinks.has(l) ? 'rgba(210,164,78,0.9)' : hiNodes.size ? 'rgba(145,136,223,0.05)' : 'rgba(145,136,223,0.2)')
+  .linkWidth(l => hiLinks.has(l) ? 0.35 : 0)
+  .linkDirectionalParticles(l => hiLinks.has(l) ? 2 : 0)
+  .linkDirectionalParticleWidth(1.8)
+  .linkDirectionalParticleSpeed(0.005)
+  .linkDirectionalParticleColor(() => '#6fd3f5')
+  .onNodeHover(n => { el.style.cursor = n ? 'pointer' : ''; })
+  .onNodeClick(n => openNote(n))
+  .onBackgroundClick(() => clearFocus(true))
+  .warmupTicks(90)      // the layout settles behind the boot screen, so the galaxy appears already formed
+  .cooldownTicks(140);
+
+window.galaxy = Graph; // handle for devtools
+Graph.renderer().setPixelRatio(Math.min(devicePixelRatio, 1.75)); // 4K screens: same look, a third of the pixels
+let fitted = false;
+Graph.onEngineStop(() => {
+  if (fitted) return;
+  fitted = true;
+  Graph.zoomToFit(1400, 60);
+  bootStep('Galaxy ignited');
+  reframe();
+  bootMark('graph');
+});
+// Centre the galaxy in the space the glass leaves free, not behind the side panel: a camera view
+// offset, eased when the note panel opens. Clicks stay exact, since the offset lives in the projection.
+let viewShift = 0, viewTarget = 0, viewEasing = false;
+function frameTarget() {
+  if (innerWidth <= 1180) return 0;
+  const left = document.querySelector('.side').getBoundingClientRect().right;
+  const right = document.body.classList.contains('panel-open') ? innerWidth - panel.getBoundingClientRect().left : 0;
+  return (left - right) / 2;
+}
+function applyView() {
+  const cam = Graph.camera();
+  cam.setViewOffset(innerWidth, innerHeight, -viewShift, 0, innerWidth, innerHeight);
+  cam.updateProjectionMatrix();
+}
+function reframe() {
+  viewTarget = frameTarget();
+  if (viewEasing) return;
+  viewEasing = true;
+  (function ease() {
+    viewShift += (viewTarget - viewShift) * (still ? 1 : 0.14);
+    if (Math.abs(viewTarget - viewShift) < 0.5) viewShift = viewTarget;
+    applyView();
+    if (viewShift !== viewTarget) requestAnimationFrame(ease); else viewEasing = false;
+  })();
+}
+new MutationObserver(() => setTimeout(reframe, 30)).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+let resizing;
+addEventListener('resize', () => { clearTimeout(resizing); resizing = setTimeout(() => { Graph.width(innerWidth).height(innerHeight); reframe(); }, 120); });
+document.addEventListener('visibilitychange', () => document.hidden ? Graph.pauseAnimation() : Graph.resumeAnimation());
+
+// Slow idle rotation; pauses while you steer and resumes after a quiet spell.
+const controls = Graph.controls();
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let idle;
+const pauseSpin = ms => { controls.autoRotate = false; clearTimeout(idle); if (!still) idle = setTimeout(() => { controls.autoRotate = true; }, ms); };
+controls.autoRotate = !still;
+controls.autoRotateSpeed = 0.35;
+controls.addEventListener('start', () => pauseSpin(1e9));
+controls.addEventListener('end', () => pauseSpin(7000));
+
+function repaint() {
+  nodes.forEach(n => n.glow && n.glow.material.color.set(!hiNodes.size || hiNodes.has(n) ? colorOf[n.group] : '#000000'));
+  Graph.nodeColor(Graph.nodeColor()).linkColor(Graph.linkColor()).linkWidth(Graph.linkWidth())
+    .linkDirectionalParticles(Graph.linkDirectionalParticles());
+}
+
+function flyTo(n, ms = 1600) {
+  const k = 1 + 190 / (Math.hypot(n.x, n.y, n.z) || 1);   // close enough to read, far enough to see its neighbours
+  pauseSpin(ms + 5000);
+  Graph.cameraPosition({ x: n.x * k, y: n.y * k, z: n.z * k }, { x: n.x, y: n.y, z: n.z }, ms);
+}
+
+function light(list) {
+  const set = new Set(list);
+  hiNodes = set;
+  hiLinks = new Set(links.filter(l => set.has(l.source) && set.has(l.target)));
+  repaint();
+}
+
+function swatch(group) {
+  const i = document.createElement('i');
+  i.className = 'swatch';
+  i.style.background = i.style.color = colorOf[group];
+  return i;
+}
+
+function fillChips(box, list) {
+  box.replaceChildren(...list.map(n => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.append(swatch(n.group), n.label);
+    b.addEventListener('click', () => openNote(n));
+    return b;
+  }));
+}
+
+function openNote(n) {
+  $('note-excerpt').classList.remove('draft');
+  const linked = [...n.neighbors].sort((a, b) => a.label.localeCompare(b.label));
+  hiNodes = new Set([n, ...linked]);
+  hiLinks = new Set(n.links);
+  repaint();
+  flyTo(n);
+  setLegendPressed(null);
+  $('note-group').replaceChildren(swatch(n.group), n.group);
+  $('note-title').textContent = n.label;
+  $('note-path').textContent = n.path;
+  $('note-excerpt').textContent = n.excerpt || 'This note is empty.';
+  $('note-links-label').textContent = `Linked notes · ${linked.length}`;
+  fillChips($('note-links'), linked);
+  panel.querySelector('.panel-body').scrollTop = 0;
+  panel.classList.remove('open'); void panel.offsetWidth;  // replay the content stagger
+  panel.classList.add('open');
+  panel.inert = false;
+  panel.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('panel-open');
+}
+
+function closePanel() {
+  panel.classList.remove('open');
+  panel.inert = true;
+  panel.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('panel-open');
+}
+
+function clearFocus(refit) {
+  hiNodes = new Set();
+  hiLinks = new Set();
+  repaint();
+  closePanel();
+  setLegendPressed(null);
+  if (refit) Graph.zoomToFit(1200, 60);
+}
+
+$('close').addEventListener('click', () => clearFocus(false));
+addEventListener('keydown', e => { if (e.key === 'Escape' && $('palette').hidden) clearFocus(false); });
+
+// Group rail: click a group to isolate it, click again to release.
+const legend = $('legend');
+function setLegendPressed(group) {
+  legend.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.group === group)));
+}
+function addGroup(g) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.dataset.group = g;
+  b.setAttribute('aria-pressed', 'false');
+  const name = document.createElement('span');
+  name.textContent = g;
+  const c = document.createElement('span');
+  c.className = 'count';
+  c.textContent = count[g];
+  b.append(swatch(g), name, c);
+  b.addEventListener('click', () => {
+    if (b.getAttribute('aria-pressed') === 'true') return clearFocus(true);
+    closePanel();
+    setLegendPressed(g);
+    const list = nodes.filter(n => n.group === g);
+    light(list);
+    pauseSpin(7000);
+    Graph.zoomToFit(1400, 80, n => hiNodes.has(n));
+  });
+  const li = document.createElement('li');
+  li.append(b);
+  legend.append(li);
+}
+groups.forEach(addGroup);
+
+// ── Status line: which of us the machine thinks is talking. ─────────────────────
+let listening = false;
+function setStatus(s) {
+  document.body.dataset.status = s;
+  $('status-label').textContent = s[0].toUpperCase() + s.slice(1);
+}
+const settle = () => setStatus(listening ? 'listening' : 'idle');
+
+// ── Speaking. The ONLY function that speaks; ?mute=1 is checked here so nothing routes around it.
+let unlocked = false, voice = null;
+function pickVoice() {
+  const all = speechSynthesis.getVoices();
+  voice = all.find(v => /en-GB/i.test(v.lang) && /daniel|arthur|male|george|ryan/i.test(v.name))
+       || all.find(v => /en-GB/i.test(v.lang)) || all.find(v => /^en/i.test(v.lang)) || null;
+}
+if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+let audio = null, speakSeq = 0;
+const isSpeaking = () => !!audio || ('speechSynthesis' in window && speechSynthesis.speaking);
+async function speak(text) {
+  if (MUTE || !unlocked || !text) return;
+  const seq = ++speakSeq;
+  stopVoices();
+  if (desk.kokoro) {   // local Kokoro: a real British voice, free and private
+    try {
+      const res = await fetch('/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      if (res.ok && seq === speakSeq) {
+        const url = URL.createObjectURL(await res.blob());
+        if (seq !== speakSeq) return URL.revokeObjectURL(url);
+        audio = new Audio(url);
+        audio.onplay = () => setStatus('speaking');
+        audio.onended = audio.onerror = () => { URL.revokeObjectURL(url); audio = null; settle(); };
+        await audio.play();
+        return;
+      }
+    } catch { audio = null; }
+    if (seq !== speakSeq) return;
+  }
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  if (voice) u.voice = voice;
+  u.lang = voice ? voice.lang : 'en-GB';
+  u.rate = 1.02;
+  u.onstart = () => setStatus('speaking');
+  u.onend = u.onerror = settle;
+  speechSynthesis.speak(u);
+}
+function stopVoices() {
+  if (audio) { audio.pause(); audio = null; }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+}
+function hush() { speakSeq++; stopVoices(); settle(); }
+
+// Browsers block audio until a gesture, so the greeting waits for the first click or key, then fires inside it.
+let greeting = 'Hello, sir.';
+function unlock() {
+  if (unlocked) return;
+  unlocked = true;
+  removeEventListener('pointerdown', unlock, true);
+  removeEventListener('keydown', unlock, true);
+  speak(greeting);
+}
+addEventListener('pointerdown', unlock, true);
+addEventListener('keydown', unlock, true);
+
+// ── The brain chip ──────────────────────────────────────────────────────────────
+const pretty = id => (id || '').replace(/^claude-/, '').replace(/(?<=\d)-(?=\d)/g, '.').replace(/-/g, ' ').toUpperCase();
+let configModel = null;
+function showBrain(model) {
+  if (!model) return;
+  $('brain-name').textContent = pretty(model);
+  $('brain').classList.toggle('swapped', !!configModel && model !== configModel);
+}
+async function api(path, body) {
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  return [res, await res.json()];
+}
+let desk = { models: [], links: {} }, booted = false;
+let lastUrgent = 0;
+const toasted = new Set();
+
+function setTab(tab, animate = true) {
+  $('tabs').dataset.tab = tab;
+  $('tab-runs').setAttribute('aria-selected', String(tab === 'runs'));
+  $('tab-groups').setAttribute('aria-selected', String(tab === 'groups'));
+  const show = tab === 'runs' ? $('rail') : $('groups'), hide = tab === 'runs' ? $('groups') : $('rail');
+  hide.hidden = true; show.hidden = false;
+  if (animate) { show.classList.remove('enter'); void show.offsetWidth; show.classList.add('enter'); }
+}
+$('tab-runs').addEventListener('click', () => setTab('runs'));
+$('tab-groups').addEventListener('click', () => setTab('groups'));
+
+function led(name, state, title) {
+  const el = document.querySelector(`.led[data-led="${name}"]`);
+  el.className = 'led' + (state === true ? ' on' : state === 'warn' ? ' warn' : '');
+  el.title = title;
+}
+function setLeds() {
+  const l = desk.links || {};
+  led('brain', true, `Brain online: ${pretty(desk.model)} on your Claude subscription`);
+  led('voice', desk.kokoro ? true : 'warn', desk.kokoro ? 'Voice: local Kokoro' : 'Voice: browser fallback (Kokoro not running)');
+  led('web', !!(desk.web && desk.web.up), desk.web && desk.web.up ? `Web app at ${desk.web.url}` : 'Web app not running');
+  led('google', !!l.google, l.google ? 'Google connected' : 'Google not connected');
+  led('phone', !!l.phone, l.phone ? 'Phone line ready' : 'Phone line not configured');
+  led('pocket', !!l.pocket, l.pocket ? 'Telegram paired' : 'Telegram not paired');
+}
+
+function tick() {
+  const now = new Date();
+  $('clock-time').textContent = now.toLocaleTimeString('en-GB');
+  $('clock-date').textContent = now.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase();
+}
+tick();
+setInterval(tick, 1000);
+
+function toast(c) {
+  const t = document.createElement('div');
+  t.className = `toast glass ${c.priority === 'high' ? 'high' : ''} ${c.kind === 'song' ? 'song' : ''}`;
+  const bar = document.createElement('i');
+  const body = document.createElement('div');
+  const small = document.createElement('small'); small.textContent = `${c.kind} · ${c.source}`;
+  const p = document.createElement('p'); p.textContent = c.text;   // text only: cards are never HTML
+  body.append(small, p);
+  t.append(bar, body);
+  const close = () => { t.classList.add('out'); setTimeout(() => t.remove(), 320); };
+  t.addEventListener('click', close);
+  setTimeout(close, c.priority === 'high' ? 12000 : 7000);
+  const box = $('toasts');
+  box.prepend(t);
+  while (box.children.length > 4) box.lastChild.remove();
+}
+
+// Run rows remember their note by PATH: a full rebuild may renumber captures, a path never moves.
+const byPath = new Map(nodes.map(n => [n.path, n]));
+const nodeFor = r => r.node && r.node.node && byPath.get(r.node.node.path);
+const DOMAIN_COLOR = { CORE: '#9188df', KNOWLEDGE: '#53a2ce', RESEARCH_INTELLIGENCE: '#6fd3f5', RECORDS: '#b258a5', TECH: '#d2a44e', GOVERNANCE: '#59c48a', shared: '#8a88a0' };
+const AREA_ICON = { command: '◈', songs: '♪', studio: '◉', research: '⌕', vault: '▣', workflows: '⚙', analytics: '▤', system: '◎' };
+let navBuilt = false;
+function renderNav() {
+  const nav = $('nav');
+  nav.classList.toggle('offline', !desk.web.up);
+  nav.title = desk.web.up ? '' : `The web app is not answering at ${desk.web.url}`;
+  if (navBuilt) return;
+  navBuilt = true;
+  const item = (el, ico, label, extra) => {
+    const i = document.createElement('span'); i.className = 'ico'; i.append(ico);
+    const t = document.createElement('span'); t.className = 'txt'; t.textContent = label;
+    el.append(i, t);
+    if (extra) el.append(extra);
+    return el;
+  };
+  const head = text => { const h = document.createElement('h4'); const t = document.createElement('span'); t.className = 'txt'; t.textContent = text; h.append(t); return h; };
+  nav.append(head('Areas'));
+  desk.web.areas.forEach(a => {
+    const link = document.createElement('a');
+    link.href = desk.web.url + a.path; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    link.setAttribute('aria-label', `${a.label} (opens the web app)`);
+    const ext = document.createElement('span'); ext.className = 'ext txt'; ext.textContent = '↗';
+    nav.append(item(link, AREA_ICON[a.key] || '•', a.label, ext));
+  });
+  nav.append(head('Domains'));
+  desk.domains.forEach(d => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.domain = d.id; b.setAttribute('aria-pressed', 'false');
+    const dot = document.createElement('i'); dot.className = 'dom'; dot.style.color = DOMAIN_COLOR[d.id];
+    const count = nodes.filter(n => n.domain === d.id).length;
+    const c = document.createElement('span'); c.className = 'ext txt'; c.textContent = count;
+    b.onclick = () => filterDomain(d.id);
+    nav.append(item(b, dot, d.label, c));
+  });
+  const note = document.createElement('p'); note.className = 'note';
+  note.textContent = 'Areas open the XYP3RN web app. Domains light their stars here.';
+  nav.append(note);
+}
+function filterDomain(d) {
+  const btn = $('nav').querySelector(`button[data-domain="${CSS.escape(d)}"]`);
+  if (btn && btn.getAttribute('aria-pressed') === 'true') { btn.setAttribute('aria-pressed', 'false'); return clearFocus(true); }
+  $('nav').querySelectorAll('button[data-domain]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.domain === d)));
+  const list = nodes.filter(n => n.domain === d);
+  closePanel(); setLegendPressed(null);
+  if (!list.length) return;
+  light(list);
+  pauseSpin(9000);
+  Graph.zoomToFit(1400, 80, n => hiNodes.has(n));
+}
+function openArea(url, label) {   // voice has no click, so a blocked pop-up becomes a link to press
+  const w = window.open(url, '_blank', 'noopener');
+  if (w) return;
+  const a = document.createElement('a');
+  a.className = 'chip'; a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+  a.textContent = `Open ${label} ↗`;
+  $('answer-sources').replaceChildren(a);
+}
+async function poll() {
+  try {
+    desk = await (await fetch('/desk')).json();
+  } catch { return; }
+  if (!booted) {
+    booted = true; configModel = desk.config_model; greeting = desk.greeting || greeting;
+    bootStep(`Brain online · ${pretty(desk.model)}`);
+    bootStep(`Voice · ${desk.kokoro ? 'Kokoro' : 'browser'}`, desk.kokoro ? 'OK' : 'FALLBACK');
+    bootStep(`Web app · ${desk.web.url.replace(/^https?:\/\//, '')}`, desk.web.up ? 'OK' : 'OFFLINE');
+    desk.cards.forEach(c => toasted.add(c.id));   // no flood of old cards on boot
+    const busy = desk.runs.some(r => ['pending', 'running', 'review'].includes(r.status));
+    setTab(busy ? 'runs' : 'groups', false);
+    bootMark('desk');
+  }
+  setLeds();
+  showBrain(desk.model);
+  if (desk.web) renderNav();
+  $('armed').hidden = !desk.urgent_line;
+  renderRuns(desk.runs, desk.cards);
+  desk.runs.forEach(r => r.node && r.node.node && !byPath.has(r.node.node.path) && birth(r.node, false));
+  readCards(desk.cards);
+  desk.cards.forEach(c => { if (!toasted.has(c.id)) { toasted.add(c.id); toast(c); } });
+}
+poll();
+setInterval(() => { if (!document.hidden) poll(); }, 2500);
+
+// Desk cards speak once, when you are here to hear them; never over a live call or an answer.
+function readCards(cards) {
+  if (!unlocked || MUTE || desk.on_call || isSpeaking()) return;
+  const next = cards.find(c => !c.seen && c.speak);
+  if (!next) return;
+  say({ answer: next.text });
+  api('/desk/seen', { id: next.id }).catch(() => {});
+  next.seen = true;
+}
+
+const ago = t => { const s = Math.max(0, Date.now() / 1000 - t); return s < 60 ? `${s | 0}s` : s < 3600 ? `${s / 60 | 0}m` : s < 86400 ? `${s / 3600 | 0}h` : `${s / 86400 | 0}d`; };
+const KIND = { os: 'OS', agent: 'Agent' };
+function row(cls, text, tagText, whatText, whenText) {
+  const li = document.createElement('li');
+  li.className = cls;
+  const p = document.createElement('p');
+  p.textContent = text;   // text only: run output and cards are never HTML
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const tag = document.createElement('span');
+  tag.className = 'tag';
+  tag.textContent = tagText;
+  const what = document.createElement('span');
+  what.textContent = whatText;
+  const when = document.createElement('span');
+  when.style.marginLeft = 'auto';
+  when.textContent = whenText;
+  meta.append(tag, what, when);
+  li.append(p, meta);
+  return li;
+}
+const STAGE = { concept: 'Concepts', lyrics: 'Lyrics', humanize: 'Humanize', suno: 'Suno package' };
+function button(label, cls, fn) {
+  const b = document.createElement('button');
+  b.className = cls; b.textContent = label; b.type = 'button';
+  b.onclick = e => { e.stopPropagation(); fn(); };
+  return b;
+}
+function openDraft(r) {   // a song draft in the note panel, as text
+  $('note-group').replaceChildren(swatch('songs'), `Song · ${STAGE[r.stage] || r.stage}`);
+  $('note-title').textContent = r.title || r.text;
+  $('note-path').textContent = r.status === 'review' ? 'Waiting for your review' : r.status;
+  const ex = $('note-excerpt');
+  ex.textContent = r.draft || 'Writing…';
+  ex.classList.add('draft');
+  $('note-links-label').textContent = '';
+  fillChips($('note-links'), []);
+  panel.querySelector('.panel-body').scrollTop = 0;
+  panel.classList.remove('open'); void panel.offsetWidth;
+  panel.classList.add('open');
+  panel.inert = false;
+  panel.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('panel-open');
+}
+function runRow(r) {
+  const key = `${r.id}:${r.status}:${r.stage || ''}:${(r.progress || []).length}`;
+  const song = r.kind === 'song';
+  const li = row(`run ${r.status}`, song ? (r.title || r.text) : (r.headline || r.text), song && r.stage ? `${r.status} · ${STAGE[r.stage] || r.stage}` : r.status,
+                 song ? 'Song' : r.kind === 'playbook' ? 'Playbook' : (r.domain ? 'Research' : KIND[r.kind]) + (r.notify ? ' · call when done' : ''),
+                 r.status === 'running' ? ago(r.started) : ago(r.ended || r.created));
+  if (r.status === 'running' && r.progress && r.progress.length) {
+    const trace = document.createElement('div');
+    trace.className = 'trace';
+    r.progress.slice(-3).forEach(line => { const sp = document.createElement('span'); sp.textContent = line; trace.append(sp); });
+    li.insertBefore(trace, li.lastChild);
+  }
+  const acts = document.createElement('div');
+  acts.className = 'acts';
+  if (r.status === 'running') acts.append(button('Stop', 'btn-ghost', () => respond('/run/stop', { id: r.id }, 'Stopping…')));
+  if (song && r.status === 'review') {
+    if (r.stage === 'concept' && r.options) r.options.forEach((o, i) => acts.append(button(String(i + 1), 'btn-primary pick', () => dispatch(`option ${i + 1}`))));
+    else acts.append(button('Approve', 'btn-primary', () => dispatch('looks good')));
+    acts.append(button('Revise', 'btn-ghost', () => { input.value = 'rewrite '; input.focus(); }), button('View', 'btn-ghost', () => openDraft(r)));
+  }
+  if (acts.children.length) li.append(acts);
+  li.dataset.key = key;
+  if (song && r.draft) { li.classList.add('clickable'); li.title = 'Read the draft'; li.onclick = () => openDraft(r); }
+  if (r.status === 'pending') {
+    const acts = document.createElement('div');
+    acts.className = 'acts';
+    const go = document.createElement('button');
+    go.className = 'btn-primary'; go.textContent = 'Do it'; go.type = 'button';
+    go.onclick = e => { e.stopPropagation(); respond('/run/confirm', { id: r.id }, 'Starting…'); };
+    const no = document.createElement('button');
+    no.className = 'btn-ghost'; no.textContent = 'Cancel'; no.type = 'button';
+    no.onclick = e => { e.stopPropagation(); respond('/run/cancel', { id: r.id }, 'Cancelling…'); };
+    acts.append(go, no);
+    li.append(acts);
+  }
+  const n = nodeFor(r);
+  if (n) { li.classList.add('clickable'); li.title = 'Open the run note'; li.onclick = () => openNote(n); }
+  return li;
+}
+function approvalRow(a) {
+  const li = row('run needs', a.label, 'approval', (a.type || '').replace(/_/g, ' '), '');
+  li.dataset.key = a.id;
+  const acts = document.createElement('div');
+  acts.className = 'acts';
+  acts.append(button('Approve', 'btn-primary', () => respond('/approval', { id: a.id, decision: 'approve' }, 'Approving…')),
+              button('Reject', 'btn-ghost', () => respond('/approval', { id: a.id, decision: 'reject' }, 'Rejecting…')));
+  li.append(acts);
+  return li;
+}
+function cardRow(c) {
+  const li = row('run needs clickable', c.text, c.kind, '', ago(c.created));
+  li.title = 'Dismiss';
+  li.dataset.key = c.id;
+  li.onclick = () => { li.remove(); api('/desk/seen', { id: c.id }).then(poll).catch(() => {}); };
+  return li;
+}
+function renderRuns(runs, cards) {
+  const needs = [...runs.filter(r => r.status === 'pending' || r.status === 'review').map(runRow),
+                 ...(desk.approvals || []).map(approvalRow),
+                 ...cards.filter(c => !c.seen && (c.priority === 'high' || c.kind === 'message')).slice(-4).reverse().map(cardRow)];
+  const active = runs.filter(r => r.status === 'running').map(runRow);
+  // never-started proposals (cancelled, expired) aren't history
+  const hist = runs.filter(r => !['pending', 'running', 'expired', 'cancelled'].includes(r.status)).slice(-6).reverse().map(runRow);
+  $('needs').replaceChildren(...needs); $('needs-h').textContent = needs.length ? `Needs you · ${needs.length}` : '';
+  $('active').replaceChildren(...active); $('active-h').textContent = active.length ? `Active · ${active.length}` : '';
+  $('history').replaceChildren(...hist); $('history-h').textContent = hist.length ? `History · ${hist.length}` : '';
+  [...needs, ...active, ...hist].forEach(li => {   // only new or changed rows animate; polling never replays them
+    const k = li.dataset.key.replace(/:\d+$/, '');
+    if (!seenRows.has(k)) { seenRows.add(k); li.classList.add('fresh'); }
+  });
+  const urgent = needs.length, total = needs.length + active.length + hist.length;
+  const badge = $('runs-count');
+  badge.textContent = urgent + active.length;
+  badge.classList.toggle('hot', urgent > 0);
+  $('runs-empty').hidden = total > 0;
+  if (urgent > lastUrgent && $('tabs').dataset.tab !== 'runs') setTab('runs');
+  lastUrgent = urgent;
+}
+const seenRows = new Set();
+
+// ── One path for everything said or typed ───────────────────────────────────────
+const input = $('q'), send = $('send');
+$('ask').addEventListener('submit', async e => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text || send.disabled) return;
+  await dispatch(text);
+  input.select();
+});
+$('reset').addEventListener('click', () => respond('/chat', { reset: true }, 'Starting a new thread…'));
+
+async function dispatch(text) {
+  if (REMEMBER.test(text)) return capture(text);
+  if (sharing() && !MODEL_CMD.test(text)) return see(text);
+  if (screenStream && !sharing()) { endShare(); return say({ answer: 'The screen share has ended, sir. Share it again and ask me once more.' }, 'error'); }
+  return respond('/chat', { question: text }, 'Reading your notes…');
+}
+
+async function respond(path, body, pendingLine) {
+  setBusy(true);
+  showAnswer({ answer: pendingLine }, 'pending');
+  try {
+    const [res, data] = await api(path, body);
+    const domainHit = data.route === 'domain' && data.domain;
+    if (domainHit) data.nodes = [];   // the domain lights in the galaxy, not as a wall of chips
+    say(data, res.ok ? '' : 'error');
+    if (data.route === 'standing order') $('armed').hidden = false;
+    if (data.route === 'open' && data.open) openArea(data.open, data.label);
+    if (domainHit) filterDomain(data.domain);
+    if (['run', 'when done', 'reminder', 'stage', 'briefing', 'song', 'playbook', 'approval'].includes(data.route)
+        || path.startsWith('/run') || path === '/approval') poll();
+    if (res.ok) prove(data.nodes || []);
+  } catch {
+    say({ answer: 'The brain is offline. Start it with: python server.py' }, 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+// Answer first, then the galaxy proves where it came from. Never read the note aloud.
+function say(data, state) {
+  showAnswer(data, state);
+  if (data.model) showBrain(data.model);
+  speak(data.answer);
+}
+
+// Small talk returns no sources, so it never moves the camera.
+function prove(ids) {
+  const used = ids.map(i => nodes[i]).filter(Boolean);
+  if (!used.length) return;
+  if (used.length >= 4) {   // flying to one of six would lie about the source: light the cluster, hold still
+    closePanel(); setLegendPressed(null); light(used); pauseSpin(9000);
+    return;
+  }
+  openNote(used[0]);
+}
+
+function showAnswer(data, state) {
+  const box = $('answer');
+  box.hidden = false;
+  box.className = 'answer glass' + (state ? ' ' + state : '');
+  void box.offsetWidth;
+  box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
+  const p = $('answer-text');
+  if (state === 'pending' || still) p.textContent = data.answer || '';
+  else p.replaceChildren(...(data.answer || '').split(/(\s+)/).map((w, i) => {
+    const s = document.createElement('span');   // text nodes only: answers are never HTML
+    s.textContent = w;
+    s.style.animationDelay = `${Math.min(i * 14, 900)}ms`;
+    return s;
+  }));
+  $('answer-model').textContent = data.model ? pretty(data.model) : state === 'error' ? 'Error' : '';
+  fillChips($('answer-sources'), (data.nodes || []).map(i => nodes[i]).filter(Boolean));
+}
+
+function setBusy(on) {
+  send.disabled = on;
+  if (on) setStatus('thinking'); else if (document.body.dataset.status === 'thinking') settle();
+}
+
+// ── Total recall: a new star is born at its closest relative, pulses, and the camera flies to it.
+async function capture(text) {
+  setBusy(true);
+  showAnswer({ answer: 'Writing that down…' }, 'pending');
+  try {
+    const [res, data] = await api('/remember', { text });
+    say(data, res.ok ? '' : 'error');   // a failed capture is said out loud, never swallowed
+    if (!res.ok) return;
+    if (data.existing) return nodes[data.node] && openNote(nodes[data.node]);
+    birth(data);
+  } catch {
+    say({ answer: 'I could not reach the desk, sir. That note was NOT saved.' }, 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+function birth({ node, links: linkedIds, near }, fly = true) {
+  if (byPath.has(node.path)) return;   // already here (another tab added it, or a rebuild indexed it)
+  const n = { ...node, id: nodes.length, neighbors: [], links: [] };
+  byPath.set(n.path, n);
+  const home = nodes[near] || nodes[linkedIds[0]];
+  const j = () => (Math.random() - 0.5) * 12;
+  Object.assign(n, home ? { x: home.x + j(), y: home.y + j(), z: home.z + j() } : { x: j(), y: j(), z: j() });
+  if (!colorOf[n.group]) { colorOf[n.group] = PALETTE[Object.keys(colorOf).length % PALETTE.length]; count[n.group] = 0; addGroup(n.group); }
+  count[n.group]++;
+  legend.querySelector(`button[data-group="${CSS.escape(n.group)}"] .count`).textContent = count[n.group];
+  nodes.push(n);
+  linkedIds.forEach(i => { const l = { source: n, target: nodes[i] }; links.push(l); wire(l); });
+  Graph.graphData({ nodes, links });
+  updateStats();
+  n.bornAt = performance.now();
+  startPulse();
+  if (fly) setTimeout(() => openNote(n), 450);   // run stars pulse in place; only your own captures fly
+}
+
+// Glow pulse for newborn stars: a loop that runs only while something is pulsing.
+let pulsing = false;
+function startPulse() { if (!pulsing) { pulsing = true; requestAnimationFrame(pulse); } }
+function pulse() {
+  let alive = false;
+  const now = performance.now();
+  for (let i = nodes.length - 1; i >= 0 && i >= nodes.length - 8; i--) {
+    const n = nodes[i];
+    if (!n.bornAt || !n.glow) continue;
+    const k = (now - n.bornAt) / 2200, base = n.glowSize || 18;
+    if (k >= 1) { n.glow.scale.set(base, base, 1); delete n.bornAt; continue; }
+    const s = base * (1 + 5 * Math.sin(Math.PI * k) * (1 - k));
+    n.glow.scale.set(s, s, 1);
+    alive = true;
+  }
+  if (alive || nodes.some(n => n.bornAt && !n.glow)) requestAnimationFrame(pulse); else pulsing = false;
+}
+
+// ── Listening: buffer final phrases; the pause that truly ends a thought sends it all.
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const mic = $('mic');
+let rec = null, buffer = '', timer = null;
+if (!Recognition) { mic.disabled = true; mic.title = 'Speech recognition needs Chrome.'; }
+mic.addEventListener('click', () => listening ? stopListening() : startListening());
+
+function startListening() {
+  rec = new Recognition();
+  rec.lang = 'en-GB';
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.onresult = e => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const said = e.results[i][0].transcript.trim();
+      if (!said) continue;
+      if (INTERRUPT.test(said) && !buffer) { hush(); input.value = ''; continue; }   // bypasses the buffer
+      if (isSpeaking()) continue;   // never transcribe our own voice
+      clearTimeout(timer);
+      if (e.results[i].isFinal) buffer = (buffer + ' ' + said).trim();
+      input.value = e.results[i].isFinal ? buffer : (buffer + ' ' + said).trim();
+      timer = setTimeout(flush, FINISH_MS);   // more speech restarts the wait
+    }
+  };
+  rec.onend = () => { if (listening) try { rec.start(); } catch {} };   // Chrome ends sessions on its own
+  rec.onerror = e => { if (e.error === 'not-allowed') { stopListening(); say({ answer: 'I need microphone permission for that, sir.' }, 'error'); } };
+  listening = true;
+  mic.setAttribute('aria-pressed', 'true');
+  rec.start();
+  settle();
+}
+function stopListening() {
+  listening = false;
+  mic.setAttribute('aria-pressed', 'false');
+  clearTimeout(timer);
+  if (rec) rec.stop();
+  settle();
+}
+function flush() {
+  const text = buffer.trim();
+  buffer = '';
+  if (!text) return;   // interim-only: wait for the final
+  input.value = text;
+  dispatch(text);
+}
+
+// ── Sight: one fresh frame, captured at the moment you ask.
+let screenStream = null;
+const video = $('frame-src'), screenBtn = $('screen');
+const sharing = () => !!screenStream && screenStream.getVideoTracks().some(t => t.readyState === 'live');
+screenBtn.addEventListener('click', async () => {
+  if (sharing()) return endShare();
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5 }, audio: false });
+  } catch { return; }
+  video.srcObject = screenStream;
+  await video.play().catch(() => {});
+  screenStream.getVideoTracks()[0].addEventListener('ended', () => { $('live').hidden = true; screenBtn.setAttribute('aria-pressed', 'false'); });
+  $('live').hidden = false;
+  screenBtn.setAttribute('aria-pressed', 'true');
+});
+function endShare() {
+  if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+  screenStream = null;
+  video.srcObject = null;
+  $('live').hidden = true;
+  screenBtn.setAttribute('aria-pressed', 'false');
+}
+async function see(question) {
+  if (!sharing() || !video.videoWidth) return say({ answer: 'The screen share has ended, sir. Share it again and ask me once more.' }, 'error');
+  const scale = Math.min(1, 1600 / video.videoWidth);
+  const c = document.createElement('canvas');
+  c.width = Math.round(video.videoWidth * scale);
+  c.height = Math.round(video.videoHeight * scale);
+  c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+  const image = c.toDataURL('image/jpeg', 0.85).split(',')[1];   // we encode JPEG, so we send image/jpeg
+  return respond('/see', { question, image, media_type: 'image/jpeg' }, 'Looking at your screen…');
+}
+
+// ── Command palette (Ctrl+K): fuzzy over commands and every note ─────────────────
+const palette = $('palette'), palQ = $('pal-q'), palList = $('pal-list');
+const prefill = t => () => { input.value = t; input.focus(); input.setSelectionRange(t.length, t.length); };
+function commands() {
+  const list = [
+    ...((desk.web && desk.web.areas) || []).map(a => [`Open: ${a.label}`, AREA_ICON[a.key] || '•', () => openArea(desk.web.url + a.path, a.label)]),
+    ...(desk.domains || []).map(d => [`Domain: ${d.label}`, '●', () => filterDomain(d.id)]),
+    ['Write a song…', '♪', prefill('write a song about ')],
+    ['What changed today?', '◷', () => dispatch('what changed today?')],
+    ['What changed this week?', '◷', () => dispatch('what changed this week?')],
+    ['Stop the running run', '■', () => dispatch('stop that run')],
+    ...(desk.playbooks || []).map(n => [`Run playbook: ${n}`, '▤', () => dispatch(`run my ${n} playbook`)]),
+    ['Start research…', '⌕', prefill('research ')],
+    ['Start an agent…', '⚙', prefill('agent ')],
+    ['Run an OS workflow…', '▶', prefill('run workflow ')],
+    ['Remember…', '+', prefill('remember that ')],
+    ['Confirm the pending run', '✓', () => dispatch('do it')],
+    [sharing() ? 'Stop sharing the screen' : 'Share the screen', '▣', () => screenBtn.click()],
+    [listening ? 'Stop listening' : 'Start listening', '●', () => mic.click()],
+    ['New thread', '↺', () => $('reset').click()],
+    ['Clear focus', '○', () => clearFocus(true)],
+    ['Call me now', '☎', () => dispatch('call me')],
+    ['Call me with the briefing now', '☎', () => dispatch('call me with the briefing now')],
+    ['Stage an urgent call in ninety seconds', '☎', () => dispatch('stage an urgent call in ninety seconds')],
+    ['Pocket code (pair Telegram)', '✆', () => dispatch('pocket code')],
+    [desk.links.google ? 'Reconnect Google' : 'Connect Google', 'G', () => { location.href = '/oauth/start'; }],
+    ['Go back to your normal brain', '◆', () => respond('/model', { name: 'go back to your normal brain' }, 'Swapping…')],
+    ...desk.models.filter(m => m.id !== desk.model).map(m => [`Switch brain: ${m.name}`, '◆', () => respond('/model', { name: `switch to ${m.name}` }, 'Swapping…')]),
+  ];
+  return list.map(([label, ico, run]) => ({ label, ico, run, kind: 'Command' }));
+}
+function fuzzy(q, text) {   // subsequence match; consecutive letters and word starts score higher
+  if (!q) return { score: 0, hits: [] };
+  const t = text.toLowerCase(); let score = 0, last = -2, i = 0;
+  const hits = [];
+  for (const ch of q.toLowerCase()) {
+    if (ch === ' ') continue;
+    const at = t.indexOf(ch, i);
+    if (at < 0) return null;
+    score += at === last + 1 ? 6 : 1;
+    if (at === 0 || /[\s\-_/·:]/.test(t[at - 1])) score += 4;
+    score -= Math.min(3, (at - i) * 0.05);
+    hits.push(at); last = at; i = at + 1;
+  }
+  return { score: score - t.length * 0.01, hits };
+}
+let palItems = [], palAt = 0;
+function palRender() {
+  const q = palQ.value.trim();
+  const pool = [...commands(), ...nodes.map(n => ({ label: n.label, ico: '✦', kind: n.group, run: () => openNote(n) }))];
+  palItems = pool.map(it => ({ ...it, m: fuzzy(q, it.label) })).filter(it => it.m)
+    .sort((a, b) => b.m.score - a.m.score || (a.kind === 'Command' ? -1 : 1)).slice(0, q ? 14 : 16);
+  palAt = Math.min(palAt, Math.max(0, palItems.length - 1));
+  palList.replaceChildren(...palItems.map((it, i) => {
+    const li = document.createElement('li');
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', String(i === palAt));
+    const ico = document.createElement('span'); ico.className = 'ico'; ico.textContent = it.ico;
+    const name = document.createElement('span');
+    const hit = new Set(it.m.hits);
+    [...it.label].forEach((ch, k) => { if (hit.has(k)) { const mk = document.createElement('mark'); mk.textContent = ch; name.append(mk); } else name.append(ch); });
+    const kind = document.createElement('span'); kind.className = 'kind'; kind.textContent = it.kind;
+    li.append(ico, name, kind);
+    li.onmousemove = () => { if (palAt !== i) { palAt = i; palRender(); } };
+    li.onclick = () => palRun(i);
+    return li;
+  }));
+  palList.children[palAt]?.scrollIntoView({ block: 'nearest' });
+}
+function palOpen() { palette.hidden = false; palQ.value = ''; palAt = 0; palRender(); palQ.focus(); }
+function palClose() { palette.hidden = true; }
+function palRun(i) { const it = palItems[i]; palClose(); if (it) it.run(); }
+palQ.addEventListener('input', () => { palAt = 0; palRender(); });
+palQ.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); palAt = Math.min(palAt + 1, palItems.length - 1); palRender(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); palAt = Math.max(palAt - 1, 0); palRender(); }
+  else if (e.key === 'Enter') { e.preventDefault(); palRun(palAt); }
+  else if (e.key === 'Escape') { e.preventDefault(); palClose(); }
+});
+palette.addEventListener('pointerdown', e => { if (e.target === palette) palClose(); });
+$('pal-open').addEventListener('click', palOpen);
+$('brain').addEventListener('click', () => { palOpen(); palQ.value = 'brain'; palRender(); });
+addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); palette.hidden ? palOpen() : palClose(); }
+});
+
+// ── Starfield and glow halos need three.js; the galaxy still works without them.
+// three must match the revision bundled inside 3d-force-graph (r186), or its renderer rejects our objects.
+const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js';
+function starfield(THREE) {
+  const N = 3000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+  const tints = [[0.84, 0.83, 0.87], [0.43, 0.83, 0.96], [0.82, 0.64, 0.31]];
+  for (let i = 0; i < N; i++) {
+    const r = 2400 + Math.random() * 3600, u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u);
+    pos.set([r * s * Math.cos(a), r * u, r * s * Math.sin(a)], i * 3);
+    const t = tints[Math.random() < 0.8 ? 0 : Math.random() < 0.65 ? 1 : 2], b = 0.2 + Math.random() * 0.6;
+    col.set([t[0] * b, t[1] * b, t[2] * b], i * 3);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const stars = new THREE.Points(geo, new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, transparent: true, depthWrite: false }));
+  stars.onBeforeRender = () => { stars.rotation.y += 0.00004; };   // a slow drift for depth
+  return stars;
+}
+function glowTexture(THREE) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d'), grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,0.85)');
+  grad.addColorStop(0.3, 'rgba(255,255,255,0.28)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+// Additive halo sprites instead of a bloom pass: the post-processing chain double-encodes
+// colour and turns the black background lavender.
+try {
+  const THREE = await import(THREE_URL);
+  Graph.scene().add(starfield(THREE));
+  const glow = glowTexture(THREE);
+  Graph.nodeThreeObjectExtend(true).nodeThreeObject(n => {
+    n.glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: colorOf[n.group], blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+    n.glow.raycast = () => {};  // clicks go to the star, never its halo
+    n.glowSize = 18 * Math.cbrt(1 + n.neighbors.length / 3);
+    n.glow.scale.set(n.glowSize, n.glowSize, 1);
+    return n.glow;
+  });
+  repaint();
+} catch (err) {
+  console.warn('Starfield and glow unavailable:', err);
+}
+</script>
+</body>
+</html>
