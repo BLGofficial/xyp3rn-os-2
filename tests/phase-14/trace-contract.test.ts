@@ -54,7 +54,7 @@ describe('defined once (the guide\'s constraint: "if you find yourself defining 
       return statSync(p).isDirectory() ? walk(p) : p.endsWith('.ts') && !p.endsWith('.test.ts') ? [p] : [];
     });
     const files = ['core', 'records', 'tech', 'knowledge', 'research-intelligence'].flatMap((d) => walk(join(REPO_ROOT, d)))
-      .filter((p) => !relative(REPO_ROOT, p).startsWith('tech/trace/'));
+      .filter((p) => !relative(REPO_ROOT, p).replaceAll('\\', '/').startsWith('tech/trace/'));
     const offenders = files.flatMap((p) => {
       const src = readFileSync(p, 'utf8');
       return [

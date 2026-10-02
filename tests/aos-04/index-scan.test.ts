@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rename, rm, stat, symlink, unlink, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, stat, unlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -8,6 +8,7 @@ import { scanRoots, type ScanResult } from '../../knowledge/knowledge-graph/scan
 import { createLocalVaultStore } from '../../knowledge/source-registry/vault-store.ts';
 import { createTestDb, type TestDb } from '../helpers/db.ts';
 import { asCommitted, insertRun } from '../helpers/records-fixture.ts';
+import { linkTo } from '../helpers/symlink.ts';
 
 // AOS-04 Plan C1 Task 2: the scan. A fixture root built here (the real checkout is never walked by this test);
 // the index rows written as xyp_indexer; counts that add up; nothing excluded ever named.
@@ -15,10 +16,13 @@ import { asCommitted, insertRun } from '../helpers/records-fixture.ts';
 const sha = (b: string | Uint8Array) => createHash('sha256').update(b).digest('hex');
 const OVERSIZE = 1_048_577;
 const LOCKED = 'docs/locked.md';
+// A backslash is a separator on Windows, so that filesystem cannot hold the unsupported-path fixture at all.
+const ODD = process.platform === 'win32' ? 0 : 1;
 
 let db: TestDb;
 let root: string;
 let vaultDir: string;
+let outsideDir: string;
 let first: ScanResult;
 
 const put = async (rel: string, body: string | Uint8Array) => {
@@ -47,7 +51,7 @@ beforeAll(async () => {
   await put(LOCKED, '[FIXTURE] locked\n');
   await put('image.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]));
   await put('big.txt', 'x'.repeat(OVERSIZE));
-  await put('odd\\name.txt', '[FIXTURE] a backslash is a legal Linux filename but not an index path\n');
+  if (ODD) await put('odd\\name.txt', '[FIXTURE] a backslash is a legal Linux filename but not an index path\n');
   // Excluded, and never named anywhere the scan writes:
   await put('.env', 'SECRET=[FIXTURE]\n');
   await put('.env.example', 'SECRET=\n');
@@ -56,14 +60,17 @@ beforeAll(async () => {
   await put('node_modules/pkg/index.js', '');
   await put('.git/HEAD', 'ref: refs/heads/main\n');
   await put('.vault/ab/abc', '');
-  await symlink('/etc/hostname', join(root, 'escape-link'));
-  await symlink(join(root, 'records', 'a.ts'), join(root, 'records', 'alias.ts'));
+  outsideDir = await mkdtemp(join(tmpdir(), 'xyp-outside-'));
+  await writeFile(join(outsideDir, 'hostname'), '[FIXTURE] outside the root\n');
+  linkTo(join(outsideDir, 'hostname'), join(root, 'escape-link'));
+  linkTo(join(root, 'records', 'a.ts'), join(root, 'records', 'alias.ts'));
   first = await scan();
 }, 120_000);
 afterAll(async () => {
   await db?.drop();
   await rm(root, { recursive: true, force: true });
   await rm(vaultDir, { recursive: true, force: true });
+  if (outsideDir) await rm(outsideDir, { recursive: true, force: true });
 });
 
 describe('scope', () => {
@@ -102,7 +109,7 @@ describe('the first scan', () => {
   it('adds up: eligible = indexed + failed, excluded counted per rule, sealed success', async () => {
     expect(first.status).toBe('success');
     expect(first.counts).toMatchObject({
-      eligible: 8, indexed: 6, failed: 2, missing: 0,
+      eligible: 7 + ODD, indexed: 6, failed: 1 + ODD, missing: 0,
       excluded: { credentials: 3, backups: 1, dependencies: 1, vcs: 1, 'runtime-state': 1, symlink: 1, 'symlink-escape': 1 },
     });
     expect(first.failures.map((f) => f.path).sort()).toEqual([LOCKED].sort());
@@ -113,7 +120,7 @@ describe('the first scan', () => {
     expect(run!.finished_at).not.toBeNull();
   });
 
-  it('counts a path the index cannot hold as failed, without naming it', () => {
+  it.skipIf(!ODD)('counts a path the index cannot hold as failed, without naming it', () => {
     expect(first.counts.unsupportedPaths).toBe(1);
     expect(JSON.stringify(first)).not.toContain('odd');
   });
