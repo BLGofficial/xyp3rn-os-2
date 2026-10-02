@@ -2,6 +2,7 @@ import { runtime, studioLoaders } from '../../lib/server';
 import { defaultTagSetAction } from '../studio-actions';
 import { ErrorBanner, ScrollTable, Time } from '../ui';
 import { RecipeForm, TagSetForm } from './studio-ui';
+import { VoiceCapture } from './voice-capture';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export default async function Studio({ searchParams: pendingSearchParams }: { se
         handed off once its lyric, recipe and tag set versions are approved. Read at <Time at={s.asOf} />.
       </p>
       <ErrorBanner error={searchParams.error} />
+      <VoiceCapture />
 
       <h2>Style recipes</h2>
       <ScrollTable label="Style recipes">

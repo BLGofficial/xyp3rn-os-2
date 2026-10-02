@@ -76,6 +76,18 @@
 .status-unavailable { color: theme('colors.warn'); }
 .status-unavailable::before { content: '!' / ''; }
 
+.voice-capture { padding: 20px; margin: 24px 0; border: 1px solid var(--border, #394453); border-radius: 12px; }
+.voice-capture h2 { margin-top: 0; }
+.voice-capture p { margin: 10px 0; }
+.capture-fields, .capture-controls { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+.capture-fields label { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 140px; }
+.capture-transcript { display: flex; flex-direction: column; gap: 8px; }
+.capture-transcript textarea { width: 100%; resize: vertical; min-height: 150px; }
+.capture-confirm { display: flex; align-items: flex-start; gap: 10px; margin: 20px 0; }
+.voice-capture button, .voice-capture select { min-height: 44px; }
+.capture-controls label { display: flex; align-items: center; gap: 8px; }
+.voice-capture input[type=checkbox] { width: 18px; height: 18px; flex-shrink: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation: none !important; scroll-behavior: auto !important; }
 }
