@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { ComponentsData, StatusData } from '../../server/hud-loaders';
+import type { ComponentsData, HudEvent, StatusData } from '../../server/hud-loaders';
 import { HUD_DOMAIN, HUD_STATUS, LENS_DOMAIN, LENSES, ORBIT_ORDER, type HudOwner, type Lens } from '../../lib/hud-theme';
 import { askAction } from '../ask-actions';
 import { HudGlobe } from './hud-globe';
@@ -19,7 +19,10 @@ type Props = {
 
 const OWNERS: readonly HudOwner[] = [...ORBIT_ORDER, 'shared'];
 const ACTIVITY_DOMAIN: Record<string, HudOwner> = { song: 'RECORDS', agent: 'CORE', workflow: 'CORE', research: 'RESEARCH_INTELLIGENCE', decision: 'GOVERNANCE' };
-const ago = (iso: string, now: number) => {
+// Relative times render only after mount (null on the server): the server's clock and the browser's differ by the
+// time the page takes to arrive, and "12s" against "13s" is a hydration mismatch.
+const ago = (iso: string, now: number | null) => {
+  if (now === null) return '';
   const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
 };
@@ -43,7 +46,8 @@ export function HudShell({ identity, owner, components, componentsError, status:
   const [contrast, setContrast] = useState<'normal' | 'high'>('normal');
   const [drawer, setDrawer] = useState<'left' | 'right' | null>(null);
   const [showGlobe, setShowGlobe] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Date.now()), []);
   const search = useRef<HTMLInputElement>(null);
 
   // Settings per browser; reduced motion always wins.
@@ -68,18 +72,39 @@ export function HudShell({ identity, owner, components, componentsError, status:
     history.replaceState(null, '', u);
   }, []);
 
-  // Status: refreshed every 15 s while the tab is visible (live events arrive with the event stream).
-  useEffect(() => {
-    const t = setInterval(async () => {
-      setNow(Date.now());
-      if (document.hidden) return;
-      try {
-        const r = await fetch('/api/system/status', { cache: 'no-store' });
-        if (r.ok) setStatus(await r.json() as StatusData);
-      } catch { /* keep the last reading; its as-of time says how old it is */ }
-    }, 15_000);
-    return () => clearInterval(t);
+  // Status: re-read every 15 s while the tab is visible, and soon after each live event (counts roll only then).
+  const refreshStatus = useCallback(async () => {
+    try {
+      const r = await fetch('/api/system/status', { cache: 'no-store' });
+      if (r.ok) setStatus(await r.json() as StatusData);
+    } catch { /* keep the last reading; its as-of time says how old it is */ }
   }, []);
+  useEffect(() => {
+    const t = setInterval(() => { setNow(Date.now()); if (!document.hidden) void refreshStatus(); }, 15_000);
+    return () => clearInterval(t);
+  }, [refreshStatus]);
+
+  // Live events (GET /api/events/stream): each recorded row once when it starts and once when it finishes.
+  const [live, setLive] = useState<HudEvent[]>([]);
+  const [liveState, setLiveState] = useState<'connecting' | 'open' | 'down'>('connecting');
+  const [pulse, setPulse] = useState<{ readonly seq: number; readonly event: HudEvent } | null>(null);
+  const [scanSweep, setScanSweep] = useState(false);
+  useEffect(() => {
+    const es = new EventSource('/api/events/stream');
+    let seq = 0; let refresh: ReturnType<typeof setTimeout> | undefined; let sweep: ReturnType<typeof setTimeout> | undefined;
+    es.onopen = () => setLiveState('open');
+    es.onerror = () => setLiveState('down'); // EventSource reconnects on its own (retry: 5 s)
+    es.addEventListener('problem', () => setLiveState('down'));
+    es.addEventListener('activity', (m) => {
+      const e = JSON.parse((m as MessageEvent<string>).data) as HudEvent;
+      setLiveState('open');
+      setLive((l) => [e, ...l.filter((x) => x.key !== e.key)].slice(0, 20));
+      setPulse({ seq: ++seq, event: e });
+      if (e.kind === 'scan') { setScanSweep(e.status === 'running'); clearTimeout(sweep); if (e.status !== 'running') sweep = setTimeout(() => setScanSweep(false), 1500); }
+      clearTimeout(refresh); refresh = setTimeout(() => void refreshStatus(), 800);
+    });
+    return () => { es.close(); clearTimeout(refresh); clearTimeout(sweep); };
+  }, [refreshStatus]);
 
   // "/" focuses search (not while typing somewhere else).
   useEffect(() => {
@@ -200,7 +225,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
       {/* D. Centre: the globe */}
       <main id="hud-main" className="relative" style={{ gridColumn: 2, gridRow: 2 }} aria-label="Graph view" data-show-globe={showGlobe}>
         <HudGlobe data={components} error={componentsError} hidden={hidden} lens={lens} focus={lens in LENS_DOMAIN ? LENS_DOMAIN[lens as keyof typeof LENS_DOMAIN] ?? null : null}
-          identity={identity} motion={effectiveMotion} />
+          identity={identity} motion={effectiveMotion} pulse={pulse} />
       </main>
 
       {/* E. Right rail */}
@@ -229,9 +254,30 @@ export function HudShell({ identity, owner, components, componentsError, status:
           ) : <p className="hud-muted m-0">Status unavailable.</p>}
         </section>
         <section className="hud-panel" aria-labelledby="live-h">
-          <div className="flex items-baseline justify-between"><h2 id="live-h" className="hud-label hud-muted mb-2 mt-0">Live activity</h2><a href="/" className="hud-label text-[11px]">View all</a></div>
-          <ol className="m-0 flex list-none flex-col gap-2 p-0">
-            {(status?.activity ?? []).slice(0, 6).map((a, i) => {
+          <div className="flex items-baseline justify-between">
+            <h2 id="live-h" className="hud-label hud-muted mb-2 mt-0">Live activity</h2>
+            <span className="hud-label text-[10px]" data-live={liveState} style={{ color: liveState === 'open' ? HUD_STATUS.ok.color : liveState === 'down' ? HUD_STATUS.warning.color : HUD_STATUS.info.color }}>
+              {liveState === 'open' ? '● Live' : liveState === 'down' ? '! Reconnecting' : '• Connecting'}
+            </span>
+            <a href="/" className="hud-label text-[11px]">View all</a>
+          </div>
+          <ol className="m-0 flex list-none flex-col gap-2 p-0" aria-live="polite">
+            {live.slice(0, 5).map((e) => {
+              const d = HUD_DOMAIN[(e.domain as HudOwner | null) ?? 'shared'] ?? HUD_DOMAIN.shared;
+              const tone = e.status === 'error' ? HUD_STATUS.failure : e.status === 'success' ? HUD_STATUS.ok : HUD_STATUS.info;
+              const flash = { '--flash': `${d.glow}55` } as React.CSSProperties;
+              return (
+                <li key={e.key} className="hud-flash flex items-start gap-2" style={flash} data-live-event={e.kind}>
+                  <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center" style={{ background: `${d.base}22`, boxShadow: `inset 0 0 0 1px ${d.base}66` }}><DomainIcon icon={d.icon} color={d.label} size={14} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px]">{e.title}</span>
+                    <span className="hud-data block text-[11px]" style={{ color: tone.color }}>{tone.glyph} {e.kind} · {e.status}</span>
+                  </span>
+                  <span className="hud-data hud-muted text-[11px]">{ago(e.at, now)}</span>
+                </li>
+              );
+            })}
+            {(status?.activity ?? []).slice(0, Math.max(0, 6 - live.length)).map((a, i) => {
               const d = HUD_DOMAIN[ACTIVITY_DOMAIN[a.kind] ?? 'shared'];
               return (
                 <li key={`${a.at}-${i}`} className="flex items-start gap-2">
@@ -244,7 +290,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
                 </li>
               );
             })}
-            {status && status.activity.length === 0 && <li className="hud-muted">No activity recorded yet.</li>}
+            {status && status.activity.length === 0 && live.length === 0 && <li className="hud-muted">No activity recorded yet.</li>}
           </ol>
         </section>
         <section className="hud-panel" aria-labelledby="files-h">
@@ -281,7 +327,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
             <p className="m-0">Graph API: <span className="hud-data">/api/graph/overview · /node · /components</span>, <span className="hud-data">/api/system/status</span>.</p>
             <p className="m-0 mt-1 hud-muted">No platform connectors yet (Prompt 11).</p>
           </BottomSection>
-          <BottomSection label="Data pipeline">
+          <BottomSection label="Data pipeline" sweep={scanSweep || status?.lastScan?.status === 'running'}>
             <p className="hud-data m-0">SCAN → HASH → PARSE → RESOLVE → PROJECT</p>
             <p className="m-0 mt-1">{status?.lastScan ? <>Last scan <strong>{status.lastScan.status}</strong>, started {new Date(status.lastScan.startedAt).toLocaleString('en-GB', { timeZone: 'Europe/Sofia' })}</> : 'No scan recorded yet.'}</p>
           </BottomSection>
@@ -338,9 +384,25 @@ function Row({ k, v, src, tone }: { k: string; v: number | string; src: string; 
   return (
     <div className="hud-row" title={`Source: ${src}`}>
       <dt className="hud-2 text-[13px]">{k}</dt>
-      <dd className="hud-data m-0 text-[13px]" style={tone ? { color: HUD_STATUS[tone].color } : undefined}>{tone ? `${HUD_STATUS[tone].glyph} ` : ''}{v}</dd>
+      <dd className="hud-data m-0 text-[13px]" style={tone ? { color: HUD_STATUS[tone].color } : undefined}>{tone ? `${HUD_STATUS[tone].glyph} ` : ''}{typeof v === 'number' ? <Odometer value={v} /> : v}</dd>
     </div>
   );
+}
+
+/** A count that rolls to its new value (600 ms) when a real reading changes it; instant with Motion Off. */
+function Odometer({ value }: { value: number }) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+  useEffect(() => {
+    const start = from.current; from.current = value;
+    const off = document.querySelector('[data-hud-root]')?.getAttribute('data-motion') === 'off';
+    if (off || start === value) { setShown(value); return; }
+    const t0 = performance.now(); let id = 0;
+    const step = (t: number) => { const k = Math.min(1, (t - t0) / 600); setShown(Math.round(start + (value - start) * (1 - (1 - k) ** 3))); if (k < 1) id = requestAnimationFrame(step); };
+    id = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(id);
+  }, [value]);
+  return <span data-odometer={value}>{shown}</span>;
 }
 
 function Sparkline({ series }: { series: readonly number[] }) {
@@ -384,10 +446,10 @@ function OwnerMenu({ owner, motion, reduced, contrast, onMotion, onContrast }: {
   );
 }
 
-function BottomSection({ label, children }: { label: string; children: React.ReactNode }) {
+function BottomSection({ label, children, sweep }: { label: string; children: React.ReactNode; sweep?: boolean }) {
   return (
     <details className="relative">
-      <summary className="hud-label cursor-pointer list-none border border-[var(--hud-border)] bg-[rgba(20,38,70,0.55)] px-3 py-1.5 text-[11px]" style={{ clipPath: 'polygon(8px 0,100% 0,100% 100%,0 100%,0 8px)' }}>{label}</summary>
+      <summary data-sweep={sweep ? 'true' : undefined} className="hud-label hud-sweepable cursor-pointer list-none border border-[var(--hud-border)] bg-[rgba(20,38,70,0.55)] px-3 py-1.5 text-[11px]" style={{ clipPath: 'polygon(8px 0,100% 0,100% 100%,0 100%,0 8px)' }}>{label}</summary>
       <div className="hud-panel absolute bottom-10 left-1/2 z-20 w-80 -translate-x-1/2 p-3 text-[13px]">{children}</div>
     </details>
   );
