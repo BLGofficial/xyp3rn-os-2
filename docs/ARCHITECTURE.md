@@ -559,3 +559,33 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **Not proven end to end:** a real skill or deep run through `/ask/[id]` (the smoke covers the lookup tier only; skill and deep are covered by unit tests with fake runners).
 - **The lookup** no longer counts pending schedule requests: `release_schedule_requests` exists only on the old base.
 - **Persona and intent classes** (Prompt 04) beyond these four tiers are not built.
+
+**F52. The Mercury HUD (/hud).** DECIDED (operator, 2026-10-01; brief "XYP3RN AGENTIC OS — MERCURY EDITION").
+- **Sub-components:** `knowledge/knowledge-graph/components.ts` is the one path-rule table. It matches every indexed file to exactly one sub-component: the reserved ids above, plus TRACE, which Tech built under its own name. The most specific rule wins (`dir/`, an exact file, or `agents/x-*.agent.md`). An unmatched file goes to its owner domain's Other (the index's frontmatter, manifest or domain-path ownership); a file with no owner goes to Shared. A component with no file is `reserved` and is never drawn as built.
+- **Links** are aggregates of `graph_edges` rows, from one repeatable-read snapshot. `aggregated + internal + unmapped = graph_edges`: internal edges have both ends in one component; unmapped edges have a record end (a song, a release). Both are pinned by `apps/web/server/hud.test.ts`, with the files summing to the indexed total.
+- **Endpoints:** `GET /api/graph/components` and `GET /api/system/status`. Both are session-only and `no-store`. The status composes the shell's pulse, metrics and activity with agent, run, graph and scan counts. Provider keys are reported as configured or not; their values never leave the server.
+- **The page:**
+  - It is a full-screen layer over the app shell. The shell stays mounted and is made `inert` while the HUD is open; the root layout is unchanged.
+  - Its palette (`apps/web/lib/hud-theme.ts`) and fonts (Orbitron, Chakra Petch, JetBrains Mono: pinned `@fontsource`, OFL notices) apply to `/hud` only. Changing `taxonomy.ts` would restyle every page.
+- **The globe:**
+  - The canvas draws light only (body, wireframe, rim, glows, links, file satellites). Every label and control is HTML placed from the same pure layout (`apps/web/lib/hud-layout.ts`).
+  - A side domain's title heads its own list.
+  - Labels that would collide hide; their dots stay, and they return on zoom or focus.
+  - FIT is the largest zoom, at most 1×, at which everything drawn fits. Semantic levels are measured relative to FIT.
+  - The view (`z`, `c`, `lens`) lives in the URL.
+- **Responsive:**
+  - 1280–1599 px: the left rail is a drawer and a select replaces the lens tabs.
+  - Below 1280 px: one column.
+  - Below 960 px: the list comes first and the globe is behind a button.
+- **Motion:** Cinematic (default), Calm or Off, per browser. Reduced motion forces Off. Boot and ambient motion run in Cinematic only and never move nodes, send light along links or change numbers.
+
+**F53. Open after F52.**
+- **Live events:** `GET /api/events/stream` (SSE) and the data-driven beads, odometer counts and pipeline sweep are not built. Status refreshes every 15 s while the tab is visible.
+- **Not built yet:**
+  - hovering a file to light its own edges (hovering a component lights its aggregated links)
+  - search results that fly the camera to a node (search opens `/search`)
+  - the FLIP morph between views (Agent Mesh and Workflow Flow are lenses; List View links to the Graph list)
+  - the frame-budget drop to Calm, and fps recorded in a proof
+- **Command Center** does not link to `/hud` yet: that edits an existing page.
+- **Small targets:** some sub-component labels are under the 44 px hit target. `/favicon.ico` is a 404 app-wide.
+- **Time-zone bug in existing tests:** `apps/web/server/catalog.test.ts` computes today in UTC. It fails between 00:00 and 03:00 Sofia time, when the schedule guard's `current_date` is already the next day. `web:smoke` had the same bug and now reads the database's date.
