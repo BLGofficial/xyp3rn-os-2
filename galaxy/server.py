@@ -111,7 +111,7 @@ SERVED_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; ch
                 ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
                 ".ico": "image/x-icon", ".woff2": "font/woff2"}
 BODY_LIMIT = {"/chat": 16_384, "/remember": 16_384, "/model": 2_048, "/see": 6_000_000, "/tool_chat": 16_384,
-              "/run": 8_192, "/run/confirm": 1_024, "/run/cancel": 1_024, "/desk/seen": 1_024,
+              "/run": 8_192, "/run/confirm": 1_024, "/run/cancel": 1_024, "/run/launch": 8_192, "/desk/seen": 1_024,
               "/call": 1_024, "/stage": 1_024, "/briefing": 1_024, "/pocket/code": 1_024,
               "/run/stop": 1_024, "/approval": 2_048, "/speak": 8_192}
 KOKORO = {"url": "http://127.0.0.1:8880", "voice": "bm_george"}   # local, free; config "kokoro" overrides
@@ -817,6 +817,8 @@ class Handler(BaseHTTPRequestHandler):
         path, _, query = self.path.partition("?")
         if path == "/state" or path == "/desk":
             return self.send_json(200, desk_snapshot())
+        if path == "/tasks":
+            return self.send_json(200, task_catalog())
         if path == "/oauth/start":
             try:
                 url = google.auth_url()

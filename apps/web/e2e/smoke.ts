@@ -188,6 +188,8 @@ try {
   await page.selectOption('select[name=recording]', { label: 'night-city-master.wav' });
   await page.click('button:text("Register on a new release")');
   await page.waitForURL(/\/releases\/[0-9a-f-]{36}$/);
+  await page.getByText('the release has no artwork', { exact: false }).waitFor();
+  await page.getByText('the track has no rights split set', { exact: false }).waitFor();
   const releaseId = page.url().split('/').pop()!;
   const draft = (await page.textContent('body')) ?? '';
   check(draft.includes('the release has no artwork') && draft.includes('the track has no rights split set'),
@@ -484,6 +486,7 @@ try {
   const opened8: string[] = [];
   for (const [label, path, h1] of AREAS) {
     const res = await page.goto(`${BASE}${path}`);
+    await page.getByRole('heading', { level: 1, name: h1, exact: true }).waitFor();
     const heading = (await page.textContent('h1'))?.trim();
     const current = (await page.textContent('nav[aria-label="Primary"] a[aria-current="page"]'))?.trim();
     if (res?.status() !== 200 || heading !== h1 || current !== label) opened8.push(`${path}: ${res?.status()} "${heading}" current "${current}"`);

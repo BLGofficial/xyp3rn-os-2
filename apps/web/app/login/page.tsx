@@ -8,7 +8,7 @@ export default async function Login({ searchParams: pendingSearchParams }: { sea
   const searchParams = await pendingSearchParams;
   return (
     <BrandSplash title="Owner access">
-      <p className="meta">Local and single-owner. Enter XYP_WEB_TOKEN.</p>
+      <p className="meta">Your private workspace. Enter your owner access token.</p>
       <ErrorBanner error={searchParams.error} />
       <form action={login} className="flex w-full max-w-md flex-col gap-3 text-left">
         <input type="hidden" name="next" value={first(searchParams.next) ?? '/vault'} />

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ComponentsData, HudEvent, StatusData } from '../../server/hud-loaders';
 import { HUD_DOMAIN, HUD_STATUS, LENS_DOMAIN, LENSES, ORBIT_ORDER, type HudOwner, type Lens } from '../../lib/hud-theme';
 import { askAction } from '../ask-actions';
+import { taskAction } from '../catalog-actions';
 import { HudGlobe } from './hud-globe';
 import { DomainIcon } from './hud-icons';
 import { BrandLogo } from '../brand/logo';
@@ -32,10 +33,12 @@ const write = (k: string, v: string) => { try { localStorage.setItem(k, v); } ca
 
 /** Hides the app shell under the full-screen HUD from Tab and screen readers (the shell stays mounted). */
 const useInertShell = () => useEffect(() => {
+  const overflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
   const els = [document.querySelector('body > header'), document.querySelector('nav[aria-label="Primary"]'), document.querySelector('body > a[href="#main"]')]
     .filter((e): e is Element => e !== null);
   for (const e of els) e.setAttribute('inert', '');
-  return () => { for (const e of els) e.removeAttribute('inert'); };
+  return () => { document.body.style.overflow = overflow; for (const e of els) e.removeAttribute('inert'); };
 }, []);
 
 export function HudShell({ identity, owner, components, componentsError, status: initialStatus, lens: initialLens }: Props) {
@@ -47,6 +50,10 @@ export function HudShell({ identity, owner, components, componentsError, status:
   const [contrast, setContrast] = useState<'normal' | 'high'>('normal');
   const [drawer, setDrawer] = useState<'left' | 'right' | null>(null);
   const [showGlobe, setShowGlobe] = useState(false);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskType, setTaskType] = useState<'ask' | 'deep' | 'catalog'>('ask');
+  const [taskPrompt, setTaskPrompt] = useState('');
+  const [taskExecuting, setTaskExecuting] = useState(false);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
   const search = useRef<HTMLInputElement>(null);
@@ -81,8 +88,10 @@ export function HudShell({ identity, owner, components, componentsError, status:
     } catch { /* keep the last reading; its as-of time says how old it is */ }
   }, []);
   useEffect(() => {
-    const t = setInterval(() => { setNow(Date.now()); if (!document.hidden) void refreshStatus(); }, 15_000);
-    return () => clearInterval(t);
+    const refresh = () => { if (!document.hidden) { setNow(Date.now()); void refreshStatus(); } };
+    const t = setInterval(refresh, 15_000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', refresh); };
   }, [refreshStatus]);
 
   // Live events (GET /api/events/stream): each recorded row once when it starts and once when it finishes.
@@ -157,6 +166,10 @@ export function HudShell({ identity, owner, components, componentsError, status:
           </label>
           <button type="submit" className="hud-label">Search</button>
           <button type="submit" formAction={askAction} className="hud-label" style={{ background: 'linear-gradient(180deg,#F7C948,#D4912A)', color: '#1a1200', borderColor: '#F7C948' }}>Ask</button>
+          <button type="button" onClick={() => setTaskModalOpen(true)} className="hud-label flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold" style={{ background: 'linear-gradient(180deg, #72D6F7, #53A2CE)', borderColor: '#72D6F7', color: '#04040b', boxShadow: '0 0 10px rgba(114, 214, 247, 0.3)' }} title="Start a new task directly from the web UI window">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+            <span>Start Task</span>
+          </button>
         </form>
         <a href="/" className="relative no-underline" aria-label={`${status?.counts.alerts ?? 0} catalog checks open (Command Center)`} title="Open catalog checks (blockers and warnings), from catalog_checks">
           <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 1 1 12 0v6l2 2H4zm4 3a2 2 0 0 0 4 0" fill="none" stroke="#C3D0E4" strokeWidth="1.5" /></svg>
@@ -175,7 +188,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
           <h2 id="map-h" className="hud-label hud-muted mb-2 mt-0">System map</h2>
           <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
             <MapItem active={lens === 'GRAPH'} onClick={() => chooseLens('GRAPH')}>Graph View</MapItem>
-            <MapItem href="/">List View</MapItem>
+            <MapItem href="/command">List View</MapItem>
             <MapItem active={lens === 'AGENTS'} onClick={() => chooseLens('AGENTS')}>Agent Mesh</MapItem>
             <MapItem active={lens === 'WORKFLOWS'} onClick={() => chooseLens('WORKFLOWS')}>Workflow Flow</MapItem>
             <MapItem active={lens === 'KNOWLEDGE'} onClick={() => chooseLens('KNOWLEDGE')}>Knowledge Graph</MapItem>
@@ -345,6 +358,104 @@ export function HudShell({ identity, owner, components, componentsError, status:
         </div>
         <span className="hud-label hud-muted hidden text-right text-[10px] leading-tight xl:inline">Built by X3LIUS<br />for a higher tomorrow</span>
       </footer>
+
+      {/* Task Launcher Modal */}
+      {taskModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
+          <div className="hud-panel relative w-full max-w-lg p-6 shadow-2xl border" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--cyan)' }}>
+            <div className="flex items-center justify-between border-b border-[var(--hairline)] pb-3 mb-4">
+              <div>
+                <h2 id="task-modal-title" className="hud-display text-lg m-0 flex items-center gap-2" style={{ color: 'var(--cyan)' }}>
+                  <span className="text-amber-400">⚡</span> Jarvis OS Task Launcher
+                </h2>
+                <p className="hud-label hud-muted text-[11px] m-0 mt-0.5">Start an AI agent task or catalog action directly from this window</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTaskModalOpen(false)}
+                className="hud-label px-2 py-1 text-xs hover:bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form action={taskType === 'catalog' ? taskAction : askAction} onSubmit={() => setTaskExecuting(true)}>
+              {taskType === 'deep' && <input type="hidden" name="deep" value="on" />}
+              {taskType === 'catalog' && <input type="hidden" name="back" value="/" />}
+
+              <div className="mb-4">
+                <label className="hud-label block mb-1 text-[11px] text-[var(--text-muted)]">Select Task Mode:</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTaskType('ask')}
+                    className={`hud-label p-2 text-center text-xs transition-all ${taskType === 'ask' ? 'border-[var(--amber)] text-amber-300 bg-amber-500/10 font-bold' : 'hud-muted border-transparent bg-white/5'}`}
+                  >
+                    ⚡ Fast Agent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTaskType('deep')}
+                    className={`hud-label p-2 text-center text-xs transition-all ${taskType === 'deep' ? 'border-[var(--cyan)] text-cyan-300 bg-cyan-500/10 font-bold' : 'hud-muted border-transparent bg-white/5'}`}
+                  >
+                    🧠 Deep Agent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTaskType('catalog')}
+                    className={`hud-label p-2 text-center text-xs transition-all ${taskType === 'catalog' ? 'border-[var(--plum)] text-purple-300 bg-purple-500/10 font-bold' : 'hud-muted border-transparent bg-white/5'}`}
+                  >
+                    📋 Catalog Task
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="task-prompt-input" className="hud-label block mb-1 text-[11px] text-[var(--text-muted)]">
+                  {taskType === 'catalog' ? 'Task Title:' : 'Task Prompt / Instruction:'}
+                </label>
+                <textarea
+                  id="task-prompt-input"
+                  name={taskType === 'catalog' ? 'title' : 'q'}
+                  value={taskPrompt}
+                  onChange={(e) => setTaskPrompt(e.target.value)}
+                  required
+                  rows={4}
+                  placeholder={
+                    taskType === 'catalog'
+                      ? "Enter task title (e.g. 'Audit song splits for Sofia track', 'Schedule release press package')"
+                      : "Enter task prompt (e.g. 'Analyze catalog readiness', 'Check distributor requirements', 'Run code verification')"
+                  }
+                  className="hud-data w-full p-3 bg-black/60 border border-[var(--hairline)] text-xs rounded text-[var(--text-headline)] focus:outline-none focus:border-[var(--cyan)]"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-[var(--hairline)]">
+                <span className="hud-data hud-muted text-[10px]">
+                  {taskType === 'deep' ? 'Claude Code headless execution' : taskType === 'ask' ? 'Agent router & skill dispatch' : 'Adds task to database'}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTaskModalOpen(false)}
+                    className="hud-label px-3 py-1.5 text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={taskExecuting || !taskPrompt.trim()}
+                    className="hud-label px-4 py-1.5 text-xs font-bold text-black disabled:opacity-50"
+                    style={{ background: 'linear-gradient(180deg, #F7C948, #D4912A)', borderColor: '#F7C948' }}
+                  >
+                    {taskExecuting ? 'Starting Task...' : '▶ Start Task Now'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

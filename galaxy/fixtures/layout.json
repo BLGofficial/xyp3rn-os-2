@@ -1,0 +1,27 @@
+[
+  {
+    "id": "group:knowledge",
+    "x": -249.21,
+    "y": -239.62
+  },
+  {
+    "id": "group:root",
+    "x": 407.86,
+    "y": -295.55
+  },
+  {
+    "id": "note:README.md",
+    "x": 337.47,
+    "y": -233.88
+  },
+  {
+    "id": "note:knowledge/README.md",
+    "x": -328.1,
+    "y": -195.05
+  },
+  {
+    "id": "note:knowledge/note.md",
+    "x": -191,
+    "y": -316.74
+  }
+]

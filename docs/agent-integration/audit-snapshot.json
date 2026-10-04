@@ -1,0 +1,1826 @@
+{
+  "auditedAt": "2026-10-03T14:17:27.285Z",
+  "source": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents",
+  "target": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents",
+  "sourceCommit": "528b1e2f3f5ba3928b6a306f03f7480004159b88",
+  "targetCommit": "252a5504689d9553bd7ab657a2cd9689571f4ef1",
+  "sourceCount": 43,
+  "targetCount": 51,
+  "counts": {
+    "model-only": 20,
+    "identical": 16,
+    "source-only": 2,
+    "contract-drift": 5
+  },
+  "sourceFailures": [],
+  "targetFailures": [],
+  "templates": {
+    "source": [
+      "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\_template.agent.md"
+    ],
+    "target": [
+      "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\_template.agent.md"
+    ]
+  },
+  "limits": [
+    "Static registration and tool authorization, not live dispatch",
+    "No database or provider connections",
+    "TECH manifest stubs count as handlers; this does not prove implementation"
+  ],
+  "agents": [
+    {
+      "name": "ai-vocal-systems-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\ai-vocal-systems-researcher.agent.md",
+        "sha256": "5d5e3540daed0f689c21aa5ac1f3e50c7ac60e61b540f866b8977e4401e765c7",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering how AI music models render vocals. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on how AI music models render sung and rapped vocals — timbre, register and delivery — per model version.\n\nKeywords: vocal (3), timbre (2), baritone (2), register (2), falsetto (2), rap delivery (2), singer (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Judging whether a vocal matches one specific artist's signature — that is the Artist Identity Researcher's scope."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\ai-vocal-systems-researcher.agent.md",
+        "sha256": "cdc311279d54aad77ce76e6cb7b496c3104b83dd69a637a5e412b7e6871716f2",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "artist-identity-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\artist-identity-researcher.agent.md",
+        "sha256": "8e2e6907f452e7e1332632238bc947631b43d0b033561d26b34cf85b26d09183",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering keeping one artist's sonic identity consistent. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on keeping an artist's sonic identity — signature voice character and sound — consistent across AI generations, anchored on X3LIUS.\n\nKeywords: artist identity (3), sonic identity (3), x3lius (3), dark baritone (3), signature sound (2), consistency (1)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Covering non-sonic persona (visuals, narrative, public voice) — that is the Brand / Persona Consistency Researcher's scope."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\artist-identity-researcher.agent.md",
+        "sha256": "58c46406f060516914302ab9682ca00cc928eb6d1b67bb833e3b6186a6076356",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "benchmark-scoring-methodology-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\benchmark-scoring-methodology-researcher.agent.md",
+        "sha256": "903304098a710adb1630392a9d22d45c92327db5425d4b36e9df21a1fa9f1b07",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering quantitative scoring of generated music. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on quantitative scoring for generated music — metrics, rubrics, reference datasets and their known biases.\n\nKeywords: benchmark (3), metric (3), rubric (3), clap score (3), scoring (2), score (2), dataset (2), fad (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\benchmark-scoring-methodology-researcher.agent.md",
+        "sha256": "a669b44f13ef596225da2f79484248b269729c8d0dee730ab6c4aea3d8ddc434",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "brand-persona-consistency-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\brand-persona-consistency-researcher.agent.md",
+        "sha256": "78dc343f24cc070a43931f139f615f4e396d3b143ecc511792c7a6a61bbc8c17",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering the non-sonic persona across AI output. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on keeping the non-sonic persona consistent — lyrical voice, visual identity, narrative and public persona — across AI-generated output.\n\nKeywords: persona (3), brand (3), visual identity (2), cover art (2), narrative (2), aesthetic (2), brutalism (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\brand-persona-consistency-researcher.agent.md",
+        "sha256": "f48856c14365476f749fb51797c721c6c297ee9692bd5bf71bd94a92deb4360a",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "composition-arrangement-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\composition-arrangement-researcher.agent.md",
+        "sha256": "a4c491f3f371441d3360b6ecb031fc9adfbfbd41495f92e35641bfd54b35b31c",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering composition and arrangement in generated tracks. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on how AI models handle composition and arrangement — chord progressions, instrumentation, layering and dynamics — per model version.\n\nKeywords: arrangement (3), composition (3), chord (2), progression (2), instrumentation (2), melody (2), 808 (2), layering (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\composition-arrangement-researcher.agent.md",
+        "sha256": "bcdbbcab4e5665450ad8631658e3014c361f31145c6828b4bacd6300453ad468",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "context-retriever",
+      "class": "Knowledge",
+      "domain": "KNOWLEDGE",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\context-retriever.agent.md",
+        "sha256": "597363ccda6c4f083a0f6a75efdf7c0fce3459d2d2b4a6a379a801fdb4cb450b",
+        "model": "none",
+        "tools": [
+          "retrieve_context",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Answers the Knowledge class's question, \"what do we already know?\". Given a query, it asks long-term memory (the Phase 3 Context Engine) through `retrieve_context` and returns the ranked, traceable items. It is the first step of `retrieve-and-summarize` and of any workflow that needs grounded context.",
+          "Contract": "- **Inputs:** `{ \"query\": string }`.\n- **Outputs:** `{ query, generation, cache, items: [{ ref, slug, title, snippet, text, domain, score, why, source }] }`. Every item resolves to a row and carries its score and reason.\n- **Reads:** long-term memory via `retrieve_context` (capability `context.read`), read-only as `xyp_runtime`.\n- **Writes:** its own `agent_runs` row, via the Orchestrator; one run-log line.\n- **Side effects:** none.",
+          "Refuses": "- Writing anything to knowledge tables. Long-term memory has no write path, and this agent holds only `context.read` and `log.write`.\n- Returning an item it cannot trace to a row. The Context Engine errors on unresolvable refs rather than dropping them.\n- Filtering, re-ranking or editing the retrieved items. Ranking belongs to the Context Engine."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\context-retriever.agent.md",
+        "sha256": "597363ccda6c4f083a0f6a75efdf7c0fce3459d2d2b4a6a379a801fdb4cb450b",
+        "model": "none",
+        "tools": [
+          "retrieve_context",
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "evaluation-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\evaluation-researcher.agent.md",
+        "sha256": "c5dab1d1e055d1f4a61a6a08371a90b3fac75ef1bf48ac6a6843f8b85ebba593",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering how to judge which output or method is better. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on how to judge whether one generation or method is better than another — listening criteria, A/B judgment protocols and reviewer agreement.\n\nKeywords: evaluation (3), evaluate (3), best current method (3), listening test (3), best (2), better (2), a/b (2), quality (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Defining quantitative metrics or datasets — that is the Benchmark & Scoring Methodology Researcher's scope."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\evaluation-researcher.agent.md",
+        "sha256": "61bb60bafe12c304740db03c69f16abd92f9687c7a7288d84ea2f6d4ab579109",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "extractive-summarizer",
+      "class": "Knowledge",
+      "domain": "KNOWLEDGE",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\extractive-summarizer.agent.md",
+        "sha256": "e2c5c562a629e887a5da8e20fad7703fe6900e27f8f7cc3822d57abfd8c395d3",
+        "model": "none",
+        "tools": [
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Turns a ranked context bundle into a short, cited summary for a query. It is deterministic and extractive: for each item it quotes the sentence sharing the most query terms, verbatim, and cites the row it came from. It is a stand-in until an LLM summarizer exists (`ANTHROPIC_API_KEY`), and says so in its output.",
+          "Contract": "- **Inputs:** `{ \"query\": string, \"items\": ContextItem[], \"maxBullets\"?: number }` (default 5).\n- **Outputs:** `{ method: \"extractive\", query, bullets: [{ text, cite: { table, id, slug, score }, matchedTerms }], itemsConsidered, note }`.\n- **Reads:** only its input. No database or tool reads beyond `log_message`.\n- **Writes:** its own `agent_runs` row, via the Orchestrator; one run-log line.\n- **Side effects:** none.",
+          "Refuses": "- Paraphrasing, generating or inventing text. Every bullet is a verbatim sentence from a cited row.\n- Presenting itself as an LLM summary. `method` is always `extractive`.\n- Input that isn't a list of context items. It fails the run instead of guessing."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\extractive-summarizer.agent.md",
+        "sha256": "e2c5c562a629e887a5da8e20fad7703fe6900e27f8f7cc3822d57abfd8c395d3",
+        "model": "none",
+        "tools": [
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "frontier-tool-scanner-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\frontier-tool-scanner-researcher.agent.md",
+        "sha256": "4df286d8b41ff016afd655d99e05c36f61e76f3e22b64b9d65a862ea148233a0",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering newly released or announced tools not yet covered. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Scans for newly released or announced AI music and audio tools not yet covered by another specialist, recording what each claims to do.\n\nKeywords: frontier (3), emerging (3), new tool (3), announced (2), beta (2), launch (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Treating a tool's own marketing claims as verified — they are recorded as claims with low confidence until corroborated."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\frontier-tool-scanner-researcher.agent.md",
+        "sha256": "391ac79966f536851332e53487d1944e9a4ca9182e35672e669173026db43da8",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "genre-style-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\genre-style-researcher.agent.md",
+        "sha256": "7b1f28438eb57327be83c2eefe29ad50849c3b499ab324f68a78e935a0f4f97a",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering how genre and style descriptors are interpreted. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on how genre and style descriptors such as dark melodic trap are interpreted, blended and weighted by AI music models, per model version.\n\nKeywords: genre (3), subgenre (3), trap (2), drill (2), style blend (2), dark melodic (2), bpm (2), tempo (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\genre-style-researcher.agent.md",
+        "sha256": "c7db9fc1c422fb311766876b24d117ffb05daba559b1e7db34656c4bce1eac00",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "governance-legal",
+      "class": "Governance",
+      "domain": "GOVERNANCE",
+      "state": "source-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\governance-legal.agent.md",
+        "sha256": "8dbe11950551a49fa9324b5aa103fd5c034b1c07f4c4ec7a4b4c41d2d4636ba2",
+        "model": "none",
+        "tools": [
+          "check_legal"
+        ],
+        "sections": {
+          "Role": "Flag missing licenses, commercial-use restrictions, missing attribution and missing likeness consent using four named rules.",
+          "Contract": "Input: sourceId or artifactId. Read existing metadata and append a governance flag linked to the source and run. Output includes checked rule IDs and findings.",
+          "Refuses": "Claiming legal clearance, editing source content, accepting rights claims, approving queue items, or rewriting the audit trail."
+        }
+      },
+      "target": null,
+      "sourceAgainstTarget": {
+        "executor": "missing",
+        "toolDenials": [
+          {
+            "name": "check_legal",
+            "reason": "tool not registered: check_legal"
+          }
+        ]
+      }
+    },
+    {
+      "name": "governance-rights-conflict",
+      "class": "Governance",
+      "domain": "GOVERNANCE",
+      "state": "source-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\governance-rights-conflict.agent.md",
+        "sha256": "ba38c4adfd2b25eb48eafc17338b579df9a6d9316f519f54c2dc150977516574",
+        "model": "none",
+        "tools": [
+          "check_rights_conflict"
+        ],
+        "sections": {
+          "Role": "Cross-check a new claim against Phase 13 rights allocations before a human considers acceptance.",
+          "Contract": "Input: trackId, payee, percentage. Output: named conflict rules, existing totals and a recorded flag. Never accepts claims.",
+          "Refuses": "Changing splits, claiming ownership, deciding approval items or altering audit records."
+        }
+      },
+      "target": null,
+      "sourceAgainstTarget": {
+        "executor": "missing",
+        "toolDenials": [
+          {
+            "name": "check_rights_conflict",
+            "reason": "tool not registered: check_rights_conflict"
+          }
+        ]
+      }
+    },
+    {
+      "name": "health-check",
+      "class": "Execution",
+      "domain": "CORE",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\health-check.agent.md",
+        "sha256": "f8fac384974b9087ae85deb3f230f78b0306cb664150c7d9c367cf6583aaafaf",
+        "model": "none",
+        "tools": [
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Proves the agent runtime end to end (Phase 4E). Given any JSON input, it echoes that input back with a timestamp and logs one line through `log_message`. It answers the Execution class's question (\"perform the operation\"), and the operation is simply \"respond\". It has no side effects beyond its own run log.",
+          "Contract": "- **Inputs:** any JSON value.\n- **Outputs:** `{ \"echo\": <input>, \"timestamp\": \"<ISO-8601>\" }`.\n- **Reads:** nothing.\n- **Writes:** its own `agent_runs` row, via the Orchestrator; one run-log line via `log_message`.\n- **Side effects:** none.",
+          "Refuses": "- Writing to any table other than its own run log. It holds no capability beyond `log.write`.\n- Transforming, validating or interpreting its input. It echoes it verbatim.\n- Canonical writes, approvals and audit writes, like every agent."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\health-check.agent.md",
+        "sha256": "f8fac384974b9087ae85deb3f230f78b0306cb664150c7d9c367cf6583aaafaf",
+        "model": "none",
+        "tools": [
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "lyrics-rhyme-systems-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\lyrics-rhyme-systems-researcher.agent.md",
+        "sha256": "4f4705e9de2275da902efb031f0e958836991efa00c25bbf363af8e356eb2457",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering how lyrics and rhyme are rendered. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on how lyrics, rhyme schemes, flow and bilingual Bulgarian/English lines are rendered and pronounced by AI models, per model version.\n\nKeywords: lyric (3), rhyme (3), bulgarian (3), flow (2), syllable (2), bars (2), bilingual (2), pronunciation (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\lyrics-rhyme-systems-researcher.agent.md",
+        "sha256": "c0d9b4f0a2a5e0a44ee9d3bade9b660a5eb4951627134a9bf5e84e4079d00bfd",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "mix-master-ai-tooling-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\mix-master-ai-tooling-researcher.agent.md",
+        "sha256": "97078575fc1e809ccebb043f23590e42aa0db1353703f86ef825ff9f19266da8",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering AI-assisted mixing and mastering tools. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on AI-assisted mixing and mastering tools and their measurable effect on loudness, tonal balance and stereo image, per tool version.\n\nKeywords: mastering (3), mixing (3), lufs (3), loudness (2), stereo width (2), tonal balance (2), limiter (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Reporting a loudness or balance effect without the measurement behind it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\mix-master-ai-tooling-researcher.agent.md",
+        "sha256": "9935c595ee5c2db6adc1c5b19ed2dd0c2257d1deca00c88f9ad58736b61891b2",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "model-version-changelog-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\model-version-changelog-researcher.agent.md",
+        "sha256": "0a38cd43805bf8d67145a9b250eea431d8a1ef3f7c790c437fd39b3bbe4da100",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering what changed between versions of tools already in the stack. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Tracks official changelogs and release notes of the AI music and voice tools already in the stack, recording what changed in each model version.\n\nKeywords: changelog (3), release note (3), new version (2), model update (2), deprecated (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Covering tools not yet in the stack — that is the Frontier Tool Scanner's scope."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\model-version-changelog-researcher.agent.md",
+        "sha256": "6f6b452ee6513189326dffb64a7d6947ae75427eef60354f38b2f5d692121e8d",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "negative-prompt-failure-mode-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\negative-prompt-failure-mode-researcher.agent.md",
+        "sha256": "ce67b9a6ce8a112f0b169ece5e949ceae2b4a829919e69ed1651e2b8c45f656e",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering how generations fail and how to prevent it. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on how generations fail (artefacts, genre drift, lyric mangling) and which exclusions or negative prompts prevent each failure, per model version.\n\nKeywords: failure mode (3), negative prompt (3), artefact (2), artifact (2), glitch (2), drift (2), mangled (2), exclude (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\negative-prompt-failure-mode-researcher.agent.md",
+        "sha256": "e461f3bb1a989177a11e712c647ed958edaddb3db4d12389e9cbf58ac1ab663f",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "prompt-engineering-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\prompt-engineering-researcher.agent.md",
+        "sha256": "625e79a3f0da70d182d6b4af8063fcd86842b3cdd587b4463c5da7dd66a3fcf3",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering prompting techniques that steer generation. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on prompting techniques that reliably steer AI music generation — ordering, emphasis, specificity and control phrasing — per model version.\n\nKeywords: prompt engineering (3), controlling (2), control (2), steer (2), steering (2), phrasing (2), emphasis (2), method (1), technique (1)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Cataloguing whole reusable templates — that is the Prompt Formula / Template Researcher's scope."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\prompt-engineering-researcher.agent.md",
+        "sha256": "f8b10ced1b14c9a1e7ec1d73334018c608c24f8cfb1f2fc36b63ef8ffe1d3db0",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "prompt-formula-template-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\prompt-formula-template-researcher.agent.md",
+        "sha256": "c79325c28f577d42582c7ed1eb3f0b0ad3fda1299962a71b14afc92dd947d2d1",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering reusable prompt structures. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on reusable prompt structures (formulas, templates, slot orders) and which variants outperform others per model version.\n\nKeywords: prompt formula (3), prompt template (3), template (2), formula (2), slot order (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\prompt-formula-template-researcher.agent.md",
+        "sha256": "2972d2cabb2b72d025f5e133999e1b75ea7592150e8e7a3f588df10320970484",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "records-catalog",
+      "class": "Execution",
+      "domain": "RECORDS",
+      "state": "contract-drift",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\records-catalog.agent.md",
+        "sha256": "79829911b627ba5a92006c1b8fd9357527d9b2af719221a222e5b908b469d5f7",
+        "model": "none",
+        "tools": [
+          "register_track",
+          "read_release",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Registers a finished track in the XYP3RN Records catalog (Phase 13): a captured Suno take (Phase 9) or a studio master, linked to the creative artifacts behind it and, if one exists, the master's mix report. It answers the Execution class's question, \"how do we perform the operation?\", for catalog registration only. Deterministic: it creates no content.",
+          "Contract": "- **Inputs:** `{ releaseId?, release?: { title, kind: \"single\"|\"ep\"|\"album\" }, track: { title, position, source: { sunoTakeId } | { masterUri, masterSha256 }, artifactIds?, mixReportId?, durationSeconds? } }`; exactly one of `releaseId` / `release`.\n- **Outputs:** `{ release: { id, status }, track: { id, position }, next }`, where `next` tells the operator to enter splits.\n- **Reads:** `releases` (as `xyp_catalog`).\n- **Writes:** `releases`, `tracks` through `register_track` (capability `catalog.write`, role `xyp_catalog`). ISRC and UPC stay null.\n- **Side effects:** none.",
+          "Refuses": "- Writing rights splits or a release status (the DB refuses both for `xyp_catalog`).\n- A track with two audio sources or none, an unknown take or artifact, or a mix report that is not an `x3lius.mix-report/v1`.\n- Adding a track to a release that has left draft."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\records-catalog.agent.md",
+        "sha256": "151ec96f9cd4927e014c2abae0672434321cf13b59552bad50c3d4d67c3863e4",
+        "model": "none",
+        "tools": [
+          "register_track",
+          "write_splits",
+          "assign_codes",
+          "add_person",
+          "add_alias",
+          "write_credit",
+          "retract_credit",
+          "write_platform_link",
+          "retract_platform_link",
+          "set_artwork",
+          "record_delivery",
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": [
+          {
+            "name": "read_release",
+            "reason": "tool not registered: read_release"
+          }
+        ]
+      }
+    },
+    {
+      "name": "records-release-calendar",
+      "class": "Execution",
+      "domain": "RECORDS",
+      "state": "contract-drift",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\records-release-calendar.agent.md",
+        "sha256": "fdc62041f0f5099dd5edb2ca77b88c0940ab8d9b5cd693b75881f9c98cc895d0",
+        "model": "none",
+        "tools": [
+          "read_release",
+          "propose_schedule",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Proposes a release date for a draft release and queues it for the operator's approval (Phase 13). Scheduling only: no marketing, PR or distribution logic. It answers the Execution class's question, \"how do we perform the operation?\", for the release calendar.",
+          "Contract": "- **Inputs:** `{ releaseId, releaseDate: \"YYYY-MM-DD\" }`.\n- **Outputs:** `{ release: { id, status: \"pending_schedule\", releaseDate }, approvalId }`.\n- **Reads:** the release through `read_release` (capability `records.read`).\n- **Writes:** the release date and one scheduling request through `propose_schedule` (capability `schedule.propose`, role `xyp_calendar`). The operator's approval, not this agent, moves the release to `scheduled`.\n- **Side effects:** none.",
+          "Refuses": "- A release the schedulability check refuses: it returns the report and points to `records-rights-splits` for the flag.\n- Setting `scheduled`, `released` or `cancelled` itself (the DB refuses `xyp_calendar`).\n- Marketing, PR or distribution steps."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\records-release-calendar.agent.md",
+        "sha256": "352fa6f3c5f9cd504b96dc2d92a404741aad4123f5a09e7873afe0f0355e95a8",
+        "model": "none",
+        "tools": [
+          "schedule_release",
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": [
+          {
+            "name": "read_release",
+            "reason": "tool not registered: read_release"
+          },
+          {
+            "name": "propose_schedule",
+            "reason": "tool not registered: propose_schedule"
+          }
+        ]
+      }
+    },
+    {
+      "name": "records-rights-splits",
+      "class": "Governance",
+      "domain": "RECORDS",
+      "state": "contract-drift",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\records-rights-splits.agent.md",
+        "sha256": "e981601900fa22790a0457932718de1ae3f064a55e2150c82b439eb7ae51944c",
+        "model": "none",
+        "tools": [
+          "read_release",
+          "flag_release",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Validates a release's rights splits before it can be scheduled (Phase 13) and flags whatever blocks it: a track with no splits, a total other than 100, or an UNASSIGNED share. It answers the Governance class's question, \"is this allowed?\", for rights data it reads and never writes (ARCHITECTURE F3).",
+          "Contract": "- **Inputs:** `{ releaseId }`.\n- **Outputs:** `{ schedulable, problems, tracks: [{ trackId, position, total, unassigned, problems, notes }], flagId? }`; `flagId` only when a flag was written.\n- **Reads:** the release, tracks and splits through `read_release` (capability `records.read`).\n- **Writes:** one `records_flags` row through `flag_release` (capability `governance.flag`, role `xyp_rights`) when the release is not schedulable.\n- **Side effects:** none.",
+          "Refuses": "- Editing splits, tracks or the release: it flags and reports only; the operator fixes splits.\n- Declaring a release schedulable the DB gate would refuse (same rules, one function: `records/ops/schedulable.ts`)."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\records-rights-splits.agent.md",
+        "sha256": "15356b2a977e45c35001510d1394664ddce04c0f898f8b8c23e538baba8f66c9",
+        "model": "none",
+        "tools": [
+          "read_catalog",
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": [
+          {
+            "name": "read_release",
+            "reason": "tool not registered: read_release"
+          },
+          {
+            "name": "flag_release",
+            "reason": "tool not registered: flag_release"
+          }
+        ]
+      }
+    },
+    {
+      "name": "release-strategy-platform-algo-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\release-strategy-platform-algo-researcher.agent.md",
+        "sha256": "8f753bf71efd7c43502983cf8b054f73b475677bf5334d13ec68207e9a4b66ca",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering distribution and platform-algorithm behaviour. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on distribution and platform-algorithm behaviour — release timing, playlisting, short-form video and recommendation signals — for released tracks.\n\nKeywords: release strategy (3), algorithm (3), playlist (2), streaming (2), tiktok (2), spotify (2), release timing (2), distribution (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\release-strategy-platform-algo-researcher.agent.md",
+        "sha256": "8cd5c44d88169a9aa606433b27d297be84097a77b5f3d7748ae4670521714c0f",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "research-orchestrator",
+      "class": "Planning",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\research-orchestrator.agent.md",
+        "sha256": "04e0ed9fb30f1269997e660f2bfc5ebc7a2ce000b9497dac56c90307590daaac",
+        "model": "none",
+        "tools": [
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Decides which Research specialists a question needs, answering the Planning class's \"what should we do\". Given a research question and the current specialist roster (each specialist's one-sentence scope plus weighted keywords), it scores the question against every scope. It activates only the specialists at or above the selection threshold and never all of them by default. It returns a Workflow Engine plan. The Research Intelligence entrypoint in the runtime executes that plan; this agent never dispatches other agents itself.",
+          "Contract": "- **Inputs:** `{ \"question\": string, \"roster\": [{ \"name\": string, \"scope\": string }] }`, where `scope` is the specialist's `## Scope` section text.\n- **Outputs:** `{ selection: { selected, notSelected, threshold }, workflow: { name, description, steps } }`. Every selection carries its score and the terms it matched.\n- **Reads:** only its input.\n- **Writes:** its own `agent_runs` row, linked to the research run; one run-log line.\n- **Side effects:** none.",
+          "Refuses": "- Activating a specialist whose scope doesn't match the question, or activating everyone when nothing matches.\n- Dispatching agents or writing research data. It plans; the runtime executes, and specialists write evidence.\n- Changing a specialist's scope. Scopes live in each specialist's own `.agent.md`."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\research-orchestrator.agent.md",
+        "sha256": "04e0ed9fb30f1269997e660f2bfc5ebc7a2ce000b9497dac56c90307590daaac",
+        "model": "none",
+        "tools": [
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "rights-licensing-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\rights-licensing-researcher.agent.md",
+        "sha256": "c47db705bff5d0fcce9556ee9b4f073cb30255dc78814ae9d809265493dda677",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering rights attached to AI-generated music and voice models. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on the licensing terms, ownership rules and commercial-use rights attached to AI-generated music and voice models, per platform and plan.\n\nKeywords: license (3), licensing (3), copyright (3), commercial use (3), ownership (2), terms of service (2), royalty (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Giving legal advice or deciding a rights conflict — it records what terms say; Governance (Phase 15) decides."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\rights-licensing-researcher.agent.md",
+        "sha256": "4b5b8591de8f2254dc37481e64a77591cda722b74fa7fb331c0933c7240dc23f",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "songwriting-structure-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\songwriting-structure-researcher.agent.md",
+        "sha256": "201dfd326f9892d6608be3af76fae793355bd060a5977e1b9f34edc5b327f550",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering song structure in generated tracks. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on song structure in AI-generated tracks — section order, hook placement, song length and how section tags are followed — per model version.\n\nKeywords: song structure (3), songwriting (3), hook (2), chorus (2), verse (2), bridge (2), section tag (2), intro (1), outro (1)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Evaluating lyric content or rhyme — that is the Lyrics & Rhyme Systems Researcher's scope."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\songwriting-structure-researcher.agent.md",
+        "sha256": "b68a46dd026383fdf3aba651ccd2ad46f5720d39eb7a7133f233e26e66f38588",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "suno-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\suno-researcher.agent.md",
+        "sha256": "cdfc1fbb2d05b6aea04e4c917e3bc193ccf5d17363b888fd86989eaf29f6b90f",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering how Suno's models respond to what they're given. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on how Suno's generation models interpret style prompts, lyrics formatting and meta-tags, recorded per Suno model version.\n\nKeywords: suno (3), meta-tag (2), style prompt (2), lyrics formatting (2), custom mode (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Generalising a Suno observation to other platforms — that is the Udio & Alt-Platform Researcher's scope."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\suno-researcher.agent.md",
+        "sha256": "a2aeb0788651e9bd2d7b5b9c3c45f491e5ca994a5bef947b2620198b4b730f58",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "suno-submitter",
+      "class": "Execution",
+      "domain": "RECORDS",
+      "state": "contract-drift",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\suno-submitter.agent.md",
+        "sha256": "42c3a8a6f27104b9be601f2ef5e0186781869b3ce723054433505109af84a7c8",
+        "model": "none",
+        "tools": [
+          "submit_suno",
+          "capture_suno_takes",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Execution agent for Suno generation (Phase 9). It answers the Execution class's question, \"how do we perform the operation?\". It submits one approved `x3lius.suno-prompt/v1` artifact to Suno through the adapter the caller names, and records the takes that come back. It creates no content and makes no choice: the artifact and the adapter are inputs.\n\nSuno has no official public API (as of 2026-09). The adapters are:\n- `manual`: the prompt is recorded, the operator generates in the Suno UI and registers the takes.\n- `sunoapi`: the sunoapi.org reseller, unverified until `SUNO_API_KEY` exists.",
+          "Contract": "- **Inputs:** exactly one of:\n  - `{ \"submit\": { \"formulaArtifactId\": uuid, \"adapter\": \"manual\" | \"sunoapi\" } }`\n  - `{ \"capture\": { \"submissionId\": uuid, \"takes\"?: [{ \"audioUrl\": \"https://…\", \"title\"?: string, \"durationSeconds\"?: number }] } }`, where `takes` is required for `manual` and refused for `sunoapi` (whose takes come from one provider poll).\n- **Outputs:**\n  - submit: `{ submissionId, adapter, sunoModel, providerTaskId, status: \"awaiting-takes\" | \"submitted\" }`.\n  - capture: `{ submissionId, status: \"captured\" | \"pending\", inserted, alreadyCaptured, takes: [{ id, audioUrl }], scoring: { status: \"stub\", scorer, rows } }`.\n- **Reads:** the formula artifact by id, as `xyp_execution`. The submitted prompt is copied from the artifact, never taken from the caller.\n- **Writes:**\n  - `suno_submissions`, `suno_takes`, `take_scores` (insert-only, as `xyp_execution`, capability `external.execute`).\n  - Each new take gets one STUB `take_scores` row with no score until the Phase 12 Critic exists.\n  - Its own `agent_runs` row, whose log carries the **full prompt text** of every submission, written before the external call (the Governance audit trail).\n- **Side effects:** `sunoapi` only: one `POST /api/v1/generate` per submit and one `GET /api/v1/generate/record-info` per capture. `manual`: none.",
+          "Refuses": "- Choosing the adapter or the artifact: a missing adapter or a non-`x3lius.suno-prompt/v1` artifact is an error.\n- Submitting anything but the artifact's own prompt fields.\n- Scoring a take: the hook writes a stub marker, never a number.\n- Retrying a submission (Phase 4D: no retries on side-effecting agents until idempotency keys exist).\n- Updating or deleting a submission, take or score."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\suno-submitter.agent.md",
+        "sha256": "5bf0a53c148093fde7d6796d668142027751b88acd0e396a737bbd667f6a8934",
+        "model": "none",
+        "tools": [
+          "submit_suno",
+          "capture_suno_takes",
+          "rate_take",
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "tech-r-and-d",
+      "class": "Planning",
+      "domain": "TECH",
+      "state": "contract-drift",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\tech-r-and-d.agent.md",
+        "sha256": "98199402a3fcfb35df9de2d3a5c2b71381b45338955dfa62ed044504b90410dd",
+        "model": "none",
+        "tools": [
+          "propose_rd_backlog"
+        ],
+        "sections": {
+          "Role": "Propose candidate features from registered research sources tagged frontier or emerging.",
+          "Contract": "Input: sourceId, title, rationale. Output: proposed rd_backlog row linked to the source and agent run. Human decides what ships.",
+          "Refuses": "Implementing proposals, writing canonical knowledge, manufacturing sources, or marking a proposal approved."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\tech-r-and-d.agent.md",
+        "sha256": "708c1838713d1d0577a0320a2307cf6c128917a98941e700b59bf576209c950a",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "read_frontier_evidence",
+          "write_rd_backlog",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "missing",
+        "toolDenials": [
+          {
+            "name": "propose_rd_backlog",
+            "reason": "tool not registered: propose_rd_backlog"
+          }
+        ]
+      }
+    },
+    {
+      "name": "udio-alt-platform-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\udio-alt-platform-researcher.agent.md",
+        "sha256": "d6cd96de4c9149b4c1d2e732e527ee153eb25d445cccd5bcbfe59db8be5f3e44",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering music-generation platforms other than Suno. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on Udio and other non-Suno music-generation platforms, recorded per platform and model version.\n\nKeywords: udio (3), stable audio (3), musicgen (3), riffusion (3), alternative platform (2), alt-platform (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\udio-alt-platform-researcher.agent.md",
+        "sha256": "e13c6fac352171223edbd4a96e74a930807f88913a5e1a7228fad78e37b848f6",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "voice-cloning-researcher",
+      "class": "Research",
+      "domain": "RESEARCH_INTELLIGENCE",
+      "state": "model-only",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\voice-cloning-researcher.agent.md",
+        "sha256": "2ca6554839381cc348eaf1507c32b4d58569a10075321af96ca9c98f27af797a",
+        "model": "claude-sonnet-5",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Research specialist, one of 20 (Phase 6B), covering voice-conversion tooling used after generation. It answers the Research class's question, \"what is true, and what works?\", within its scope only. It writes evidence, never knowledge. It runs only when the Research Orchestrator selects it for a question.",
+          "Scope": "Gathers evidence on voice-conversion tooling (RVC, Applio) — training-data needs, model settings and artefacts — per tool version.\n\nKeywords: rvc (3), applio (3), voice cloning (3), voice conversion (3), voice model (2), pitch extraction (2), index rate (2)",
+          "Contract": "- **Inputs:** `{ \"question\": string }`, dispatched on behalf of a research run.\n- **Outputs:** the ids of the `research_evidence` rows it wrote, plus any claim it declined to record and why.\n- **Reads:** long-term memory via `retrieve_context`, so it doesn't re-prove canonical rules; external material via `fetch_source`.\n- **Writes:** ONLY `research_sources` and `research_evidence`, through `write_evidence` (the Evidence Engine, 6C). Every claim carries a model/version tag (`<tool>-<version>`, e.g. `suno-v4.5`, or `model-agnostic`), a confidence with the inputs behind it, and the source row that backs it.\n- **Side effects:** outbound fetches through `fetch_source` only.",
+          "Refuses": "- Promoting anything to canonical knowledge, directly or indirectly. Findings and candidates belong to Synthesis (6C); promotion belongs to the Promotion Gate (6D).\n- Asserting any claim without a `research_sources` row backing it.\n- Recording a claim without a model/version tag, or tagging it with a version it wasn't observed on.\n- Gathering evidence outside its scope. Out-of-scope material belongs to the specialist that owns it.\n- Recording settings for a voice model without the tool version they were observed on."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\voice-cloning-researcher.agent.md",
+        "sha256": "8d2718fb1eac7a1e54ba00526ad9a640bfd7ace444b341320f80232e5b68caf4",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "fetch_source",
+          "write_evidence",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-arrangement",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-arrangement.agent.md",
+        "sha256": "8c4d3428673ebf673597f7467904f2db8fe3920523ea3c42066157fc80722eea",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Creative agent for the X3LIUS Music System's Arrangement sub-domain (Phase 11). It replaces the Phase 7 stub under the same name. It answers the Creative class's question for arrangement: section by section, how full the song is, what plays and how one section leads into the next. Every arrangement choice comes from canonical rules pulled through the Context Engine at run time, or is listed as ungrounded.",
+          "Scope": "Covers section order, instrumentation and transitions in X3LIUS tracks.\n\nKeywords: arrangement (3), instrumentation (3), transition (2), drop (2), build-up (2), section (2), intro (1), outro (1)",
+          "Contract": "- **Inputs:** `{ \"request\": string, \"structureArtifactId\"?: string }`.\n  - `structureArtifactId` names an `x3lius.song-structure/v1` artifact to arrange; any other kind is refused.\n- **Outputs:** `{ subdomain, status: \"generated\", artifact: { id, lineageId, version, schemaId: \"x3lius.arrangement/v1\" }, body, knowledge, context, model: { ref, served }, usage }`.\n  - `body`: `{ sections: [{ sectionId, kind, bars, energy, elements: [{ element, role }], transitionIn }], sources, rulesApplied: [{ ref, how }], ungroundedChoices }`, validated against the schema. The checks: at least one section, unique ids, energy 1–10, positive bars.\n  - With a structure, the sections must be the structure's, in its order. Code copies their kind and bars from it and records it in `sources` (artifact id and version).\n  - `knowledge`: `{ sparse, threshold, scopedRules, perModule, voiceClaims, reasons }`, where `sparse` is true below 3 scoped rules.\n- **Reads:**\n  - `retrieve_context` scoped to `x3lius-arrangement`, then `x3lius-vocal-dna`;\n  - `retrieve_claims` with prefix `x3lius.`;\n  - `read_artifact` for the structure. All of these are read-only (`context.read`, `artifact.read`).\n- **Writes:**\n  - one `creative_artifacts` row via `write_artifact` (`artifact.write`, as `xyp_creative`);\n  - its own `agent_runs` row; run-log lines.\n- **Side effects:** one LLM call to the provider named by `model`.",
+          "Refuses": "- Writing canonical knowledge, including the rules it consumes.\n- Hardcoding an instrument, energy curve or transition: an uncovered choice goes in `ungroundedChoices`.\n- Writing a reply that isn't schema-valid JSON, that cites a ref it wasn't given, or that leaves the structure's sections or their order. In each case the run errors and nothing is written.\n- Overwriting an artifact: a change is a new version."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-arrangement.agent.md",
+        "sha256": "8c4d3428673ebf673597f7467904f2db8fe3920523ea3c42066157fc80722eea",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-composition",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-composition.agent.md",
+        "sha256": "88e4016974bad7a446e749ac27171bd4825e7bbe0d7f93381a2d046aee563a3e",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "write_artifact",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Creative agent for the X3LIUS Music System's Composition sub-domain. It was built in Phase 8 alongside songwriting (F15, user decision) and replaces the Phase 7 stub under the same name. It answers the Creative class's question for harmony and melody: key, mode, tempo, chord progressions and the shape of the melody for one brief. Style targets come only from canonical rules and claims pulled through the Context Engine at run time.",
+          "Scope": "Covers chords, melody and harmony decisions for X3LIUS tracks.\n\nKeywords: composition (3), chord (3), chord progression (3), harmony (3), melody (2), scale (2), key (1)",
+          "Contract": "- **Inputs:** `{ \"request\": string }` (the brief), routed here by the X3LIUS Music System entrypoint (RECORDS) or dispatched directly.\n- **Outputs:** `{ subdomain, status: \"generated\", artifact: { id, lineageId, version, schemaId: \"x3lius.composition/v1\" }, body, knowledge, context, model: { ref, served }, usage }`.\n  - `body`: `{ key: { tonic, mode }, tempoBpm, timeSignature, progressions: [{ section, chords, barsPerChord }], melody: { range, contour, motif }, rulesApplied: [{ ref, how }], ungroundedChoices: [string] }`, validated against the schema, plus: positive tempo, and no empty progression.\n  - `knowledge`: `{ sparse, threshold, scopedRules, perModule, voiceClaims, reasons }`. `sparse` is true below 3 scoped rules.\n  - `context`: every canonical ref sent to the model, each with its source.\n- **Reads:**\n  - `retrieve_context` scoped to `x3lius-composition`, then to `x3lius-vocal-dna`;\n  - `retrieve_claims` with topic prefix `x3lius.`.\n  - Both are read-only as `xyp_runtime` (capability `context.read`).\n- **Writes:**\n  - one `creative_artifacts` row via `write_artifact` (capability `artifact.write`, as `xyp_creative`, insert-only);\n  - its own `agent_runs` row; run-log lines.\n- **Side effects:** one LLM call to the provider named by `model` (key from the environment).",
+          "Refuses": "- Writing canonical knowledge, including the rules it consumes.\n- Hardcoding a genre, key or tempo preference: an uncovered choice goes in `ungroundedChoices`.\n- Writing a reply that isn't schema-valid JSON or that cites a ref it wasn't given: the run errors and nothing is written.\n- Overwriting an artifact: a change is a new version."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-composition.agent.md",
+        "sha256": "88e4016974bad7a446e749ac27171bd4825e7bbe0d7f93381a2d046aee563a3e",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "write_artifact",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-evaluation",
+      "class": "Critic",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-evaluation.agent.md",
+        "sha256": "e476e0df1c400222989025b2b3ae3a1876c16575a2ac332b4f4585ab8a09dee9",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "read_critique",
+          "write_critique",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "The Critic of the X3LIUS Music System (Phase 12). It replaces the Phase 7 stub under the same name, so routing and scope carry over. It answers the Critic class's question, \"what is wrong with the result?\", for one creative artifact version at a time. It checks the version against the canonical rules in force for it and writes a structured critique of specific violations, each tied to a rule ref. It never edits the artifact; that is `x3lius-revision`'s job. The loop controller (`pnpm evaluate`) runs the two in turn.",
+          "Scope": "Covers critique and scoring of X3LIUS outputs against canonical rubrics.\n\nKeywords: evaluation (3), evaluate (3), critique (3), rubric (3), score (2), feedback (2)",
+          "Contract": "- **Inputs:** `{ \"artifactId\": uuid, \"previousCritiqueId\"?: uuid }`. `previousCritiqueId` is the critique of this version's parent, when a loop continues.\n- **Outputs:** `{ status: \"critiqued\", critique: { id, artifactId, schemaId, version, counts: { checked, passed, violations } }, body }`, where `body` is an `x3lius.critique/v1`:\n  - `rules` lists every rule checked, with `method: code | model`.\n  - `violations` has `{ key: ruleRef@path, ruleRef, method, path (JSON Pointer), quote, expected, found }`.\n  - `resolved` lists the keys of the previous critique's violations that are now gone.\n  - `unverified` lists model reports that code could not confirm, with the reason.\n- **Reads:**\n  - the artifact via `read_artifact` and the previous critique via `read_critique`;\n  - the rules via `retrieve_context` and `retrieve_claims`. It uses the producing sub-domain's modules and claim namespaces (found by schema id), queried with the artifact's brief, current versions only.\n  - A mix report's rules are its own checks.\n- **Writes:** one `critiques` row via `write_critique` (`critique.write`, as `xyp_critic`); its own `agent_runs` row; run-log lines.\n- **Side effects:** one model call per critique, only when prose rules apply. There is none for a mix report.",
+          "Refuses": "- Editing the artifact under review, the rubric or any canonical knowledge.\n- A bare request with no `artifactId`. A routed request is refused the same way Mix/Master refuses one without an analysis.\n- A `previousCritiqueId` that did not review this version's parent.\n- A schema no current Creative spec writes, such as a legacy `x3lius.lyrics/v1`.\n- Counting a model-reported violation that code cannot confirm: an unknown or code-checked rule, a path that isn't a field, or a quote that isn't there word for word."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-evaluation.agent.md",
+        "sha256": "e476e0df1c400222989025b2b3ae3a1876c16575a2ac332b4f4585ab8a09dee9",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "read_critique",
+          "write_critique",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-genre-style",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-genre-style.agent.md",
+        "sha256": "d4d647dde72c315351cffb15d30a271ab370c344e5c6f13c44fe63b10bf43151",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "write_artifact",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Creative agent for the X3LIUS Music System's Genre/Style sub-domain. It was built in Phase 9 alongside the Suno formula (F15, user decision) and replaces the Phase 7 stub under the same name. It answers the Creative class's question for genre and style: the target sound for one brief, which the Suno Prompt-Formula then builds on. Every genre, tempo and sound choice comes from canonical rules pulled through the Context Engine at run time, or is listed as ungrounded.",
+          "Scope": "Covers genre and style targets, subgenres and reference tracks for X3LIUS.\n\nKeywords: genre (3), subgenre (3), reference track (3), style (2)",
+          "Contract": "- **Inputs:** `{ \"request\": string }` (the brief).\n- **Outputs:** `{ subdomain, status: \"generated\", artifact: { id, lineageId, version, schemaId: \"x3lius.genre-style/v1\" }, body, knowledge, context, model: { ref, served }, usage }`.\n  - `body`: `{ primaryGenre, subgenres, tempoBpm: { min, max }, mood, soundPalette: [{ element, descriptor }], referenceDescriptors: [{ descriptor, why }], avoid, rulesApplied: [{ ref, how }], ungroundedChoices }`, validated against the schema, plus: 0 < min ≤ max tempo.\n  - `referenceDescriptors` describe sounds and never name an artist, song or album.\n  - `knowledge`: `{ sparse, threshold, scopedRules, perModule, voiceClaims, reasons }`, where `sparse` is true below 3 scoped rules. `context`: every canonical ref sent to the model.\n- **Reads:**\n  - `retrieve_context` scoped to `x3lius-genre-style`, then to `x3lius-vocal-dna`;\n  - `retrieve_claims` with prefix `x3lius.`.\n  - Both are read-only as `xyp_runtime` (`context.read`).\n- **Writes:**\n  - one `creative_artifacts` row via `write_artifact` (`artifact.write`, as `xyp_creative`);\n  - its own `agent_runs` row; run-log lines.\n- **Side effects:** one LLM call to the provider named by `model`.",
+          "Refuses": "- Writing canonical knowledge, including the rules it consumes.\n- Hardcoding a genre or sound: an uncovered choice goes in `ungroundedChoices`.\n- Writing a reply that isn't schema-valid JSON, that cites a ref it wasn't given, or whose tempo range is inverted: the run errors and nothing is written.\n- Overwriting an artifact: a change is a new version."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-genre-style.agent.md",
+        "sha256": "d4d647dde72c315351cffb15d30a271ab370c344e5c6f13c44fe63b10bf43151",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "write_artifact",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-lyrics",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-lyrics.agent.md",
+        "sha256": "b464e7c5845dfb454d5b3bfc4426e0485df8001af61b515c7cb2c641cbfa0aaf",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Creative agent for the X3LIUS Music System's Lyrics sub-domain (Phase 8; replaces the Phase 7 stub under the same name). It answers the Creative class's question, \"what should the lyrics be?\". Since the Phase 9 live runs it writes the whole song (`x3lius.lyrics/v2`, user decision). Given a song-structure artifact, it writes every section of it in order, one model call per section, hook included (ARCHITECTURE F21). The voice reference comes from canonical knowledge at run time: the guide's claim and any rule the Promotion Gate placed in `x3lius-lyrics` or `x3lius-vocal-dna`. It is never written into this file or its code.",
+          "Scope": "Covers lyric writing, rhyme schemes and wordplay in the X3LIUS voice.\n\nKeywords: lyric (3), rhyme (3), wordplay (3), bar (2), punchline (2), flow (1)",
+          "Contract": "- **Inputs:** `{ \"request\": string, \"structureArtifactId\"?: uuid }`.\n  - `records/x3lius/song-to-suno.workflow.yaml` passes the structure the songwriting step wrote.\n  - A bare `{ request }` (routed here by the X3LIUS Music System entrypoint, or dispatched directly) writes the sections the brief asks for, following no structure.\n- **Outputs:** `{ subdomain, status: \"generated\", artifact: { id, lineageId, version, schemaId: \"x3lius.lyrics/v2\" }, body, knowledge, warnings, context, model: { ref, served }, usage }`.\n  - `body`: `{ sections: [{ sectionId, kind, label, bars: [{ n, text, language, rhymeTag }], rhymeScheme, devices: [{ bar, device, note }], directions: [string] }], instrumental: [sectionId], sources: [{ role: \"structure\", artifactId, schemaId, version }], rulesApplied: [{ ref, how }], ungroundedChoices: [string] }`.\n  - With a structure:\n    - Each call replies against `x3lius.lyrics-section-llm/v2`: `instrumental`, `bars`, `rhymeScheme`, `devices`, `directions`, trace.\n    - Each call sees the structure and the lyrics written so far, under `WRITE NOW: section <id> (<kind>, <bars> bars): <purpose>`.\n    - Code sets `sectionId` and `kind` from the structure and records it in `sources`. So every structure section appears once, in order, written or in `instrumental`.\n    - Each call's trace is kept, prefixed `[<sectionId>]`. A section marked instrumental may not have bars.\n    - A section whose lines have a mixed-script word is asked for once more, with a `CORRECTION` naming each word and its bar. Still mixed means the run fails.\n  - `label`, the section tag Suno sees, comes from code, not the model: verses numbered in song order (\"Verse 1\", \"Verse 2\"), every other kind by name (\"Pre-Chorus\", \"Chorus\", \"Outro\"). The model wrote section ids as tags live.\n  - `bars` hold only the words that are sung or spoken. Production or performance notes go in `directions`, which are stored on the artifact and never rendered into Suno's lyrics. Seen live: an outro whose \"Synth decays… concrete breath fades\" was a sung line. This is asked for in the prompt; code cannot check it reliably.\n  - Without a structure: one call replies against `x3lius.lyrics-llm/v2`.\n  - In both cases every section's bars are numbered 1..n in order, and no section id repeats.\n  - Mixed-script words (Latin and Cyrillic letters in one word, a homoglyph corruption; ARCHITECTURE F22):\n    - refused in bar text and section labels, which Suno receives verbatim;\n    - anywhere else they are written to the artifact's `warnings`.\n  - `language` is a free ISO 639-1 code (or `mixed`). Which languages to use is a canonical rule, not a schema constant.\n  - `knowledge`: `{ sparse, threshold, scopedRules, perModule, voiceClaims, reasons }`. `sparse` is true below 3 scoped rules.\n  - `context`: every canonical ref sent to the model, each with its source.\n- **Reads:**\n  - `read_artifact` for the structure artifact (`artifact.read`; it must be `x3lius.song-structure/v1`);\n  - `retrieve_context` scoped to `x3lius-lyrics`, then to `x3lius-vocal-dna`;\n  - `retrieve_claims` with topic prefix `x3lius.`.\n  - Both are read-only as `xyp_runtime` (capability `context.read`).\n- **Writes:**\n  - one `creative_artifacts` row via `write_artifact` (capability `artifact.write`, as `xyp_creative`, insert-only);\n  - its own `agent_runs` row; run-log lines.\n- **Side effects:** LLM calls to the provider named by `model` (key from the environment): one per structure section, or one for a bare brief.\n  - A failed call stops the run and nothing is written; the error names the section.\n  - Progress is logged per section.",
+          "Refuses": "- Writing canonical knowledge, including the rules it consumes.\n- Hardcoding a voice: with thin rules it says so (`knowledge.sparse`, `ungroundedChoices`) rather than falling back to a built-in style.\n- Writing a reply that isn't schema-valid JSON, that cites a ref it wasn't given, that marks a section instrumental while giving it bars, or that has a mixed-script word in a bar or label: the run errors and nothing is written.\n- Overwriting an artifact: a change is a new version."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-lyrics.agent.md",
+        "sha256": "b464e7c5845dfb454d5b3bfc4426e0485df8001af61b515c7cb2c641cbfa0aaf",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-mix-master",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-mix-master.agent.md",
+        "sha256": "fbc10855520d0d9f6d9779223e643f2a08e422d1d71b49f03d865d428fb28891",
+        "model": "none",
+        "tools": [
+          "retrieve_claims",
+          "write_artifact",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Creative agent for the X3LIUS Music System's Mix/Master sub-domain (Phase 11). It replaces the Phase 7 stub under the same name. It is deterministic (user decision, ARCHITECTURE F10): it checks a TRACE-shaped analysis of one render against the canonical mix/master rubric and writes the adjustments as an artifact. Every bound it applies is a canonical claim, cited by ref and version. A metric the rubric doesn't bound is reported as unset, never checked against a default.",
+          "Scope": "Covers mix and master decisions against a rubric, from structured TRACE-shaped analysis.\n\nKeywords: mix (3), mixing (3), master (3), mastering (3), lufs (3), loudness (3), trace (2), eq (2), compression (2), limiter (2), stereo width (2)",
+          "Contract": "- **Inputs:** `{ \"analysis\": trace.analysis/v1, \"request\"?: string }`.\n  - The contract is `tech/trace/analysis.ts`: loudness, tonal balance over seven fixed bands, stereo correlation and width (full band and per band), and crest factor, for the `mix` or the `master` stage.\n  - An invalid analysis is refused with every violation named.\n- **Outputs:** `{ subdomain, status: \"checked\", artifact: { id, lineageId, version, schemaId: \"x3lius.mix-report/v1\" }, body, knowledge, context }`.\n  - `body`: `{ stage, analysis, checks: [{ metric, unit, measured, rubric: { min?, max? }, action: keep|raise|lower, by, ref, version }], unset: [metric] }`.\n  - `checks` is in contract order. `by` is the distance to the nearest bound in the metric's unit.\n  - `knowledge`: `{ rubricClaims, unset, reasons }`. `context`: every rubric claim applied.\n- **Reads:** `retrieve_claims` with prefix `x3lius.<stage>.`, keeping claims scoped `trace` (`context.read`, as `xyp_runtime`). The claims come from `records/x3lius/mix-rubric.yaml` or from research candidates, both admitted through the gate.\n- **Writes:**\n  - one `creative_artifacts` row via `write_artifact` (`artifact.write`, as `xyp_creative`);\n  - its own `agent_runs` row; run-log lines.\n- **Side effects:** none. No LLM, no audio, no DAW. TRACE itself is wired in Phase 14.",
+          "Refuses": "- Running without an analysis, or with one that isn't a valid `trace.analysis/v1`.\n- A threshold from code: with no rubric claim for a metric, it lists the metric as `unset`.\n- A metric bounded by two current canonical rows (two sources of truth), or a malformed bound.\n- Writing canonical knowledge, including the rubric it applies."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-mix-master.agent.md",
+        "sha256": "fbc10855520d0d9f6d9779223e643f2a08e422d1d71b49f03d865d428fb28891",
+        "model": "none",
+        "tools": [
+          "retrieve_claims",
+          "write_artifact",
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-production",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-production.agent.md",
+        "sha256": "1f1e0f9f63453da9e25d3861395677110565e0af7d76021f9bc09b1fd8bf2157",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Creative agent for the X3LIUS Music System's Production sub-domain (Phase 11). It replaces the Phase 7 stub under the same name. It answers the Creative class's question for production: the drums, the sounds and the FL Studio project that makes them. FL Studio project conventions are canonical rules in the Production module, so a convention change reaches the next run with no code change. Every other choice comes from canonical rules too, or is listed as ungrounded.",
+          "Scope": "Covers sound design, drums and beat production in FL Studio.\n\nKeywords: production (3), sound design (3), fl studio (3), 808 (3), drum (2), beat (2), sample (2)",
+          "Contract": "- **Inputs:** `{ \"request\": string, \"arrangementArtifactId\"?: string }`.\n  - `arrangementArtifactId` names an `x3lius.arrangement/v1` artifact to produce; any other kind is refused.\n- **Outputs:** `{ subdomain, status: \"generated\", artifact: { id, lineageId, version, schemaId: \"x3lius.production/v1\" }, body, knowledge, context, model: { ref, served }, usage }`.\n  - `body`: `{ tempoBpm, drums: [{ element, sound, pattern }], soundDesign: [{ element, source, processing }], flStudio: { channels: [{ name, generator, mixerTrack }], mixerTracks: [{ track, name, effects }] }, sources, rulesApplied: [{ ref, how }], ungroundedChoices }`, validated against the schema.\n  - The checks: a positive tempo, unique non-negative mixer track numbers, and every channel routed to a listed mixer track.\n  - `sources` records the arrangement (artifact id and version), or is empty.\n  - `knowledge`: `{ sparse, threshold, scopedRules, perModule, voiceClaims, reasons }`, where `sparse` is true below 3 scoped rules.\n- **Reads:**\n  - `retrieve_context` scoped to `x3lius-production`, `x3lius-arrangement`, then `x3lius-vocal-dna`;\n  - `retrieve_claims` with prefix `x3lius.`;\n  - `read_artifact` for the arrangement. All of these are read-only (`context.read`, `artifact.read`).\n  - Knowledge scoped to one tool (Suno versions, the RVC settings, the TRACE rubric) is left out.\n- **Writes:**\n  - one `creative_artifacts` row via `write_artifact` (`artifact.write`, as `xyp_creative`);\n  - its own `agent_runs` row; run-log lines.\n- **Side effects:** one LLM call to the provider named by `model`. It does not open or write an FL Studio project.",
+          "Refuses": "- Writing canonical knowledge, including the rules it consumes.\n- Hardcoding a sound, plugin or FL Studio convention: an uncovered choice goes in `ungroundedChoices`.\n- Writing a reply that isn't schema-valid JSON, that cites a ref it wasn't given, or whose channels route to an unlisted mixer track. In each case the run errors and nothing is written.\n- Overwriting an artifact: a change is a new version."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-production.agent.md",
+        "sha256": "1f1e0f9f63453da9e25d3861395677110565e0af7d76021f9bc09b1fd8bf2157",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-revision",
+      "class": "Revision",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-revision.agent.md",
+        "sha256": "60b7c39ddfa2c2d9322929bf9268322926ef9f376bf64823461a4338313e8a24",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "read_critique",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "The Revision agent of the X3LIUS Music System (Phase 12). It works inside the Evaluation sub-domain without being one, as `x3lius-rvc-post` does for Vocal DNA. It answers the Revision class's question, \"how should it be corrected?\", for one critique written by `x3lius-evaluation` (the Critic). It proposes concrete edits and appends the next version of the artifact. The loop controller (`pnpm evaluate`) then has the Critic judge that version.",
+          "Contract": "- **Inputs:** `{ \"critiqueId\": uuid }`.\n- **Outputs:** `{ status: \"revised\", artifact: { id, lineageId, version, schemaId }, critiqueId, edits: [{ path, replacement, violationKeys }], body }`.\n- **Reads:** the critique via `read_critique` (`critique.read`) and the version it reviewed via `read_artifact` (`artifact.read`), both as `xyp_runtime`.\n- **Writes:**\n  - one `creative_artifacts` row via `write_artifact` (`artifact.write`, as `xyp_creative`). It is the next version of the same lineage, with `parent_id` set to the version reviewed and `critique_id` set to the critique. Brief, context refs and knowledge are copied from the parent.\n  - its own `agent_runs` row; run-log lines.\n- **Side effects:** one model call.",
+          "Refuses": "- Overwriting any artifact version, or marking a critique resolved. Only the Critic does that, on its next pass.\n- A mix report: fixing a measured render is studio work.\n- The whole revision when any edit:\n  - cites no violation of the critique;\n  - names no field, or a field code derives (`sources`, the trace, a Suno prompt's lyrics, limits or model);\n  - is outside every violated field;\n  - changes a field's type, changes nothing, or repeats a field.\n- A revised body that fails its spec's checks or puts a mixed-script word in text Suno receives."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-revision.agent.md",
+        "sha256": "60b7c39ddfa2c2d9322929bf9268322926ef9f376bf64823461a4338313e8a24",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "read_critique",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-rvc-post",
+      "class": "Execution",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-rvc-post.agent.md",
+        "sha256": "fa1883be12ba5ab5fe4c6d813db18a661406025d6af1d925bc6cd3a8f7b847aa",
+        "model": "none",
+        "tools": [
+          "retrieve_claims",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Execution agent for the X3LIUS Music System's RVC/Applio post-processing step (Phase 10). It turns the canonical Vocal DNA into the job spec for converting a vocal with the X3LIUS voice model. It is one of the two readers the guide names for the Vocal DNA; the Suno formula is the other. It reads the same canonical row, never a copy, so a vocal-direction change reaches both at once.",
+          "Scope": "Covers RVC/Applio voice conversion settings for X3LIUS vocals.\n\nKeywords: rvc (3), applio (3), voice conversion (3), post-processing (2)",
+          "Contract": "- **Inputs:** `{}`. It reads nothing but the canonical Vocal DNA.\n- **Outputs:** `{ status: \"job-spec\", source: { canonicalPromptId, slug, version, ref }, rvc: { engine, model, index?, pitch?, index_rate?, protect?, f0_method?, rms_mix_rate? }, unset: [setting], vocal: { tone, register, delivery, adlibs } }`.\n  - `source` names the canonical row and version every value came from.\n  - `unset` lists the optional settings the Vocal DNA doesn't state. For those, the local tool's own defaults apply; none are invented here.\n- **Reads:** `retrieve_claims` for `x3lius.vocal.` (`context.read`, as `xyp_runtime`), through the shared reader `records/x3lius/vocal-dna/read.ts`. It needs exactly one row with all five claims.\n- **Writes:** its own `agent_runs` row (the audit trail of which vocal direction a render used), plus one run-log line.\n- **Side effects:** none. The voice model runs in the operator's local audio pipeline; no model or GPU exists here. No LLM.",
+          "Refuses": "- Running without a canonical Vocal DNA: it names the file to admit, `records/x3lius/vocal-dna.yaml`.\n- Vocal DNA claims that span more than one canonical row (two sources of truth), or a row missing an attribute.\n- Filling an RVC setting the Vocal DNA doesn't state."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-rvc-post.agent.md",
+        "sha256": "fa1883be12ba5ab5fe4c6d813db18a661406025d6af1d925bc6cd3a8f7b847aa",
+        "model": "none",
+        "tools": [
+          "retrieve_claims",
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-songwriting",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-songwriting.agent.md",
+        "sha256": "d77a1619ca0dc96fe3f80956eacdc4c78b5228d8faec482eb056a763cefcc95f",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "write_artifact",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Creative agent for the X3LIUS Music System's Songwriting sub-domain (Phase 8; replaces the Phase 7 stub under the same name). It answers the Creative class's question, \"what should the song be?\": theme, section structure and hook selection for one brief. The artist's voice and style are never in this file or its code. They arrive at run time as canonical rules and claims through the Context Engine, so a rule the Promotion Gate adds changes the next song with no code change.",
+          "Scope": "Covers song structure, hooks and toplines for X3LIUS tracks.\n\nKeywords: songwriting (3), song structure (3), topline (3), hook (2), chorus (2), verse (2), bridge (2)",
+          "Contract": "- **Inputs:** `{ \"request\": string }` (the brief), routed here by the X3LIUS Music System entrypoint (RECORDS) or dispatched directly.\n- **Outputs:** `{ subdomain, status: \"generated\", artifact: { id, lineageId, version, schemaId: \"x3lius.song-structure/v1\" }, body, knowledge, context, model: { ref, served }, usage }`.\n  - `body`: `{ title, theme: { statement, perspective }, sections: [{ id, kind, bars, purpose }], hook: { candidates: [{ text, language, rationale }], selectedIndex, selectionReason }, rulesApplied: [{ ref, how }], ungroundedChoices: [string] }`, validated against the schema, plus: at least 2 hook candidates and a `selectedIndex` among them.\n  - `knowledge`: `{ sparse, threshold, scopedRules, perModule, voiceClaims, reasons }`. `sparse` is true below 3 scoped rules; the flag is part of the artifact, not only the log.\n  - `context`: every canonical ref sent to the model (rules and claims), each with its source.\n- **Reads:**\n  - `retrieve_context` scoped to `x3lius-songwriting`, then to `x3lius-vocal-dna` (current versions only);\n  - `retrieve_claims` with topic prefix `x3lius.` (e.g. the guide's `x3lius.voice-reference`).\n  - Both are read-only as `xyp_runtime` (capability `context.read`).\n- **Writes:**\n  - one `creative_artifacts` row via `write_artifact` (capability `artifact.write`, as `xyp_creative`, insert-only);\n  - its own `agent_runs` row; run-log lines (context refs pulled, sparsity warning).\n- **Side effects:** one LLM call to the provider named by `model` (key from the environment: `OPENROUTER_API_KEY` for `openrouter:`).",
+          "Refuses": "- Writing canonical knowledge, including the rules it consumes; only the Promotion Gate writes those.\n- Hardcoding a voice or style: with no canonical rule for a choice, it records that choice in `ungroundedChoices` instead of inventing a house style.\n- Writing a reply that isn't schema-valid JSON, that cites a ref it wasn't given, or that selects a hook outside its candidates: the run errors and nothing is written.\n- Overwriting an artifact: a change is a new version (Revision, Phase 12)."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-songwriting.agent.md",
+        "sha256": "d77a1619ca0dc96fe3f80956eacdc4c78b5228d8faec482eb056a763cefcc95f",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "write_artifact",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-suno",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-suno.agent.md",
+        "sha256": "1070d006792af1d9239d49d95dd46645919b311f91ef2efd3717d3e09d20c87d",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Creative agent for the X3LIUS Music System's Suno sub-domain (Phase 9; replaces the Phase 7 stub under the same name). It assembles a Suno-ready prompt from approved upstream artifacts plus canonical Suno rules promoted through the gate. It is not a static template: the formula is whatever the promoted rules say for the target Suno version.\n\nIt is hybrid (user decision):\n- The model writes the title, the \"Style of Music\" text and the styles to exclude, citing rules.\n- Code renders the lyrics field from the Phase 8 lyrics artifact(s), so approved lyrics can't drift, and records which artifact versions the prompt came from.",
+          "Scope": "Covers Suno prompt formulas, style prompts and negative prompts, recorded per Suno model version.\n\nKeywords: suno (3), style prompt (3), negative prompt (3), meta-tag (2), persona (2)",
+          "Contract": "- **Inputs:** `{ \"sunoModel\": \"v5\", \"lyricsArtifactIds\": [uuid, …], \"structureArtifactId\"?: uuid, \"genreStyleArtifactId\"?: uuid, \"request\"?: string }`.\n  - `records/x3lius/song-to-suno.workflow.yaml` produces all of them from one brief.\n  - A bare `{ request }` (e.g. from `pnpm ask`) is refused with that pointer.\n- **Outputs:** `{ subdomain, status: \"generated\", artifact: { id, lineageId, version, schemaId: \"x3lius.suno-prompt/v1\" }, body, knowledge, context, model, usage }`.\n  - `body`: `{ sunoModel, title, style, excludeStyles, lyrics, sources: [{ role, artifactId, schemaId, version }], limits: [{ field, max, actual, ref }], rulesApplied, ungroundedChoices }`.\n  - The model's reply is validated against `x3lius.suno-prompt-llm/v1` (title, style, excludeStyles, trace only; a reply that includes `lyrics` is refused), and the assembled body against `x3lius.suno-prompt/v1`.\n  - `limits`: enforced only when a current canonical claim `suno.limit.<field>-chars` applies to `sunoModel`; exceeding one is an error, never a silent truncation.\n  - A mixed-script word in `title`, `style`, `excludeStyles` or the rendered `lyrics` is an error (ARCHITECTURE F22), including one inherited from an older lyrics artifact.\n- **Reads:**\n  - `read_artifact` for the input artifacts (`artifact.read`; each must have the expected schema);\n  - `retrieve_context` scoped to `x3lius-suno`, `x3lius-genre-style`, `x3lius-vocal-dna`;\n  - `retrieve_claims` for `x3lius.` and `suno.`.\n  - Rules and claims tagged for another Suno version (`suno-<v>` ≠ `sunoModel`) are left out and counted in `knowledge.reasons`.\n- **Writes:**\n  - one `creative_artifacts` row via `write_artifact` (as `xyp_creative`);\n  - its own `agent_runs` row; run-log lines.\n- **Side effects:** one LLM call. It never submits anything: submission is `suno-submitter`'s job.",
+          "Refuses": "- Writing or changing lyrics: they come verbatim from the approved lyrics artifact.\n- Using an upstream artifact of the wrong schema, or none.\n- Applying a rule tagged for a different Suno version.\n- Writing canonical knowledge; hardcoding a voice, style or length limit.\n- Overwriting an artifact: a change is a new version."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-suno.agent.md",
+        "sha256": "1070d006792af1d9239d49d95dd46645919b311f91ef2efd3717d3e09d20c87d",
+        "model": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "tools": [
+          "retrieve_context",
+          "retrieve_claims",
+          "read_artifact",
+          "write_artifact",
+          "log_message"
+        ],
+        "executor": "llm-program",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "llm-program",
+        "toolDenials": []
+      }
+    },
+    {
+      "name": "x3lius-vocal-dna",
+      "class": "Knowledge",
+      "domain": "RECORDS",
+      "state": "identical",
+      "source": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2\\agents\\x3lius-vocal-dna.agent.md",
+        "sha256": "e14e78d6fd47a96afc2ea2b064368d4bef585c9d3f039f27e7a6209f525e84ce",
+        "model": "none",
+        "tools": [
+          "retrieve_claims",
+          "log_message"
+        ],
+        "sections": {
+          "Role": "Knowledge agent for the X3LIUS Music System's Vocal DNA sub-domain (Phase 10; replaces the Phase 7 stub under the same name). It answers the Knowledge class's question, \"what do we already know?\", for the X3LIUS vocal signature. The answer is the canonical Vocal DNA row: tone, register, delivery, ad-libs and the RVC/Applio voice model, admitted from `records/x3lius/vocal-dna.yaml` through the Promotion Gate. It reads through the same reader as the RVC step.",
+          "Scope": "Covers the X3LIUS vocal signature (tone, register, delivery, ad-libs) and its RVC/Applio voice model.\n\nKeywords: vocal dna (3), vocal signature (3), ad-lib (3), rvc (3), applio (3), timbre (2), register (2), delivery (2)",
+          "Contract": "- **Inputs:** `{ \"request\": string }`, routed here by the X3LIUS Music System entrypoint (RECORDS) or dispatched directly.\n- **Outputs:** `{ subdomain, status: \"known\", request, vocalDna: { source: { canonicalPromptId, slug, version, ref, uri }, tone, register, delivery, adlibs, rvc } }`.\n- **Reads:** `retrieve_claims` for `x3lius.vocal.` (`context.read`, as `xyp_runtime`), through the shared reader `records/x3lius/vocal-dna/read.ts`.\n- **Writes:** its own `agent_runs` row, plus one run-log line.\n- **Side effects:** none. No LLM.",
+          "Refuses": "- Answering without a canonical Vocal DNA: it names the file to admit.\n- Writing or changing the Vocal DNA. A change is an edit to the first-party file, re-admitted through the gate as a new version."
+        }
+      },
+      "target": {
+        "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-vocal-dna.agent.md",
+        "sha256": "e14e78d6fd47a96afc2ea2b064368d4bef585c9d3f039f27e7a6209f525e84ce",
+        "model": "none",
+        "tools": [
+          "retrieve_claims",
+          "log_message"
+        ],
+        "executor": "handler",
+        "toolDenials": []
+      },
+      "sourceAgainstTarget": {
+        "executor": "handler",
+        "toolDenials": []
+      }
+    }
+  ],
+  "targetOnly": [
+    {
+      "name": "records-catalog-lookup",
+      "class": "Knowledge",
+      "domain": "RECORDS",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\records-catalog-lookup.agent.md",
+      "sha256": "fc081fd075319c6d3cad2b1c491b89098296b6a034a8449f3c35d5b97f550be7",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    },
+    {
+      "name": "records-songs",
+      "class": "Execution",
+      "domain": "RECORDS",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\records-songs.agent.md",
+      "sha256": "95dc58edc6a8badb300a03f8d8c820577db7ee4a067e2b726c314370d6841163",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    },
+    {
+      "name": "records-tasks",
+      "class": "Execution",
+      "domain": "RECORDS",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\records-tasks.agent.md",
+      "sha256": "eed9d9b4851315ade01a596af8ca50a0bfd59959669775508921ff4b08f46782",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    },
+    {
+      "name": "tech-ai-systems",
+      "class": "Knowledge",
+      "domain": "TECH",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\tech-ai-systems.agent.md",
+      "sha256": "2f33efa768d15635f1ea37f655edadecde451310403068e5250cdeaba63988b9",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    },
+    {
+      "name": "tech-audio-tools",
+      "class": "Execution",
+      "domain": "TECH",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\tech-audio-tools.agent.md",
+      "sha256": "01a85b6e7be74b65df23d2205734efe946a9ef4942fd16f2e8d789b33077819b",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    },
+    {
+      "name": "tech-products",
+      "class": "Knowledge",
+      "domain": "TECH",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\tech-products.agent.md",
+      "sha256": "92947816b33e33bc1f250f6370d666ba40c85684506b7f20ae5e51c47f6ef838",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    },
+    {
+      "name": "vault-curator",
+      "class": "Execution",
+      "domain": "KNOWLEDGE",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\vault-curator.agent.md",
+      "sha256": "712701045b087da25c6c48e7595fb40314b0afc2e480e32a9fee4dfe192ce949",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    },
+    {
+      "name": "x3lius-lyric-editor",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-lyric-editor.agent.md",
+      "sha256": "9152b8fdb298f516d52d7e8a35325cf5faf50b8280d4c19e521fe88f5c968b40",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    },
+    {
+      "name": "x3lius-studio-editor",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-studio-editor.agent.md",
+      "sha256": "2d3db2dfab9aeb45cc4d61cc61bd0bf4eb802eb29f9aadfc33ebc65b818527b9",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    },
+    {
+      "name": "x3lius-suno-package",
+      "class": "Creative",
+      "domain": "RECORDS",
+      "path": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\agents\\x3lius-suno-package.agent.md",
+      "sha256": "1be1e714d5ca076f3cf53ecfceea2a6d443b385b089822f355f60fab8550f97a",
+      "model": "none",
+      "executor": "handler",
+      "toolDenials": []
+    }
+  ]
+}

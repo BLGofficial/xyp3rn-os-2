@@ -1,5 +1,7 @@
 'use client';
 
+import { BrandLogo } from '../brand/logo';
+
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { arcControl, clampZoom, DOMAIN_DIRECTION, ease, facing, FOCUS_MS, hitRadius, layout, opacity, project, rimRadius, rotate, SPREAD, step, type Owner } from '../../lib/sphere.ts';
@@ -327,10 +329,12 @@ export function Sphere({ selected, scanKey }: { selected: string | null; scanKey
                   );
                 })}
                 <g aria-hidden="true">
-                  <path d={`M${cx},${cy - 7} L${cx + 7},${cy} L${cx},${cy + 7} L${cx - 7},${cy} Z`} fill={ACCENT.champagne} fillOpacity={0.9}
-                    onPointerEnter={() => setHoverId(null)} data-sphere-hub>
+                  <g onPointerEnter={() => setHoverId(null)} data-sphere-hub>
                     <title>{`${data.hub.title} ${data.hub.version}: the application, from package.json. Not an agent, a server or a database row.`}</title>
-                  </path>
+                    <foreignObject x={cx - 24} y={cy - 24} width={48} height={48}>
+                      <BrandLogo size={48} />
+                    </foreignObject>
+                  </g>
                 </g>
                 {[...shown].sort((x, y) => x.p.depth - y.p.depth).map(({ m, p }) => {
                   const r = markRadius(m) * p.scale;

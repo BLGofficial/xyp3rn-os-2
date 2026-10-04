@@ -1,0 +1,14 @@
+{
+  "scope": "Static viewer with repository graph-data.js; backend intentionally unavailable",
+  "geometry": {
+    "type": "Mesh",
+    "geometry": "SphereGeometry",
+    "vertices": 1617,
+    "texture": 1216,
+    "lights": [
+      "AmbientLight",
+      "DirectionalLight"
+    ]
+  },
+  "errors": []
+}
