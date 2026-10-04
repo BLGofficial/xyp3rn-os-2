@@ -35,12 +35,3 @@ export const Icon = ({ name, className = 'h-5 w-5' }: { name: IconName; classNam
     <path d={paths[name]} />
   </svg>
 );
-
-/** The XYP3RN mark: a mercury double ring around the hub (the application identity, §13.2). */
-export const Mark = () => (
-  <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden="true" focusable="false">
-    <circle cx="16" cy="16" r="14" fill="none" stroke="#D8E6F7" strokeWidth="1.5" />
-    <circle cx="16" cy="16" r="10.5" fill="none" stroke="#D8E6F7" strokeOpacity="0.45" strokeWidth="1" />
-    <circle cx="16" cy="16" r="3.2" fill="#D8E6F7" />
-  </svg>
-);

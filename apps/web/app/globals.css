@@ -76,6 +76,36 @@
 .status-unavailable { color: theme('colors.warn'); }
 .status-unavailable::before { content: '!' / ''; }
 
+.voice-capture { padding: 20px; margin: 24px 0; border: 1px solid var(--border, #394453); border-radius: 12px; }
+.voice-capture h2 { margin-top: 0; }
+.voice-capture p { margin: 10px 0; }
+.capture-fields, .capture-controls { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+.capture-fields label { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 140px; }
+.capture-transcript { display: flex; flex-direction: column; gap: 8px; }
+.capture-transcript textarea { width: 100%; resize: vertical; min-height: 150px; }
+.capture-confirm { display: flex; align-items: flex-start; gap: 10px; margin: 20px 0; }
+.voice-capture button, .voice-capture select { min-height: 44px; }
+.capture-controls label { display: flex; align-items: center; gap: 8px; }
+.voice-capture input[type=checkbox] { width: 18px; height: 18px; flex-shrink: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation: none !important; scroll-behavior: auto !important; }
+}
+
+/* BrandSplash: the official logo (docs/BRAND.md) with a gold aura; the reduced-motion rule above stills it. */
+.brand-splash { display: flex; min-height: 50vh; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; }
+.brand-splash h1 { margin: 0; }
+.brand-aura { display: inline-flex; padding: 14px; }
+.brand-sphere {
+  position: relative; display: inline-grid; place-items: center; flex-shrink: 0; isolation: isolate;
+  border-radius: 50%;
+  background: radial-gradient(circle at 28% 22%, #fae6b4 0%, #88672f 9%, #1f211e 32%, #080a0b 66%, #b88131 91%, #f4d78f 97%, #1c1510 100%);
+  box-shadow: inset 2px 2px 3px #fff1c870, inset -3px -5px 8px #000b, 0 8px 18px #0007, 0 0 20px #d8ab551c;
+}
+.brand-sphere-art { width: 86%; height: 86%; object-fit: contain; border-radius: 50%; }
+.brand-sphere-glass {
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(ellipse at 29% 17%, #fff8dd55 0%, #fff4cb18 14%, transparent 38%),
+    radial-gradient(circle at 42% 36%, transparent 49%, #0008 82%, #000b 98%);
+  box-shadow: inset 0 0 0 1px #f3d28a66;
 }

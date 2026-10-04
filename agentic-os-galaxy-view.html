@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agentic OS — Graph Galaxy View</title>
+<style>
+  :root{
+    /* ---- measured from the reference ---- */
+    --bg-void:#04050E; --bg-mid:#0C0E1A; --bg-halo:#171B31;
+    --core-fill:#14101A; --core-rim:#FFC300; --core-glow:rgba(255,195,0,.55);
+    --ink:#DCE6F5; --ink-dim:#8FA8C8; --ink-faint:#5A6B8C;
+    --hair:rgba(150,190,240,.14);
+    --green:#53E485; --teal:#3AD9BF; --cyan:#52C7FD; --blue:#6BA8FE;
+    --violet:#A186FF; --pink:#F76FB4; --amber:#FFCB18; --gold:#E4B833;
+    --glass:rgba(20,30,56,.50);
+    --glass-line:rgba(168,205,245,.34);
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: "Helvetica Neue", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#04050E;overflow:hidden}
+  body{display:grid;place-items:center;font-family:var(--sans)}
+
+  #stage{width:100vw;height:100vh;display:block}
+  @media (min-aspect-ratio:1668/1352){ #stage{width:calc(100vh * 1668 / 1352); height:100vh} }
+  @media (max-aspect-ratio:1668/1352){ #stage{width:100vw; height:calc(100vw * 1352 / 1668)} }
+
+  .wordmark{font-family:var(--sans);font-weight:700;letter-spacing:.20em;fill:#EEF3FC}
+  .wordmark-sub{font-family:var(--mono);font-size:13px;letter-spacing:.10em;fill:#C9A227}
+  .clab{font-family:var(--mono);font-weight:700;letter-spacing:.16em;text-transform:uppercase}
+  .clab-n{font-family:var(--mono);font-size:12px;fill:#DCE6F5;opacity:.9}
+  .app-lbl{font-family:var(--mono);font-size:14px;letter-spacing:.05em;fill:var(--ink-dim)}
+  .foot{font-family:var(--mono);font-size:13px;letter-spacing:.18em;fill:var(--ink-faint)}
+
+  .ring{fill:none;stroke:var(--hair);stroke-width:1}
+  .ring-dash{fill:none;stroke:rgba(255,195,0,.28);stroke-width:1;stroke-dasharray:2 7}
+  .ring-cluster{fill:none;stroke-width:1;stroke-dasharray:1 6;opacity:.55}
+  .spoke{stroke:rgba(140,180,240,.055);stroke-width:1}
+
+  .spin        {transform-origin:842px 609px;animation:spin 240s linear infinite}
+  .spin-rev    {transform-origin:842px 609px;animation:spin 300s linear infinite reverse}
+  .spin-slow   {transform-origin:842px 609px;animation:spin 420s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .breath{transform-origin:842px 609px;animation:breath 7s ease-in-out infinite}
+  @keyframes breath{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.055);opacity:1}}
+
+  .halo{animation:halo 9s ease-in-out infinite}
+  @keyframes halo{0%,100%{opacity:.62}50%{opacity:.95}}
+
+  .tw{animation:tw 4s ease-in-out infinite}
+  @keyframes tw{0%,100%{opacity:.22}50%{opacity:.95}}
+
+  .float{animation:float 12s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+
+  .nodewrap{cursor:pointer}
+  .nodewrap .hexfill{transition:fill .28s ease}
+  .nodewrap .hexline{transition:stroke .28s ease, stroke-width .28s ease}
+  .nodewrap .glyph{transition:opacity .28s ease}
+  .nodewrap:hover .hexfill{fill:rgba(38,56,96,.72)}
+  .nodewrap:hover .hexline{stroke:#fff;stroke-width:1.6}
+  .nodewrap:hover .app-lbl{fill:#EAF1FB}
+
+  .orbit-dot{animation:orbit 26s linear infinite}
+  @keyframes orbit{to{transform:rotate(360deg)}}
+
+  .pulse{animation:pulseline 5.5s cubic-bezier(.6,0,.4,1) infinite}
+  @keyframes pulseline{
+    0%{offset-distance:0%;opacity:0}
+    12%{opacity:1}
+    88%{opacity:1}
+    100%{offset-distance:100%;opacity:0}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important}
+  }
+</style>
+</head>
+<body>
+<svg id="stage" viewBox="0 0 1668 1352" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="vac" cx="50%" cy="46%" r="72%">
+      <stop offset="0%"  stop-color="#1A1F38"/>
+      <stop offset="26%" stop-color="#11142A"/>
+      <stop offset="58%" stop-color="#0A0C1C"/>
+      <stop offset="100%" stop-color="#04050E"/>
+    </radialGradient>
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="42%" stop-color="#FFC300" stop-opacity=".34"/>
+      <stop offset="62%" stop-color="#E4A100" stop-opacity=".14"/>
+      <stop offset="100%" stop-color="#FFC300" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="discFill" cx="38%" cy="32%" r="80%">
+      <stop offset="0%"  stop-color="#2A2230"/>
+      <stop offset="60%" stop-color="#191320"/>
+      <stop offset="100%" stop-color="#0F0B16"/>
+    </radialGradient>
+    <linearGradient id="hexGlass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#1B2547" stop-opacity=".78"/>
+      <stop offset="100%" stop-color="#0D1329" stop-opacity=".62"/>
+    </linearGradient>
+    <linearGradient id="topRuleGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="transparent"/>
+      <stop offset="50%" stop-color="rgba(150,190,240,.30)"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </linearGradient>
+    <filter id="softGlow" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="tightGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="dotGlow" x="-90%" y="-90%" width="280%" height="280%">
+      <feGaussianBlur stdDeviation="4.4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="nodeShadow" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#02030A" flood-opacity=".75"/>
+    </filter>
+  </defs>
+
+  <rect width="1668" height="1352" fill="url(#vac)"/>
+  <g id="stars"></g>
+
+  <!-- ambient halo behind the core -->
+  <circle class="halo" cx="842" cy="609" r="300" fill="url(#coreGlow)" filter="url(#softGlow)"/>
+
+  <!-- ============ orbital structure ============ -->
+  <g id="structure"></g>
+
+  <!-- spokes from core to each app node -->
+  <g id="spokes"></g>
+
+  <!-- ============ dot clouds ============ -->
+  <g id="clouds">
+    <g class="spin-rev" id="cloud-skills"></g>
+    <g class="spin"     id="cloud-memory"></g>
+    <g class="spin-slow" id="cloud-outer"></g>
+  </g>
+
+  <!-- ============ cluster labels ============ -->
+  <g id="clabels"></g>
+
+  <!-- ============ core ============ -->
+  <g id="core">
+    <circle class="breath" cx="842" cy="609" r="152" fill="url(#coreGlow)"/>
+    <circle cx="842" cy="609" r="120" class="ring-dash"/>
+    <circle cx="842" cy="609" r="74" fill="none" stroke="rgba(255,195,0,.18)" stroke-width="1"/>
+    <circle cx="842" cy="609" r="63" fill="url(#discFill)" stroke="var(--core-rim)" stroke-width="1.6" filter="url(#tightGlow)"/>
+    <circle cx="842" cy="609" r="63" fill="none" stroke="rgba(255,214,120,.55)" stroke-width=".6"/>
+    <text class="wordmark" x="842" y="606" text-anchor="middle" font-size="27">CLAUDE.MD</text>
+    <text class="wordmark-sub" x="842" y="630" text-anchor="middle">global + vault</text>
+  </g>
+
+  <!-- ============ outer app nodes ============ -->
+  <g id="nodes"></g>
+
+  <!-- ============ orbital routine markers ============ -->
+  <g id="orbits"></g>
+
+  <text class="foot" x="834" y="1326" text-anchor="middle">SCROLL / PINCH TO ZOOM · DRAG TO PAN · HOVER A ROUTINE, APP, OR CLUSTER FOR LINKS · CLICK FOR DETAIL</text>
+</svg>
+
+<script>
+/* ============================================================================
+   DATA MODEL — everything on screen is generated from these objects.
+   Swap the arrays for your own data source; nothing else has to change.
+   ========================================================================== */
+const CX = 842, CY = 609;
+const REX = 490;                       // app node ring radius (measured)
+
+/* --- clusters: id, label, count, colour, ring radius, angular span --- */
+const CLUSTERS = [
+  { id:'skills',    label:'SKILLS',           n:85,  c:'#FFCB18', r:122, from:  0, to:360, swirl:.16, dot:6.4, gap:5.0 },
+  { id:'memory',    label:'MEMORY',           n:77,  c:'#A186FF', r:206, from:132, to:408, swirl:.22, dot:6.0, gap:5.2 },
+  { id:'meta',      label:'META & INFRA',     n:9,   c:'#52C7FD', r:300, from:168, to:252, swirl:.10, dot:7.0, gap:5.6 },
+  { id:'collect',   label:'COLLECTIONS',      n:5,   c:'#53E485', r:296, from: 96, to:150, swirl:.10, dot:7.0, gap:5.6 },
+  { id:'dev',       label:'DEV & PRS',        n:27,  c:'#3AD9BF', r:300, from:330, to: 58, swirl:.10, dot:7.0, gap:5.6 },
+  { id:'knowledge', label:'KNOWLEDGE',        n:13,  c:'#A186FF', r:322, from:120, to:168, swirl:.09, dot:7.2, gap:5.6 },
+  { id:'content',   label:'CONTENT & MEDIA',  n:15,  c:'#F76FB4', r:392, from: 84, to:152, swirl:.08, dot:7.4, gap:5.8 },
+  { id:'life',      label:'LIFE OS',          n:16,  c:'#FFCB18', r:404, from:256, to:322, swirl:.08, dot:7.4, gap:5.8 },
+];
+
+/* --- satellite rings: label + count only, the dots belong to a cluster --- */
+const HEADERS = [
+  { label:'APPLICATIONS', n:22, c:'#6BA8FE', r:640, a:-90 },
+  { label:'ROUTINES',     n:7,  c:'#FFC300', r:470, a:-90 },
+];
+
+/* --- the outer ring of glass nodes (22 applications) --- */
+const APPS = [
+  { name:'Assistant', g:'spark'  }, { name:'Chat',     g:'bubble' },
+  { name:'Repo',      g:'branch' }, { name:'Issues',   g:'layers' },
+  { name:'Docs',      g:'doc'    }, { name:'Drive',    g:'cloud'  },
+  { name:'Calendar',  g:'cal'    }, { name:'Mail',     g:'mail'   },
+  { name:'Metrics',   g:'pulse'  }, { name:'Design',   g:'vector' },
+  { name:'Browser',   g:'globe'  }, { name:'CI',       g:'bolt'   },
+  { name:'Deploy',    g:'flag'   }, { name:'Tasks',    g:'check'  },
+  { name:'Voice',     g:'wave'   }, { name:'Assets',   g:'grid'   },
+  { name:'Search',    g:'eye'    }, { name:'Notes',    g:'book'   },
+  { name:'Media',     g:'play'   }, { name:'DB',       g:'disc'   },
+  { name:'Auth',      g:'key'    }, { name:'Crawler',  g:'flame'  },
+];
+
+/* --- routines: small amber orbs that travel between the orbits --- */
+const ROUTINES = [ {a:-128,r:250},{a:-96,r:262},{a:-58,r:268},{a:18,r:262},
+                   {a:96,r:250},{a:148,r:246},{a:196,r:252} ];
+
+/* ========================================================================== */
+const NS='http://www.w3.org/2000/svg';
+const el=(t,a={})=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);return n;};
+const pol=(r,a)=>[CX+r*Math.cos(a*Math.PI/180), CY+r*Math.sin(a*Math.PI/180)];
+function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const R = mulberry(20260703);
+
+/* ---------- starfield: 3 depth tiers, denser toward the core ---------- */
+(function stars(){
+  const g=document.getElementById('stars');
+  for(let i=0;i<300;i++){
+    const x=R()*1668, y=R()*1352;
+    const d=Math.hypot(x-CX,y-CY);
+    if(d<170 && R()<.85) continue;               // keep the core clear
+    const near = 1-Math.min(d/900,1);
+    const r = 0.5 + R()*1.5*(0.5+near*0.5);
+    const o = 0.10 + R()*0.42;
+    const c = el('circle',{cx:x.toFixed(1),cy:y.toFixed(1),r:r.toFixed(2),fill:'#CFE0FA',opacity:o.toFixed(2)});
+    if(R()<.35){ c.setAttribute('class','tw'); c.style.animationDelay=(-R()*4).toFixed(2)+'s';
+                 c.style.animationDuration=(3+R()*3).toFixed(2)+'s'; }
+    g.appendChild(c);
+  }
+})();
+
+/* ---------- orbital structure ---------- */
+(function structure(){
+  const g=document.getElementById('structure');
+  // faint dotted rings for each cluster
+  CLUSTERS.forEach(c=>{
+    g.appendChild(el('circle',{cx:CX,cy:CY,r:c.r,class:'ring-cluster',stroke:c.c}));
+  });
+  // the wide, very faint outer orbit that carries the app nodes
+  g.appendChild(el('circle',{cx:CX,cy:CY,r:REX,fill:'none',stroke:'rgba(150,190,240,.18)','stroke-width':1}));
+  g.appendChild(el('circle',{cx:CX,cy:CY,r:REX-14,fill:'none',stroke:'rgba(150,190,240,.05)','stroke-width':1}));
+  // inner dashed guide
+  g.appendChild(el('circle',{cx:CX,cy:CY,r:120,class:'ring-dash'}));
+})();
+
+/* ---------- spokes: one hairline from the core to every node ---------- */
+(function spokes(){
+  const g=document.getElementById('spokes');
+  APPS.forEach((_,i)=>{
+    const a=(-90 + i*(360/APPS.length));
+    const [x2,y2]=pol(REX-30,a);
+    const [x1,y1]=pol(80,a);
+    g.appendChild(el('line',{x1,y1,x2,y2,class:'spoke'}));
+  });
+})();
+
+/* ---------- dot clouds: a ring built from clustered arcs of dots ---------- */
+function buildCloud(cluster, host){
+  const {r,from,to,n,c,dot,gap,swirl}=cluster;
+  // spread n dots across the arc in spoke groups of 2-3, like the reference
+  let placed=0, spoke=0;
+  const span=((to-from)+360)%360 || 360;
+  const spokes=Math.max(3,Math.round(n/2.6));
+  while(placed<n && spoke<spokes*3){
+    const t=spoke/spokes;
+    const a=from + span*(t + (R()-0.5)*0.012);
+    const k=Math.min(n-placed, 1+Math.floor(R()*3));
+    for(let j=0;j<k;j++){
+      const rr=r + (j-(k-1)/2)*gap + (R()-0.5)*swirl*40;
+      const aa=a + (j-(k-1)/2)*1.5 + (R()-0.5)*1.6;
+      const [x,y]=pol(rr,aa);
+      const d=el('circle',{cx:x.toFixed(1),cy:y.toFixed(1),
+        r:(dot*(0.72+R()*0.5)).toFixed(2), fill:c, opacity:(0.72+R()*0.28).toFixed(2)});
+      if(R()<.5) d.setAttribute('filter','url(#dotGlow)');
+      host.appendChild(d);
+    }
+    placed+=k; spoke++;
+  }
+}
+buildCloud(CLUSTERS[0], document.getElementById('cloud-skills'));
+buildCloud(CLUSTERS[1], document.getElementById('cloud-memory'));
+document.getElementById('cloud-outer').appendChild(document.createDocumentFragment());
+[2,3,4,5,6,7].forEach(i=>buildCloud(CLUSTERS[i], document.getElementById('cloud-outer')));
+
+/* ---------- cluster labels: chip = colour tag + label + count ---------- */
+(function clabels(){
+  const g=document.getElementById('clabels');
+  CLUSTERS.forEach(c=>{
+    const mid=(( (c.from + (((c.to-c.from)+360)%360)/2 ))%360);
+    const [x,y]=pol(c.r + 46, mid);
+    const t=el('text',{x:x.toFixed(1),y:y.toFixed(1),'text-anchor':'middle',
+                       class:'clab',fill:c.c,'font-size':15});
+    t.textContent=c.label;
+    g.appendChild(t);
+    const n=el('text',{x:x.toFixed(1),y:(y+18).toFixed(1),'text-anchor':'middle',class:'clab-n'});
+    n.textContent=c.n;
+    g.appendChild(n);
+  });
+  // the two satellite headers sit on the vertical axis above the core
+  HEADERS.forEach(h=>{
+    const [x,y]=pol(h.r, h.a+90+90-180);
+    const cap=el('text',{x:CX,y:CY-h.r+16,'text-anchor':'middle',class:'clab',fill:h.c,'font-size':17});
+    cap.textContent=h.label;
+    g.appendChild(cap);
+    const n=el('text',{x:CX,y:CY-h.r+36,'text-anchor':'middle',class:'clab-n'});
+    n.textContent=h.n; g.appendChild(n);
+  });
+  // SKILLS chip sits just above the core, on a solid plate
+  const plate=el('rect',{x:CX-64,y:CY-190,width:128,height:26,rx:4,fill:'rgba(6,8,18,.82)',
+                         stroke:'rgba(255,203,24,.30)','stroke-width':.8});
+  g.appendChild(plate);
+  const sk=el('text',{x:CX,y:CY-171,'text-anchor':'middle',class:'clab',fill:'#FFCB18','font-size':16});
+  sk.textContent='SKILLS · 85'; g.appendChild(sk);
+})();
+
+/* ---------- glass hexagon nodes with abstract glyphs ---------- */
+function hexPoints(cx,cy,r){
+  let p=[];
+  for(let i=0;i<6;i++){ const a=(60*i-90)*Math.PI/180; p.push(`${(cx+r*Math.cos(a)).toFixed(2)},${(cy+r*Math.sin(a)).toFixed(2)}`); }
+  return p.join(' ');
+}
+const GLYPH = {
+  spark:'M0 -8 L2.4 -2.4 L8 0 L2.4 2.4 L0 8 L-2.4 2.4 L-8 0 L-2.4 -2.4 Z',
+  bubble:'M-8 -6 h16 v11 h-9 l-4 4 v-4 h-3 Z',
+  branch:'M-6 -8 v16 M-6 -2 h7 a4 4 0 0 1 4 4 v6 M-8.5 -8.5 a2.5 2.5 0 1 1 5 0 a2.5 2.5 0 1 1 -5 0 M2.5 6.5 a2.5 2.5 0 1 1 5 0 a2.5 2.5 0 1 1 -5 0',
+  layers:'M0 -8 L8.5 -4 L0 0 L-8.5 -4 Z M-8.5 0 L0 4 L8.5 0',
+  doc:'M-6.5 -8 h9 l4 4 v12 h-13 Z M-2 -8 v4.5 h4.5',
+  cloud:'M-7 4 a4 4 0 0 1 .7-7.9 a5.4 5.4 0 0 1 10.2 1.4 a3.6 3.6 0 0 1 -.4 6.5 Z',
+  cal:'M-8 -6 h16 v14 h-16 Z M-8 -1.5 h16 M-4.5 -8.5 v4 M4.5 -8.5 v4',
+  mail:'M-8.5 -5.5 h17 v11 h-17 Z M-8.5 -5.5 L0 1 L8.5 -5.5',
+  pulse:'M-8.5 0 h3 l2.5 -6 l3 12 l2.5 -6 h5',
+  vector:'M-6.5 6.5 L6.5 -6.5 M-4 -6.5 h8 v8 h-8 Z',
+  globe:'M0 -8.5 a8.5 8.5 0 1 1 0 17 a8.5 8.5 0 1 1 0 -17 M-8.5 0 h17 M0 -8.5 c3.6 4.6 3.6 12.4 0 17 M0 -8.5 c-3.6 4.6 -3.6 12.4 0 17',
+  bolt:'M2 -9 L-6 1 h5 l-1 8 L7 -1 h-5 Z',
+  flag:'M-5.5 -8.5 v17 M-5.5 -8.5 h11 l-3 4 l3 4 h-11',
+  check:'M-7 0.5 L-2 6 L7 -6',
+  wave:'M-8 0 h2 M-4.5 -5 v10 M-1 -8.5 v17 M2.5 -4 v8 M6 -6.5 v13 M9 0 h-1.5',
+  grid:'M-7.5 -7.5 h15 v15 h-15 Z M-2.5 -7.5 v15 M-7.5 -2.5 h15',
+  eye:'M-9 0 c4 -6 14 -6 18 0 c-4 6 -14 6 -18 0 M-2.6 0 a2.6 2.6 0 1 1 5.2 0 a2.6 2.6 0 1 1 -5.2 0',
+  book:'M-7 -7.5 h6 a3 3 0 0 1 3 3 v13 a2.4 2.4 0 0 0 -2.4 -2.4 h-6.6 Z M7 -7.5 h-6 a3 3 0 0 0 -3 3 v13 a2.4 2.4 0 0 1 2.4 -2.4 h6.6 Z',
+  play:'M-6 -8 L7 0 L-6 8 Z',
+  disc:'M-8.5 0 a8.5 8.5 0 1 1 17 0 a8.5 8.5 0 1 1 -17 0 M-3 0 a3 3 0 1 1 6 0 a3 3 0 1 1 -6 0',
+  key:'M-7.5 -3 a3.5 3.5 0 1 1 7 0 a3.5 3.5 0 1 1 -7 0 M-1 -3 h9 M5.5 -3 v3.5 M8 -3 v2.5',
+  flame:'M0 -9 c4 4.5 1.5 6.5 0 8 c-3 3 -5.5 4 -4.6 8 c2.6 2.6 7.6 1.4 8.6 -2 c1.4 -4.8 -1.3 -8.6 -4 -14 Z',
+};
+(function nodes(){
+  const g=document.getElementById('nodes');
+  const NR=27;                                   // hexagon circumradius (measured ≈40px box)
+  APPS.forEach((app,i)=>{
+    const a=-90 + i*(360/APPS.length);
+    const [x,y]=pol(REX,a);
+    const w=el('g',{class:'nodewrap'});
+    w.setAttribute('transform',`translate(${x.toFixed(1)},${y.toFixed(1)})`);
+    const fl=el('g',{class:'float'});
+    fl.style.animationDelay=(-(i*0.37)%12).toFixed(2)+'s';
+
+    fl.appendChild(el('polygon',{points:hexPoints(0,0,NR+3.4),fill:'none',
+      stroke:'rgba(120,170,240,.13)','stroke-width':1}));
+    fl.appendChild(el('polygon',{points:hexPoints(0,0,NR),class:'hexfill',fill:'url(#hexGlass)',
+      filter:'url(#nodeShadow)'}));
+    fl.appendChild(el('polygon',{points:hexPoints(0,0,NR),class:'hexline',fill:'none',
+      stroke:'var(--glass-line)','stroke-width':1.1}));
+    // top-edge inner highlight (glassmorphism catch-light)
+    fl.appendChild(el('path',{d:`M ${(-NR*0.5).toFixed(1)} ${(-NR*0.87).toFixed(1)} L 0 ${-NR} L ${(NR*0.5).toFixed(1)} ${(-NR*0.87).toFixed(1)}`,
+      fill:'none',stroke:'rgba(255,255,255,.30)','stroke-width':.9}));
+    const gl=el('path',{d:GLYPH[app.g]||GLYPH.spark,transform:'translate(0,0) scale(0.86)',
+      fill:'none',stroke:'#DCE6F5','stroke-width':1.5,'stroke-linejoin':'round','stroke-linecap':'round'});
+    if(app.g==='spark'||app.g==='play'||app.g==='flag') gl.setAttribute('fill','rgba(220,230,245,.14)');
+    gl.setAttribute('class','glyph');
+    fl.appendChild(gl);
+
+    w.appendChild(fl);
+    const right = x > CX;
+    const lt=el('text',{x: right? NR+13 : -(NR+13), y:5, 'text-anchor': right?'start':'end', class:'app-lbl'});
+    lt.textContent=app.name; w.appendChild(lt);
+    g.appendChild(w);
+  });
+})();
+
+/* ---------- routines: amber orbs on their own faint orbit ---------- */
+(function orbits(){
+  const g=document.getElementById('orbits');
+  ROUTINES.forEach((o,i)=>{
+    const [x,y]=pol(o.r,o.a);
+    const wrap=el('g',{class:'orbit'});
+    wrap.style.animationDuration=(220+i*24)+'s';
+    wrap.style.animationDelay=(-i*9)+'s';
+    wrap.setAttribute('transform',`rotate(0 ${x.toFixed(1)} ${y.toFixed(1)})`);
+    wrap.appendChild(el('circle',{cx:x.toFixed(1),cy:y.toFixed(1),r:7.4,fill:'none',
+      stroke:'rgba(255,195,0,.34)','stroke-width':1}));
+    wrap.appendChild(el('circle',{cx:x.toFixed(1),cy:y.toFixed(1),r:3.4,fill:'#FFC300',
+      filter:'url(#tightGlow)'}));
+    wrap.appendChild(el('circle',{cx:(x+11).toFixed(1),cy:y.toFixed(1),r:1,fill:'#FFE08A'}));
+    wrap.appendChild(el('circle',{cx:(x-11).toFixed(1),cy:y.toFixed(1),r:1,fill:'#FFE08A'}));
+    g.appendChild(wrap);
+  });
+})();
+
+/* ---------- travelling pulses along the spokes ---------- */
+(function pulses(){
+  const g=document.getElementById('spokes');
+  [0,3,7,11,15,19].forEach((i,k)=>{
+    const a=-90 + i*(360/APPS.length);
+    const [x1,y1]=pol(96,a), [x2,y2]=pol(REX-40,a);
+    const p=el('circle',{r:2,fill:'#FFD86B',class:'pulse',filter:'url(#tightGlow)'});
+    p.style.offsetPath=`path('M ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)}')`;
+    p.style.animationDelay=(-k*0.9)+'s';
+    g.appendChild(p);
+  });
+})();
+</script>
+</body>
+</html>

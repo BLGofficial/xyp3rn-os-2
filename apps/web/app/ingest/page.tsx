@@ -4,7 +4,8 @@ import { ErrorBanner, ScrollTable, Status, Time } from '../ui';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Ingest({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Ingest({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const rt = await runtime();
   const [status, songs] = await Promise.all([(await loaders()).ingestStatus(rt.sql), (await loaders()).songList(rt.sql)]);
   return (

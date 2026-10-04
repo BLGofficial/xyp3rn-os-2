@@ -8,7 +8,15 @@ export async function middleware(req: NextRequest) {
   const problem = tokenProblem(token);
   if (problem) return new NextResponse(problem, { status: 503, headers: { 'content-type': 'text/plain' } });
   if (req.nextUrl.pathname === '/login') return NextResponse.next();
-  if (await verifySession(token!, req.cookies.get(SESSION_COOKIE)?.value, Date.now())) return NextResponse.next();
+  if (await verifySession(token!, req.cookies.get(SESSION_COOKIE)?.value, Date.now())) {
+    // Reject malformed opaque IDs before the app shell streams a 200 response.
+    const filePath = req.nextUrl.pathname;
+    if (filePath.startsWith('/index/files/') &&
+        !/^\/index\/files\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/raw)?\/?$/i.test(filePath)) {
+      return new NextResponse('Not found', { status: 404 });
+    }
+    return NextResponse.next();
+  }
   if (req.method !== 'GET') return new NextResponse('session required', { status: 401 });
   // Not a redirect: Next rewrites an absolute Location to localhost (and refuses a relative one), and
   // switching host would lose the session cookie, which belongs to the host it was set on. A
@@ -19,4 +27,4 @@ export async function middleware(req: NextRequest) {
   });
 }
 
-export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'] };
+export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest).*)'] };

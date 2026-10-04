@@ -1,0 +1,173 @@
+{
+  "scope": "Live local Galaxy server; real indexed notes. No provider calls, microphone or workflow mutations.",
+  "checks": [
+    "Every indexed note and source-backed group is rendered",
+    "Every edge resolves to real graph entities",
+    "Graph loads without WebGL/CDN graph runtimes",
+    "Browser worker layout matches Node headless layout",
+    "Identical coordinates across page reloads",
+    "Every node has an accessible browse button",
+    "Real source note opens shared inspector",
+    "Selection encoded by path in URL",
+    "Selection and camera survive reload",
+    "Group filter persisted",
+    "Group restored after reload",
+    "Domain filter persisted",
+    "Domain restored after reload",
+    "Hover highlights exact graph neighbors",
+    "Dragging moves only selected node without restarting physics",
+    "Background pan follows pointer distance",
+    "Wheel zoom responds",
+    "Wheel zoom preserves world position under pointer",
+    "Keyboard opens a real entity",
+    "Keyboard navigation reaches every graph node",
+    "Relationships accessible without a pointer",
+    "Relationship inspector explains source provenance",
+    "Reduced motion freezes after interaction",
+    "Existing command palette remains available",
+    "Mobile has no horizontal overflow",
+    "Mobile toolbar does not cover group tabs",
+    "Local drag/zoom frame budget near 60fps",
+    "Galaxy fallback boots with real nodes",
+    "No browser runtime errors"
+  ],
+  "errors": [],
+  "resources": {
+    "graph": [
+      {
+        "name": "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;600&family=Josefin+Sans:wght@700&family=Raleway:wght@400;500;600&display=swap",
+        "bytes": 1019,
+        "transferred": 1319
+      },
+      {
+        "name": "http://127.0.0.1:4700/xyp3rn-logo.png",
+        "bytes": 1551469,
+        "transferred": 1551769
+      },
+      {
+        "name": "http://127.0.0.1:4700/graph-data.js",
+        "bytes": 129970,
+        "transferred": 130270
+      },
+      {
+        "name": "http://127.0.0.1:4700/graph-view.css",
+        "bytes": 2898,
+        "transferred": 3198
+      },
+      {
+        "name": "http://127.0.0.1:4700/graph-view.js",
+        "bytes": 21597,
+        "transferred": 21897
+      },
+      {
+        "name": "http://127.0.0.1:4700/build-graph.js",
+        "bytes": 2717,
+        "transferred": 3017
+      },
+      {
+        "name": "http://127.0.0.1:4700/graph-layout.js",
+        "bytes": 3239,
+        "transferred": 3539
+      },
+      {
+        "name": "http://127.0.0.1:4700/graph-worker.js",
+        "bytes": 252,
+        "transferred": 552
+      },
+      {
+        "name": "http://127.0.0.1:4700/graph-layout.js",
+        "bytes": 3239,
+        "transferred": 3539
+      },
+      {
+        "name": "http://127.0.0.1:4700/build-graph.js",
+        "bytes": 2717,
+        "transferred": 3017
+      },
+      {
+        "name": "http://127.0.0.1:4700/xyp3rn-logo.png",
+        "bytes": 1551469,
+        "transferred": 1551769
+      },
+      {
+        "name": "http://127.0.0.1:4700/xyp3rn-logo.png",
+        "bytes": 1551469,
+        "transferred": 1551769
+      },
+      {
+        "name": "http://127.0.0.1:4700/desk",
+        "bytes": 19191,
+        "transferred": 19491
+      }
+    ],
+    "galaxy": [
+      {
+        "name": "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;600&family=Josefin+Sans:wght@700&family=Raleway:wght@400;500;600&display=swap",
+        "bytes": 1019,
+        "transferred": 1319
+      },
+      {
+        "name": "http://127.0.0.1:4700/xyp3rn-logo.png",
+        "bytes": 1551469,
+        "transferred": 1551769
+      },
+      {
+        "name": "http://127.0.0.1:4700/graph-data.js",
+        "bytes": 129970,
+        "transferred": 130270
+      },
+      {
+        "name": "https://cdn.jsdelivr.net/npm/3d-force-graph@1.80.1/dist/3d-force-graph.min.js",
+        "bytes": 354726,
+        "transferred": 355026
+      },
+      {
+        "name": "http://127.0.0.1:4700/desk",
+        "bytes": 19192,
+        "transferred": 19492
+      },
+      {
+        "name": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "bytes": 132469,
+        "transferred": 132769
+      },
+      {
+        "name": "http://127.0.0.1:4700/xyp3rn-logo.png",
+        "bytes": 1551469,
+        "transferred": 1551769
+      },
+      {
+        "name": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.core.js",
+        "bytes": 266288,
+        "transferred": 266588
+      },
+      {
+        "name": "http://127.0.0.1:4700/xyp3rn-logo.png",
+        "bytes": 1551469,
+        "transferred": 1551769
+      },
+      {
+        "name": "http://127.0.0.1:4700/desk",
+        "bytes": 19192,
+        "transferred": 19492
+      }
+    ]
+  },
+  "input": {
+    "notes": 134,
+    "nodes": 147,
+    "edges": 775,
+    "isolatedNotes": 2
+  },
+  "runtime": {
+    "node": "v25.4.0",
+    "chromium": "154.0.8037.93"
+  },
+  "layoutMs": 742.6999999880791,
+  "frames": {
+    "samples": 149,
+    "medianMs": 16.700000000000728,
+    "p95Ms": 16.900000000001455,
+    "maxMs": 33.39999999999782
+  }
+}

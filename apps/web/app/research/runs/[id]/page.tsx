@@ -11,7 +11,9 @@ export const dynamic = 'force-dynamic';
 // The run workbench (AOS-04 design §17): header with the truthful status and recorded times; specialist
 // results and findings by topic in the main column; the selected evidence, its source and its provenance
 // path in the right column. Acceptance and canonical approval stay separate actions with separate badges.
-export default async function Run({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
+export default async function Run({ params: pendingParams, searchParams: pendingSearchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await pendingParams;
+  const searchParams = await pendingSearchParams;
   const rl = await researchLoaders();
   const d = await rl.runDetail((await runtime()).sql, params.id);
   if (!d) notFound();

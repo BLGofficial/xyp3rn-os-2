@@ -1,0 +1,39 @@
+2026-10-02 — active checkout: xyp3rn-os-2-engine, branch feat/hud-live
+Starting HEAD: 607c443
+Fetched main: 4d606592631a0ee9c8fb0bc72ba0e750389a9b30
+
+Approved artwork SHA-256 (both copies):
+41ef0ec029185361aea9b2370f373bfdfa4ec4d6ede59005b99ee6190c92fce7
+
+PASS pnpm web:build (Next.js 15.5.27)
+PASS pnpm typecheck
+PASS pnpm --filter @xyp3rn/web exec tsc --noEmit
+PASS pnpm audit --json: 0 critical/high/moderate/low advisories
+PASS git diff --check
+PASS pnpm web:smoke: all checks passed, real throwaway DB and Vault, fake research provider
+PASS Galaxy static branding: image decode, icon response, desktop/mobile visibility
+
+Final full suite: pnpm test --maxWorkers=4
+Test Files: 2 failed | 128 passed (130)
+Tests: 2 failed | 1587 passed | 14 skipped (1603)
+Duration: 143.67 seconds
+
+Unresolved environment/fixture failures:
+- tests/aos-04/index-scan.test.ts: setup cannot create /etc/hostname symlink on Windows (EPERM); 14 tests skipped.
+- apps/web/server/graph-files.test.ts: file-symlink fixture fails EPERM; directory-symlink fixture cleanup fails ENOENT after creation failed.
+No security tests were disabled or assertions weakened to obtain a passing result.
+
+Browser smoke includes:
+- Approved logo and browser icon load without login.
+- Wrong login refused, owner session accepted, private raw files and graph/event APIs guarded.
+- Vault upload, lineage approval, search, release rights/scheduling, Studio packages and research fixtures.
+- Graph indexed-source inspector, source text escaping and source-backed API counts.
+- HUD header and hub logo decode; zoom, lens, live activity and real step-link animation.
+- Keyboard operation, reduced motion, 390 px layout across 19 pages.
+- No console errors in checked main areas/HUD; no server errors in the checked graph journey.
+- LCP 856 ms, CLS 0.022 on local headless desktop, 900-entity smoke dataset (not mobile-4G).
+
+Screenshots: hud-desktop.png, hud-mobile.png, galaxy-desktop.png, galaxy-mobile.png.
+HUD screenshots contain isolated smoke fixtures. Galaxy screenshots use the existing local graph file via static preview; backend integrations were not tested.
+
+No commit, push, merge, deployment, external message or canonical promotion performed.

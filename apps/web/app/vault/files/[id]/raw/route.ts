@@ -5,7 +5,8 @@ export const dynamic = 'force-dynamic';
 // A Vault file's bytes, from the content-addressed store (verified on read). Served inline for the
 // audio player and images, but never as an active document: nosniff, and a sandbox CSP so an HTML
 // or SVG file stored as "other" can't run script on this origin.
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params: pendingParams }: { params: Promise<{ id: string }> }) {
+  const params = await pendingParams;
   const f = await (await loaders()).fileDetail((await runtime()).sql, params.id);
   if (!f) return new Response('no such Vault file', { status: 404 });
   // A copy backed by a plain ArrayBuffer: what the DOM's BodyInit accepts.

@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { scanRoots } from '../../../knowledge/knowledge-graph/scan.ts';
 import { createLocalVaultStore } from '../../../knowledge/source-registry/vault-store.ts';
 import { createTestDb, type TestDb } from '../../../tests/helpers/db.ts';
+import { linkTo } from '../../../tests/helpers/symlink.ts';
 import { openIndexedFile } from './graph-files.ts';
 
 // AOS-04 Plan C1 Task 7 (design §15.2, file safety): the viewer takes an opaque index id, resolves the path from
@@ -54,10 +55,15 @@ describe('openIndexedFile', () => {
 
   it('refuses a file swapped for a symlink after the scan, and returns no bytes', async () => {
     const id = await idOf('docs/swapped.md');
-    unlinkSync(join(root, 'docs/swapped.md'));
-    symlinkSync('/etc/passwd', join(root, 'docs/swapped.md'));
-    const r = await open(id);
-    expect(r).toEqual({ ok: false, reason: 'escaped' });
+    const outside = mkdtempSync(join(tmpdir(), 'aos04-swap-'));
+    try {
+      writeFileSync(join(outside, 'passwd'), '[FIXTURE] outside the root\n');
+      unlinkSync(join(root, 'docs/swapped.md'));
+      linkTo(join(outside, 'passwd'), join(root, 'docs/swapped.md'));
+      expect(await open(id)).toEqual({ ok: false, reason: 'escaped' });
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   it('refuses a row whose path escapes the root, even if the database held one', async () => {
@@ -66,13 +72,13 @@ describe('openIndexedFile', () => {
     const id = await idOf('docs/readme.md');
     const outside = mkdtempSync(join(tmpdir(), 'aos04-outside-'));
     try {
-      symlinkSync(outside, join(root, 'linked-dir'));
+      symlinkSync(outside, join(root, 'linked-dir'), 'junction'); // junction: ignored off Windows, unprivileged on it
       await db.sql`update indexed_files set path = 'linked-dir/readme.md' where id = ${id}`;
       writeFileSync(join(outside, 'readme.md'), '# [FIXTURE] readme\n');
       expect(await open(id)).toEqual({ ok: false, reason: 'escaped' });
     } finally {
       await db.sql`update indexed_files set path = 'docs/readme.md' where id = ${id}`;
-      unlinkSync(join(root, 'linked-dir'));
+      if (existsSync(join(root, 'linked-dir'))) unlinkSync(join(root, 'linked-dir'));
       rmSync(outside, { recursive: true, force: true });
     }
   });

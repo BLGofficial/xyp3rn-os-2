@@ -1,5 +1,6 @@
 import type { HudIcon } from '../../lib/hud-theme';
 
+// Domain medallions; application branding uses BrandLogo.
 // The HUD's inline SVG: the XYP3RN X-glyph (metallic gold, a specular band) and the domain medallion icons.
 
 export const XGlyph = ({ size = 40, id = 'xg' }: { size?: number; id?: string }) => (

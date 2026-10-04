@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../helpers/db.ts';
 
@@ -16,7 +16,7 @@ const walk = (dir: string): string[] =>
     return statSync(p).isDirectory() ? walk(p) : [p];
   });
 const files = walk(REPO_ROOT);
-const rel = (p: string) => relative(REPO_ROOT, p);
+const rel = (p: string) => relative(REPO_ROOT, p).split(sep).join('/');
 const sources = files.filter((p) => /\.(ts|tsx|mts|js|mjs)$/.test(p) && !/\.test\.(ts|tsx)$/.test(p) && !rel(p).startsWith('tests/'));
 
 /** Kernel entry point → the one file that owns it. */

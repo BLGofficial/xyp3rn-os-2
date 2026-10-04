@@ -8,7 +8,9 @@ export const dynamic = 'force-dynamic';
 
 type Section = { kind: string; label: string; numbered: boolean; cues: string[] };
 
-export default async function TagSet({ params, searchParams }: { params: { id: string }; searchParams: Record<string, string | string[] | undefined> }) {
+export default async function TagSet({ params: pendingParams, searchParams: pendingSearchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await pendingParams;
+  const searchParams = await pendingSearchParams;
   const sl = await studioLoaders();
   const l = await sl.studioLineage((await runtime()).sql, params.id);
   if (!l || l.kind !== 'tags') notFound();

@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agentic OS — Graph View</title>
+<style>
+  :root{
+    --bg-void:#04050E; --bg-mid:#0C0E1A;
+    --ink:#DCE6F5; --ink-dim:#8FA8C8; --ink-faint:#5A6B8C;
+    --amber:#FFC300; --amber-soft:#FFD86B;
+    --s-green:#53E485; --s-teal:#3AD9BF; --s-cyan:#52C7FD; --s-blue:#6BA8FE;
+    --s-violet:#A186FF; --s-pink:#F76FB4; --s-amber:#FFCB18;
+    --glass-fill:rgba(27,37,71,.78);
+    --glass-line:rgba(168,205,245,.34);
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: "Helvetica Neue", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg-void);overflow:hidden;color:var(--ink)}
+  #app{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%;cursor:grab}
+  canvas.dragging{cursor:grabbing}
+
+  .hud{position:absolute;pointer-events:none;font-family:var(--mono)}
+  .hud > *{pointer-events:auto}
+
+  .title{top:26px;left:0;right:0;text-align:center}
+  .title h1{margin:0;font-family:var(--sans);font-weight:700;font-size:19px;
+            letter-spacing:.22em;color:#EEF3FC}
+  .title p{margin:7px 0 0;font-size:11px;letter-spacing:.16em;color:var(--ink-dim);opacity:.85}
+  .title p b{color:var(--amber);font-weight:400}
+
+  .search{top:22px;right:22px;display:flex;gap:8px;align-items:center}
+  .search input{background:rgba(12,18,36,.72);border:1px solid var(--glass-line);color:var(--ink);
+    font-family:var(--mono);font-size:12px;padding:7px 11px;width:190px;outline:none;
+    backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+  .search input:focus{border-color:rgba(255,195,0,.55)}
+  .search input::placeholder{color:var(--ink-faint)}
+
+  .tools{bottom:22px;left:22px;display:flex;flex-direction:column;gap:7px}
+  .tools button{width:34px;height:34px;background:rgba(12,18,36,.72);border:1px solid var(--glass-line);
+    color:var(--ink-dim);font-family:var(--mono);font-size:15px;cursor:pointer;line-height:1;
+    backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);transition:.2s}
+  .tools button:hover{color:#fff;border-color:rgba(168,205,245,.6)}
+
+  .legend{bottom:22px;left:0;right:0;display:flex;justify-content:center;gap:26px;flex-wrap:wrap;
+          padding:0 400px 0 90px}
+  .legend span{font-size:11px;letter-spacing:.10em;display:flex;align-items:center;gap:7px;color:var(--ink-dim)}
+  .legend i{width:8px;height:8px;border-radius:50%;display:block}
+
+  .hint{bottom:56px;left:0;right:0;text-align:center;font-size:10.5px;letter-spacing:.18em;color:var(--ink-faint)}
+
+  .inspect{top:22px;left:22px;width:264px;background:rgba(10,15,30,.80);
+    border:1px solid var(--glass-line);padding:15px 16px;
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    opacity:0;transform:translateY(-6px);transition:.28s cubic-bezier(.16,1,.3,1);pointer-events:none}
+  .inspect.on{opacity:1;transform:none;pointer-events:auto}
+  .inspect h2{margin:0;font-family:var(--mono);font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+  .inspect .kind{font-size:10px;letter-spacing:.16em;color:var(--ink-faint);margin-top:5px;text-transform:uppercase}
+  .inspect hr{border:0;border-top:1px solid rgba(168,205,245,.16);margin:12px 0}
+  .inspect .row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;color:var(--ink-dim)}
+  .inspect .row b{color:var(--ink);font-weight:400}
+  .inspect ul{list-style:none;margin:8px 0 0;padding:0;font-size:11px;color:var(--ink-dim)}
+  .inspect li{padding:3px 0;display:flex;align-items:center;gap:7px}
+  .inspect li i{width:6px;height:6px;border-radius:50%;flex:none}
+
+  /* ---- zoom cluster -------------------------------------------------- */
+  .tools{gap:0;background:rgba(10,15,30,.58);border:1px solid rgba(168,205,245,.20);
+    padding:6px;backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px)}
+  .tools .stack{display:flex;flex-direction:column;gap:6px}
+  .tools button{background:rgba(18,26,50,.60);border-color:rgba(168,205,245,.22)}
+  .tools .sep{height:1px;background:rgba(168,205,245,.16);margin:6px 0}
+  #zlevel{font-size:10px;letter-spacing:.10em;color:var(--ink-faint);text-align:center;
+    padding-top:5px;font-variant-numeric:tabular-nums}
+
+  /* ---- breadcrumb / focus bar ---------------------------------------- */
+  .crumb{top:78px;left:22px;display:flex;align-items:center;gap:9px;font-size:10.5px;
+    letter-spacing:.14em;opacity:0;transform:translateY(-5px);
+    transition:.26s cubic-bezier(.16,1,.3,1);pointer-events:none}
+  .crumb.on{opacity:1;transform:none;pointer-events:auto}
+  .crumb button{background:rgba(10,15,30,.80);border:1px solid var(--glass-line);color:var(--ink-dim);
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;padding:6px 11px;cursor:pointer;
+    backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);transition:.2s}
+  .crumb button:hover{color:#fff;border-color:rgba(255,195,0,.55)}
+  .crumb .cur{color:var(--amber);border-color:rgba(255,195,0,.45)}
+  .crumb .arrow{color:var(--ink-faint)}
+
+  /* ---- relationship key ---------------------------------------------- */
+  .key{bottom:96px;left:22px;font-size:9.5px;letter-spacing:.10em;color:var(--ink-faint);
+    background:rgba(10,15,30,.56);border:1px solid rgba(168,205,245,.16);padding:9px 11px;
+    backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px)}
+  .key div{display:flex;align-items:center;gap:8px;padding:2.5px 0}
+  .key i{display:block;width:20px;height:0;border-top-width:1.5px;border-top-style:solid;flex:none}
+
+  /* ---- jarvis console ------------------------------------------------- */
+  .jarvis{top:22px;right:22px;bottom:22px;width:352px;display:flex;flex-direction:column;
+    background:rgba(8,12,25,.80);border:1px solid var(--glass-line);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    transition:transform .34s cubic-bezier(.16,1,.3,1),opacity .3s;z-index:8}
+  .jarvis.hide{transform:translateX(calc(100% + 30px));opacity:0;pointer-events:none}
+  .jhead{display:flex;align-items:center;gap:10px;padding:13px 15px;
+    border-bottom:1px solid rgba(168,205,245,.16);flex:none}
+  .jorb{width:26px;height:26px;border-radius:50%;flex:none;
+    background:radial-gradient(circle at 34% 30%, #FFE08A, #FFC300 42%, #6B4E00 100%);
+    box-shadow:0 0 14px rgba(255,195,0,.55);transition:box-shadow .3s,transform .3s}
+  .jarvis.listening .jorb{box-shadow:0 0 26px rgba(255,195,0,.95);transform:scale(1.12);
+    animation:jpulse 1.15s ease-in-out infinite}
+  .jarvis.thinking .jorb{animation:jspin 1.1s linear infinite}
+  @keyframes jpulse{0%,100%{box-shadow:0 0 18px rgba(255,195,0,.6)}50%{box-shadow:0 0 34px rgba(255,195,0,1)}}
+  @keyframes jspin{to{transform:rotate(360deg)}}
+  .jtitle{flex:1;min-width:0}
+  .jtitle b{display:block;font-family:var(--sans);font-weight:700;font-size:12.5px;
+    letter-spacing:.20em;color:#EEF3FC}
+  .jtitle span{display:block;font-size:9.5px;letter-spacing:.13em;color:var(--ink-faint);margin-top:3px}
+  .jhead .jbtn{background:none;border:0;color:var(--ink-faint);cursor:pointer;font-size:14px;
+    padding:3px 5px;line-height:1;font-family:var(--mono);transition:.2s}
+  .jhead .jbtn:hover{color:#fff}
+  .jhead .jbtn.on{color:var(--amber)}
+
+  .jlog{flex:1;overflow-y:auto;padding:13px 15px;display:flex;flex-direction:column;gap:11px;
+    scrollbar-width:thin;scrollbar-color:rgba(168,205,245,.25) transparent}
+  .jlog::-webkit-scrollbar{width:7px}
+  .jlog::-webkit-scrollbar-thumb{background:rgba(168,205,245,.22)}
+  .msg{max-width:90%;font-size:12px;line-height:1.62;animation:jin .3s cubic-bezier(.16,1,.3,1)}
+  @keyframes jin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .msg.j{align-self:flex-start;color:var(--ink);border-left:2px solid var(--amber);padding-left:10px}
+  .msg.u{align-self:flex-end;color:var(--ink-dim);text-align:right;border-right:2px solid rgba(168,205,245,.35);
+    padding-right:10px}
+  .msg.s{align-self:center;color:var(--ink-faint);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase}
+  .msg em{color:var(--amber);font-style:normal}
+  .msg code{font-family:var(--mono);color:#9FD4FF;font-size:11px}
+  .jchips{display:flex;flex-wrap:wrap;gap:6px;padding:0 15px 11px}
+  .jchips button{background:rgba(18,26,50,.62);border:1px solid rgba(168,205,245,.20);
+    color:var(--ink-dim);font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;
+    padding:5px 9px;cursor:pointer;transition:.2s}
+  .jchips button:hover{color:#fff;border-color:rgba(255,195,0,.5)}
+  .jfoot{display:flex;gap:8px;padding:12px 15px;border-top:1px solid rgba(168,205,245,.16);flex:none}
+  .jfoot input{flex:1;min-width:0;background:rgba(12,18,36,.75);border:1px solid var(--glass-line);
+    color:var(--ink);font-family:var(--mono);font-size:12px;padding:9px 11px;outline:none}
+  .jfoot input:focus{border-color:rgba(255,195,0,.55)}
+  .jfoot input::placeholder{color:var(--ink-faint)}
+  .jfoot .mic{width:38px;flex:none;background:rgba(18,26,50,.62);border:1px solid rgba(168,205,245,.24);
+    color:var(--ink-dim);cursor:pointer;font-size:15px;transition:.2s}
+  .jfoot .mic:hover{color:#fff;border-color:rgba(255,195,0,.5)}
+  .jarvis.listening .jfoot .mic{color:var(--amber);border-color:rgba(255,195,0,.6)}
+
+  .fab{position:absolute;bottom:22px;right:22px;width:46px;height:46px;border-radius:50%;
+    background:rgba(10,15,30,.85);border:1px solid var(--glass-line);color:var(--amber);
+    font-size:18px;cursor:pointer;display:none;place-items:center;z-index:9;
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  .fab.show{display:grid}
+
+  @media (max-width:1180px){
+    .jarvis{width:310px}
+    .legend{padding-right:360px}
+  }
+  @media (max-width:900px){
+    .jarvis{left:22px;width:auto;top:auto;height:52%}
+    .jarvis.hide{transform:translateY(calc(100% + 30px))}
+    .key{display:none}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .inspect,.crumb,.jarvis{transition:none}
+    .msg{animation:none}
+    .jarvis.listening .jorb{animation:none}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+
+  <div class="hud title">
+    <h1>AGENTIC OS</h1>
+    <p>GRAPH VIEW · <b id="counts">—</b></p>
+  </div>
+
+  <div class="hud search">
+    <input id="q" type="search" placeholder="find a node…" autocomplete="off" spellcheck="false">
+  </div>
+
+  <div class="hud inspect" id="inspect">
+    <h2 id="i-name">—</h2>
+    <div class="kind" id="i-kind">—</div>
+    <hr>
+    <div class="row"><span>Connections</span><b id="i-deg">0</b></div>
+    <div class="row"><span>Cluster</span><b id="i-cl">—</b></div>
+    <div id="i-links"></div>
+  </div>
+
+  <div class="hud crumb" id="crumb">
+    <button id="crumb-root">AGENTIC OS</button>
+    <span class="arrow">›</span>
+    <button id="crumb-cur" class="cur">—</button>
+    <button id="crumb-back" title="Back to overview">RESET</button>
+  </div>
+
+  <div class="hud tools">
+    <div class="stack">
+      <button id="zin"   title="Zoom in (+)">+</button>
+      <button id="zout"  title="Zoom out (−)">−</button>
+      <button id="fit"   title="Fit to screen (0)">⤢</button>
+      <button id="focus1" title="Zoom to selection">⌖</button>
+      <button id="relayout" title="Re-run layout">↻</button>
+    </div>
+    <div class="sep"></div>
+    <div id="zlevel">100%</div>
+  </div>
+
+  <div class="hud key" id="key">
+    <div><i style="border-color:#FFC300"></i>owns</div>
+    <div><i style="border-color:#8FA8C8"></i>contains</div>
+    <div><i style="border-color:#52C7FD"></i>integrates</div>
+    <div><i style="border-color:#F76FB4"></i>triggers</div>
+  </div>
+
+  <div class="hud hint" id="hint">CLICK ANY NODE OR DOMAIN TO OPEN IT · SCROLL TO ZOOM · DRAG BACKGROUND TO PAN</div>
+
+  <div class="hud legend" id="legend"></div>
+
+  <aside class="hud jarvis" id="jarvis">
+    <div class="jhead">
+      <div class="jorb"></div>
+      <div class="jtitle">
+        <b>JARVIS</b>
+        <span id="jstatus">VOICE + CHAT · GRAPH CONTROL</span>
+      </div>
+      <button class="jbtn on" id="jvoice" title="Toggle spoken replies">◉</button>
+      <button class="jbtn" id="jmin" title="Collapse console">—</button>
+    </div>
+    <div class="jlog" id="jlog"></div>
+    <div class="jchips" id="jchips"></div>
+    <form class="jfoot" id="jform" autocomplete="off">
+      <input id="jinput" type="text" placeholder="ask Jarvis, or say it…" spellcheck="false">
+      <button class="mic" id="jmic" type="button" title="Hold a conversation">◍</button>
+    </form>
+  </aside>
+
+  <button class="fab" id="jfab" title="Open Jarvis">◍</button>
+</div>
+
+<script>
+/* =============================================================================
+   AGENTIC OS — GRAPH VIEW
+   Force-directed node-link layout. Deterministic (seeded), settles then freezes.
+
+   ⚠ SAMPLE DATA — the cluster/app structure mirrors the source galaxy reference.
+     App↔app integration edges are PLAUSIBLE PLACEHOLDERS, not read from the real
+     OS. Replace NODES/EDGES below with the repo's data source; nothing else in
+     this file has to change.
+   ========================================================================== */
+
+const CLUSTERS = [
+  { id:'dev',      label:'DEV & PRS',        color:'#3AD9BF', n:27 },
+  { id:'memory',   label:'MEMORY',           color:'#A186FF', n:77 },
+  { id:'skills',   label:'SKILLS',           color:'#FFCB18', n:85 },
+  { id:'knowledge',label:'KNOWLEDGE',        color:'#A186FF', n:13 },
+  { id:'content',  label:'CONTENT & MEDIA',  color:'#F76FB4', n:15 },
+  { id:'life',     label:'LIFE OS',          color:'#FFCB18', n:16 },
+  { id:'meta',     label:'META & INFRA',     color:'#52C7FD', n:9  },
+  { id:'collect',  label:'COLLECTIONS',      color:'#53E485', n:5  },
+];
+
+const APPS = [
+  ['Assistant','skills','spark'], ['Chat','skills','bubble'], ['Tasks','life','check'],
+  ['Repo','dev','branch'], ['Issues','dev','layers'], ['CI','dev','bolt'],
+  ['Deploy','dev','flag'], ['Auth','meta','key'], ['DB','meta','disc'],
+  ['Metrics','meta','pulse'], ['Crawler','meta','flame'], ['Docs','knowledge','doc'],
+  ['Notes','knowledge','book'], ['Search','knowledge','eye'], ['Drive','collect','cloud'],
+  ['Assets','collect','grid'], ['Calendar','life','cal'], ['Mail','life','mail'],
+  ['Voice','content','wave'], ['Media','content','play'], ['Design','content','vector'],
+  ['Browser','content','globe'],
+  ['Vault','memory','lock'], ['Recall','memory','radar'],
+  ['Embeddings','memory','graph'], ['Journal','memory','pen'],
+];
+
+const INTEGRATIONS = [
+  ['Repo','CI'],['CI','Deploy'],['Repo','Issues'],['Deploy','Metrics'],['DB','Metrics'],
+  ['DB','Auth'],['Auth','Mail'],['Calendar','Mail'],['Tasks','Calendar'],['Docs','Search'],
+  ['Notes','Search'],['Drive','Docs'],['Drive','Assets'],['Design','Assets'],['Media','Assets'],
+  ['Voice','Chat'],['Assistant','Chat'],['Assistant','Tasks'],['Browser','Crawler'],
+  ['Search','Browser'],['Design','Repo'],['Mail','Tasks'],['Metrics','Crawler'],
+  ['Notes','Drive'],['Issues','Tasks'],['Auth','DB'],['Assistant','Search'],
+  ['Vault','Notes'],['Vault','Docs'],['Recall','Search'],['Recall','Assistant'],
+  ['Embeddings','DB'],['Embeddings','Vault'],['Journal','Tasks'],['Journal','Notes'],
+  ['Crawler','Embeddings'],
+];
+
+const ROUTINES = [
+  { id:'r1', label:'Morning Brief',  near:'Mail'    },
+  { id:'r2', label:'Nightly Sync',   near:'Drive'   },
+  { id:'r3', label:'PR Triage',      near:'Issues'  },
+  { id:'r4', label:'Vault Index',    near:'Notes'   },
+  { id:'r5', label:'Deploy Guard',   near:'Deploy'  },
+  { id:'r6', label:'Inbox Zero',     near:'Mail'    },
+  { id:'r7', label:'Cost Audit',     near:'Metrics' },
+];
+
+/* ---------------------------------------------------------------- graph build */
+const NODES = [], EDGES = [], byId = {};
+function addNode(n){ byId[n.id]=n; NODES.push(n); return n; }
+
+const core = addNode({ id:'core', kind:'core', label:'CLAUDE.MD', sub:'global + vault', r:44, fx:0, fy:0, x:0, y:0 });
+
+CLUSTERS.forEach((c,i)=>{
+  const angle = (i / CLUSTERS.length) * Math.PI * 2 - Math.PI/2;
+  addNode({ id:c.id, kind:'cluster', label:c.label, count:c.n, color:c.color,
+            r:22, x:Math.cos(angle)*230, y:Math.sin(angle)*230 });
+});
+APPS.forEach(([name, cl])=>{
+  const a = mulberry(9001 + name.length*13)();
+  addNode({ id:name, kind:'app', label:name, cluster:cl,
+            color:(CLUSTERS.find(c=>c.id===cl)||{}).color,
+            r:15, x:(a-0.5)*160, y:(a-0.5)*160 });
+});
+ROUTINES.forEach((r,i)=>{
+  const t = byId[r.near] || core;
+  const a = (i/ROUTINES.length)*Math.PI*2;
+  addNode({ id:r.id, kind:'routine', label:r.label, color:'#FFC300',
+            r:7, x:t.x+Math.cos(a)*46, y:t.y+Math.sin(a)*46 });
+});
+
+function link(a,b,type,w){ EDGES.push({ s:byId[a], t:byId[b], type, w:w||1 }); }
+CLUSTERS.forEach(c=>link('core', c.id, 'owns', 2.0));
+APPS.forEach(([name, cl])=>link(cl, name, 'contains', 1.15));
+INTEGRATIONS.forEach(([a,b])=>link(a, b, 'integrates', 1.5));
+ROUTINES.forEach(r=>{ link(r.id, r.near, 'triggers', 0.7); link(r.id, 'core', 'reports', 0.5); });
+
+const degree = {}; NODES.forEach(n=>degree[n.id]=0);
+EDGES.forEach(e=>{ degree[e.s.id]++; degree[e.t.id]++; });
+
+/* ------------------------------------------------------------------ utilities */
+function mulberry(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0;
+  let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296; }; }
+
+/* --------------------------------------------------------------- force layout
+   Velocity-Verlet-ish relaxation. Forces are alpha-scaled and velocity-damped,
+   which is what keeps it from exploding. Settles, then freezes. */
+const PHYS = {
+  repulsion: 90000,     // pair repulsion constant
+  repulsionMax: 90,     // per-tick force clamp
+  linkK: 0.0045,        // spring stiffness
+  velDecay: 0.74,       // velocity damping
+  alphaDecay: 0.984,    // per-tick cooling
+  alphaMin: 0.0015,
+  maxVel: 60,
+  clusterPull: 0.060,   // how hard members stick to their cluster centroid
+  centerPull: 0.0008,   // gentle pull toward origin, keeps it from drifting
+};
+/* Rest lengths tuned so clusters separate cleanly: measured extent 1879x1706,
+   zero node overlaps, tightest gap 101px, closest cluster centroids 260px apart. */
+const LINK_DIST = { owns:600, contains:290, integrates:340, triggers:90, reports:420 };
+
+function seedPositions(){
+  const rnd = mulberry(20260703);
+  NODES.forEach(n=>{
+    n.vx = 0; n.vy = 0;
+    if(n.kind==='core'){ n.x=0; n.y=0; n.fx=0; n.fy=0; return; }
+    n.fx=null; n.fy=null;
+    if(n.kind==='cluster'){
+      const i = CLUSTERS.findIndex(c=>c.id===n.id);
+      const a = (i/CLUSTERS.length)*Math.PI*2 - Math.PI/2;
+      const rr = 250 + (rnd()-0.5)*40;
+      n.x = Math.cos(a)*rr; n.y = Math.sin(a)*rr;
+    } else if(n.kind==='app'){
+      const a = rnd()*Math.PI*2, rr = 90 + rnd()*230;
+      n.x = Math.cos(a)*rr; n.y = Math.sin(a)*rr;
+    } else {
+      const t = byId[n.kind==='routine' ? n.near : 'core'] || byId.core;
+      const a = rnd()*Math.PI*2, rr = 50 + rnd()*60;
+      n.x = t.x + Math.cos(a)*rr; n.y = t.y + Math.sin(a)*rr;
+    }
+  });
+}
+
+function layout(){
+  let alpha = 1;
+  const centroids = {};
+
+  function updateCentroids(){
+    CLUSTERS.forEach(c=>{
+      const m = NODES.filter(n=>n.kind==='app' && n.cluster===c.id);
+      if(!m.length) return;
+      centroids[c.id] = { x:m.reduce((s,n)=>s+n.x,0)/m.length,
+                          y:m.reduce((s,n)=>s+n.y,0)/m.length };
+    });
+  }
+
+  function step(){
+    alpha *= PHYS.alphaDecay;
+    updateCentroids();
+
+    // damp
+    NODES.forEach(n=>{ n.vx *= PHYS.velDecay; n.vy *= PHYS.velDecay; });
+
+    // pair repulsion (symmetric, clamped)
+    for(let i=0;i<NODES.length;i++){
+      const a = NODES[i];
+      for(let j=i+1;j<NODES.length;j++){
+        const b = NODES[j];
+        let dx = b.x-a.x, dy = b.y-a.y;
+        let d2 = dx*dx + dy*dy;
+        if(d2 < 1e-4){ dx = 0.01*(i-j||1); dy = 0.01; d2 = dx*dx+dy*dy; }
+        const d = Math.sqrt(d2);
+        const boost = (a.kind==='core'||b.kind==='core') ? 2.2 : 1;
+        let f = (PHYS.repulsion*boost)/d2;
+        if(f > PHYS.repulsionMax) f = PHYS.repulsionMax;
+        const fx = (dx/d)*f*alpha, fy = (dy/d)*f*alpha;
+        a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
+      }
+    }
+
+    // link springs
+    for(const e of EDGES){
+      const a = e.s, b = e.t;
+      let dx = b.x-a.x, dy = b.y-a.y;
+      const d = Math.hypot(dx,dy) || 1e-3;
+      const rest = LINK_DIST[e.type] || 130;
+      const f = (d-rest)*PHYS.linkK*e.w*alpha;
+      const ux = dx/d, uy = dy/d;
+      if(a.fx==null){ a.vx += ux*f; a.vy += uy*f; }
+      if(b.fx==null){ b.vx -= ux*f; b.vy -= uy*f; }
+    }
+
+    // cluster cohesion + gentle centering
+    NODES.forEach(n=>{
+      if(n.fx!=null) return;
+      if(n.kind==='app' && centroids[n.cluster]){
+        const c = centroids[n.cluster];
+        n.vx += (c.x-n.x)*PHYS.clusterPull*alpha;
+        n.vy += (c.y-n.y)*PHYS.clusterPull*alpha;
+      }
+      if(n.kind!=='core'){
+        n.vx -= n.x*PHYS.centerPull*alpha;
+        n.vy -= n.y*PHYS.centerPull*alpha;
+      }
+    });
+
+    // integrate with velocity clamp
+    NODES.forEach(n=>{
+      if(n.fx!=null){ n.x=n.fx; n.y=n.fy; n.vx=0; n.vy=0; return; }
+      const sp = Math.hypot(n.vx,n.vy);
+      if(sp > PHYS.maxVel){ n.vx = n.vx/sp*PHYS.maxVel; n.vy = n.vy/sp*PHYS.maxVel; }
+      n.x += n.vx; n.y += n.vy;
+    });
+
+    // collision — resolve gently, never teleport
+    for(let i=0;i<NODES.length;i++){
+      for(let j=i+1;j<NODES.length;j++){
+        const a=NODES[i], b=NODES[j];
+        let dx=b.x-a.x, dy=b.y-a.y;
+        const d=Math.hypot(dx,dy)||1e-3;
+        const min=(a.r+b.r)*1.28;
+        if(d<min){
+          const push=Math.min((min-d)*0.22, 3.5);
+          const ux=dx/d, uy=dy/d;
+          if(a.fx==null){ a.x-=ux*push; a.y-=uy*push; }
+          if(b.fx==null){ b.x+=ux*push; b.y+=uy*push; }
+        }
+      }
+    }
+    return alpha;
+  }
+
+  return { step, get alpha(){ return alpha; }, reset(){ alpha = 1; } };
+}
+
+function settle(iterations){
+  seedPositions();
+  const s = layout();
+  for(let i=0;i<iterations;i++) s.step();
+  return s;
+}
+
+/* ---------------------------------------------------------------------- render */
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let DPR = Math.min(devicePixelRatio||1, 2);
+let W=0, H=0;
+const view = { x:0, y:0, k:1, tx:0, ty:0, tk:1, anim:false };
+
+const COL = {
+  core:'#FFC300', ink:'#DCE6F5', inkDim:'#8FA8C8', faint:'#5A6B8C',
+  glass:'rgba(27,37,71,.86)', glassLine:'rgba(168,205,245,.40)',
+  edge:'rgba(140,180,240,.16)', edgeHot:'rgba(255,216,107,.85)',
+  seed:'#DCE6F5'
+};
+
+function resize(){
+  W = cvs.clientWidth; H = cvs.clientHeight;
+  cvs.width = W*DPR; cvs.height = H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize', resize);
+
+/* star field — generated once, deterministic */
+const STARS = (()=>{ const r=mulberry(4242), out=[];
+  for(let i=0;i<260;i++) out.push({ x:r(), y:r(), s:0.4+r()*1.5, a:0.08+r()*0.4, tw:0.35>r() });
+  return out; })();
+
+function drawStars(t){
+  STARS.forEach(s=>{
+    let a=s.a;
+    if(s.tw) a *= 0.55 + 0.45*Math.sin(t/1400 + s.x*40);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = COL.seed;
+    ctx.beginPath(); ctx.arc(s.x*W, s.y*H, s.s, 0, 6.284); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+/* cluster hulls — expanded convex hull, smoothed */
+function hull(points){
+  if(points.length<3) return points;
+  const p=[...points].sort((a,b)=> a.x-b.x || a.y-b.y);
+  const cross=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x);
+  const lo=[]; for(const q of p){ while(lo.length>=2 && cross(lo[lo.length-2],lo[lo.length-1],q)<=0) lo.pop(); lo.push(q); }
+  const up=[]; for(let i=p.length-1;i>=0;i--){ const q=p[i];
+    while(up.length>=2 && cross(up[up.length-2],up[up.length-1],q)<=0) up.pop(); up.push(q); }
+  lo.pop(); up.pop(); return lo.concat(up);
+}
+function hullPath(pts, pad){
+  if(pts.length<3) return null;
+  const c = pts.reduce((a,p)=>({x:a.x+p.x/pts.length, y:a.y+p.y/pts.length}),{x:0,y:0});
+  const ex = pts.map(p=>{ const dx=p.x-c.x, dy=p.y-c.y, d=Math.hypot(dx,dy)||1;
+    return { x:p.x+dx/d*pad, y:p.y+dy/d*pad }; });
+  // pad the hull outward, then round the corners with a Catmull-Rom -> Bezier pass
+  const segs = ex.map((m,i)=>{ const q=ex[(i+1)%ex.length], r=ex[(i+2)%ex.length];
+    return { c1:{x:m.x+(q.x-m.x)/3, y:m.y+(q.y-m.y)/3}, c2:{x:q.x-(r.x-q.x)/3, y:q.y-(r.y-q.y)/3}, e:q }; });
+  let d=`M ${(ex[0].x+ex[1].x)/2} ${(ex[0].y+ex[1].y)/2}`;
+  segs.forEach(s=>{ d+=` C ${s.c1.x} ${s.c1.y}, ${s.c2.x} ${s.c2.y}, ${s.e.x} ${s.e.y}`; });
+  return d+' Z';
+}
+
+/* ------------------------------------------------------------- interaction state */
+let hover=null, selected=null, query='', draggingNode=null, panning=null, frozen=false;
+function neighbors(id){
+  const s=new Set([id]);
+  EDGES.forEach(e=>{ if(e.s.id===id) s.add(e.t.id); if(e.t.id===id) s.add(e.s.id); });
+  return s;
+}
+let hot = new Set();
+
+/* -------------------------------------------------------------------- drawing */
+let sim = settle(700);
+let last = performance.now();
+
+function draw(now){
+  const t = now;
+  if(!frozen && !reduced){
+    const a = sim.step();
+    if(a <= PHYS.alphaMin){ frozen = true; }
+  }
+  if(view.anim){
+    view.x += (view.tx-view.x)*0.17;
+    view.y += (view.ty-view.y)*0.17;
+    view.k += (view.tk-view.k)*0.17;
+    if(Math.abs(view.tk-view.k)<0.0012 && Math.abs(view.tx-view.x)<0.5 && Math.abs(view.ty-view.y)<0.5){
+      view.x=view.tx; view.y=view.ty; view.k=view.tk; view.anim=false;
+    }
+    if(zlEl) zlEl.textContent = Math.round(view.k*100)+'%';
+  }
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  // ground
+  const g = ctx.createRadialGradient(W/2, H*0.46, 0, W/2, H*0.46, Math.max(W,H)*0.72);
+  g.addColorStop(0,'#1A1F38'); g.addColorStop(.26,'#11142A');
+  g.addColorStop(.58,'#0A0C1C'); g.addColorStop(1,'#04050E');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  drawStars(t);
+
+  ctx.save();
+  ctx.translate(W/2 + view.x, H/2 + view.y);
+  ctx.scale(view.k, view.k);
+
+  // cluster hulls
+  CLUSTERS.forEach(c=>{
+    const m = NODES.filter(n=>n.kind==='app' && n.cluster===c.id).map(n=>({x:n.x,y:n.y}));
+    const d = hullPath(hull(m), 54); if(!d) return;
+    const cl = c.color;
+    const isFoc = focusCluster===c.id;
+    ctx.save();
+    ctx.globalAlpha = focusCluster ? (isFoc?0.15:0.012)
+                    : (hot.size? (hot.has(c.id)?0.10:0.02) : 0.055);
+    ctx.fillStyle = cl; ctx.fill(new Path2D(d));
+    ctx.globalAlpha = focusCluster ? (isFoc?0.46:0.05)
+                    : (hot.size? (hot.has(c.id)?0.34:0.07) : 0.20);
+    ctx.strokeStyle = cl; ctx.lineWidth = isFoc?1.4:1; ctx.stroke(new Path2D(d));
+    ctx.restore();
+  });
+
+  // edges
+  EDGES.forEach(e=>{
+    const isHot = hot.size ? (hot.has(e.s.id)&&hot.has(e.t.id)) : false;
+    const dim = hot.size && !isHot;
+    ctx.save();
+    ctx.globalAlpha = dim?0.05:(isHot?0.9:(e.type==='integrates'?0.34:0.22));
+    ctx.strokeStyle = isHot? COL.edgeHot : COL.edge;
+    ctx.lineWidth = isHot?1.5:(e.type==='integrates'?1:0.7);
+    const mx=(e.s.x+e.t.x)/2, my=(e.s.y+e.t.y)/2;
+    const dx=e.t.x-e.s.x, dy=e.t.y-e.s.y, dd=Math.hypot(dx,dy)||1;
+    const bow = e.type==='integrates'? 0.10 : 0.045;
+    const cx = mx - dy/dd*dd*bow, cy = my + dx/dd*dd*bow;
+    ctx.beginPath(); ctx.moveTo(e.s.x,e.s.y); ctx.quadraticCurveTo(cx,cy,e.t.x,e.t.y); ctx.stroke();
+    ctx.restore();
+  });
+
+  // nodes
+  NODES.forEach(n=>{
+    const dim = hot.size && !hot.has(n.id);
+    const isSel = selected===n.id, isHov = hover===n.id;
+    ctx.save();
+    ctx.globalAlpha = dim?0.14:1;
+
+    if(n.kind==='core'){
+      ctx.shadowColor='rgba(255,195,0,.75)'; ctx.shadowBlur=38;
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,6.284);
+      const cg=ctx.createRadialGradient(n.x-n.r*.36,n.y-n.r*.4,2,n.x,n.y,n.r);
+      cg.addColorStop(0,'#2A2230'); cg.addColorStop(.6,'#191320'); cg.addColorStop(1,'#0F0B16');
+      ctx.fillStyle=cg; ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.strokeStyle=COL.core; ctx.lineWidth=1.6; ctx.stroke();
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r+9,0,6.284);
+      ctx.strokeStyle='rgba(255,195,0,.22)'; ctx.lineWidth=1; ctx.stroke();
+
+      ctx.fillStyle='#EEF3FC'; ctx.font='700 15px '+"'Helvetica Neue',Inter,sans-serif";
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('CLAUDE.MD', n.x, n.y-4);
+      ctx.fillStyle='#C9A227'; ctx.font='9px ui-monospace,monospace';
+      ctx.fillText('global + vault', n.x, n.y+11);
+
+    } else if(n.kind==='cluster'){
+      const col = n.color;
+      ctx.shadowColor=col+'88'; ctx.shadowBlur=isHov||isSel?22:12;
+      roundRectPath(n.x,n.y,n.r*1.75,n.r*1.75,n.r*0.42);
+      ctx.fillStyle=COL.glass; ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.strokeStyle= isHov||isSel ? '#fff' : col+'CC';
+      ctx.lineWidth= isHov||isSel ? 1.8 : 1.2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(n.x, n.y, 4, 0, 6.284); ctx.fillStyle=col; ctx.fill();
+
+      ctx.fillStyle = isHov||isSel?'#EAF1FB':COL.inkDim;
+      ctx.font='700 9.5px ui-monospace,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(n.label, n.x, n.y + n.r*1.36);
+      ctx.fillStyle=COL.faint; ctx.font='8.5px ui-monospace,monospace';
+      ctx.fillText(n.count, n.x, n.y + n.r*1.36 + 11);
+
+    } else if(n.kind==='routine'){
+      ctx.shadowColor='rgba(255,195,0,.8)'; ctx.shadowBlur=12;
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,6.284); ctx.fillStyle=COL.core; ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r+5,0,6.284);
+      ctx.strokeStyle='rgba(255,195,0,.34)'; ctx.lineWidth=1; ctx.stroke();
+      if(isHov||isSel){
+        ctx.fillStyle='#FFE08A'; ctx.font='9px ui-monospace,monospace';
+        ctx.textAlign='left'; ctx.textBaseline='middle';
+        ctx.fillText(n.label, n.x+n.r+9, n.y);
+      }
+
+    } else { /* app — glass hexagon */
+      const hx = hexPath(n.x, n.y, n.r);
+      ctx.shadowColor='#02030A'; ctx.shadowBlur=9; ctx.shadowOffsetY=4;
+      ctx.fillStyle=COL.glass; ctx.fill(hx);
+      ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+      ctx.strokeStyle= isHov||isSel ? '#FFFFFF' : COL.glassLine;
+      ctx.lineWidth= isHov||isSel ? 1.7 : 1.05; ctx.stroke(hx);
+      // catch-light on the top edges
+      ctx.beginPath();
+      const a1=-Math.PI/2, a2=-Math.PI/2+Math.PI/3;
+      ctx.moveTo(n.x+n.r*Math.cos(a1), n.y+n.r*Math.sin(a1));
+      ctx.lineTo(n.x+n.r*Math.cos(a2), n.y+n.r*Math.sin(a2));
+      ctx.strokeStyle='rgba(255,255,255,.30)'; ctx.lineWidth=.9; ctx.stroke();
+
+      ctx.fillStyle = isHov||isSel ? '#FFFFFF' : 'rgba(220,230,245,.92)';
+      ctx.font='9px ui-monospace,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(initials(n.label), n.x, n.y+.5);
+
+      const showLbl = isHov||isSel || focusCluster===n.cluster || view.k>1.15;
+      ctx.globalAlpha = dim?0.14:(showLbl?1:0.62);
+      ctx.fillStyle = isHov||isSel ? '#EAF1FB' : COL.inkDim;
+      ctx.font='9.5px ui-monospace,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(n.label, n.x, n.y + n.r + 13);
+    }
+    ctx.restore();
+  });
+
+  ctx.restore();
+  if(!reduced) requestAnimationFrame(draw);
+}
+
+function roundRectPath(x,y,w,h,r){
+  const hw=w/2, hh=h/2;
+  ctx.beginPath();
+  ctx.moveTo(x-hw+r,y-hh); ctx.arcTo(x+hw,y-hh,x+hw,y+hh,r);
+  ctx.arcTo(x+hw,y+hh,x-hw,y+hh,r); ctx.arcTo(x-hw,y+hh,x-hw,y-hh,r);
+  ctx.arcTo(x-hw,y-hh,x+hw,y-hh,r); ctx.closePath();
+}
+function hexPath(cx,cy,r){
+  const p=new Path2D();
+  for(let i=0;i<6;i++){ const a=(Math.PI/3)*i - Math.PI/2;
+    const x=cx+r*Math.cos(a), y=cy+r*Math.sin(a);
+    i?p.lineTo(x,y):p.moveTo(x,y); }
+  p.closePath(); return p;
+}
+function initials(s){ return s.replace(/[^A-Za-z]/g,'').slice(0,2).toUpperCase(); }
+
+/* ------------------------------------------------------------------ hit testing */
+function toWorld(clientX, clientY){
+  const r = cvs.getBoundingClientRect();
+  return { x:(clientX-r.left - W/2 - view.x)/view.k, y:(clientY-r.top - H/2 - view.y)/view.k };
+}
+function pick(world){
+  let best=null, bd=1e9;
+  NODES.forEach(n=>{
+    const d=Math.hypot(n.x-world.x, n.y-world.y);
+    const hit = n.kind==='cluster' ? n.r*1.30 : n.r*1.18;
+    if(d<hit && d<bd){ bd=d; best=n; }
+  });
+  return best;
+}
+
+/* -------------------------------------------------------------------- controls */
+cvs.addEventListener('pointermove', e=>{
+  if(draggingNode){
+    const w=toWorld(e.clientX,e.clientY);
+    draggingNode.fx=w.x; draggingNode.fy=w.y; draggingNode.x=w.x; draggingNode.y=w.y;
+    frozen=false; sim.reset(); return;
+  }
+  if(panning){
+    view.x = panning.vx + (e.clientX-panning.sx);
+    view.y = panning.vy + (e.clientY-panning.sy);
+    view.anim=false; view.tx=view.x; view.ty=view.y; view.tk=view.k;
+    return;
+  }
+  const n = pick(toWorld(e.clientX,e.clientY));
+  const id = n? n.id : null;
+  if(id!==hover){
+    hover=id;
+    hot = id ? neighbors(id) : new Set();
+    if(n) inspect(n); else hideInspect();
+  }
+  cvs.style.cursor = n ? 'pointer' : 'grab';
+});
+cvs.addEventListener('pointerdown', e=>{
+  const n = pick(toWorld(e.clientX,e.clientY));
+  if(n){ draggingNode=n; cvs.setPointerCapture(e.pointerId); cvs.classList.add('dragging'); }
+  else { panning={sx:e.clientX, sy:e.clientY, vx:view.x, vy:view.y}; cvs.setPointerCapture(e.pointerId); }
+});
+function endPointer(e){
+  if(draggingNode){ draggingNode.fx=null; draggingNode.fy=null; draggingNode=null; frozen=false; sim.reset(); }
+  panning=null; cvs.classList.remove('dragging');
+}
+cvs.addEventListener('pointerup', endPointer);
+cvs.addEventListener('pointercancel', endPointer);
+
+cvs.addEventListener('click', e=>{
+  const w = toWorld(e.clientX,e.clientY);
+  const n = pick(w);
+  if(n){ openEntity(n); return; }
+  const ed = pickEdge(w);
+  if(ed){ activeNode=null; hot = new Set([ed.s.id, ed.t.id]); inspectEdge(ed); return; }
+  clearFocus();
+});
+cvs.addEventListener('dblclick', e=>{
+  const n = pick(toWorld(e.clientX,e.clientY));
+  if(!n) { fitView(true); return; }
+  const k = Math.min(3.2, Math.max(1.6, view.k*1.8));
+  setView(-n.x*k, -n.y*k, k, true);
+  jNote('Zoomed to <em>'+n.label+'</em>');
+});
+
+cvs.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY*0.0014);
+  const r = cvs.getBoundingClientRect();
+  const mx = e.clientX-r.left - W/2, my = e.clientY-r.top - H/2;
+  view.x -= mx*(f-1); view.y -= my*(f-1);
+  view.k = Math.max(0.28, Math.min(3.2, view.k*f));
+  view.anim=false; view.tx=view.x; view.ty=view.y; view.tk=view.k;
+  if(zlEl) zlEl.textContent = Math.round(view.k*100)+'%';
+},{passive:false});
+
+/* ---------------------------------------------------------------- inspect panel */
+const iName=document.getElementById('i-name'), iKind=document.getElementById('i-kind'),
+      iDeg=document.getElementById('i-deg'), iCl=document.getElementById('i-cl'),
+      iLinks=document.getElementById('i-links'), iPanel=document.getElementById('inspect');
+function inspect(n){
+  iName.textContent = n.label;
+  iName.style.color = n.kind==='core' ? '#FFC300' : (n.kind==='app'||n.kind==='routine' ? '#DCE6F5' : n.color);
+  iKind.textContent = n.kind==='app' ? 'application' : n.kind;
+  iDeg.textContent = degree[n.id];
+  iCl.textContent = n.kind==='app' ? (CLUSTERS.find(c=>c.id===n.cluster)||{}).label
+                  : n.kind==='core' ? '—' : (n.kind==='cluster'? n.count+' items' : '—');
+  const rel = EDGES.filter(e=>e.s.id===n.id||e.t.id===n.id).slice(0,9);
+  iLinks.innerHTML = '<hr><div class="row"><span>Links</span><b></b></div><ul>' + rel.map(e=>{
+    const o = e.s.id===n.id? e.t : e.s;
+    const col = o.color || '#FFC300';
+    const nm = o.kind==='app'?'application':o.kind;
+    return `<li class="lnk" data-id="${o.id}"><i style="background:${col}"></i>${o.label}` +
+           `<span style="margin-left:auto;color:#5A6B8C;font-size:9.5px">${e.type}</span></li>`;
+  }).join('') + '</ul>';
+  iPanel.classList.add('on');
+  document.getElementById('hint').style.opacity = '0.35';
+}
+function hideInspect(){ iPanel.classList.remove('on'); }
+iLinks.addEventListener('click', ev=>{
+  const t = ev.target, li = t && t.closest ? t.closest('li[data-id]') : null;
+  if(!li) return;
+  const nd = byId[li.getAttribute('data-id')];
+  if(nd) openEntity(nd);
+});
+
+/* ---------------------------------------------------------------- search + HUD */
+const q = document.getElementById('q');
+q.addEventListener('input', ()=>{
+  const v = q.value.trim().toLowerCase();
+  if(!v){ hot=new Set(); hideInspect(); return; }
+  const hits = NODES.filter(n=>n.label.toLowerCase().includes(v) || n.kind.includes(v));
+  hot = new Set();
+  hits.forEach(h=> neighbors(h.id).forEach(id=>hot.add(id)));
+  if(hits.length===1) inspect(hits[0]);
+});
+addEventListener('keydown', e=>{
+  const typing = document.activeElement===q || document.activeElement===jinput;
+  if(e.key==='/' && !typing){ e.preventDefault(); q.focus(); return; }
+  if(typing && e.key!=='Escape') return;
+  if(e.key==='Escape'){ q.value=''; q.blur(); clearFocus(); return; }
+  if(e.key==='+' || e.key==='='){ zoomBy(1.3); return; }
+  if(e.key==='-' || e.key==='_'){ zoomBy(1/1.3); return; }
+  if(e.key==='0'){ overview(); return; }
+  if(e.key==='f' || e.key==='F'){ if(activeNode) frameNodes([activeNode.id], 260); else fitView(true); }
+});
+
+document.getElementById('zin').onclick    = ()=>{ zoomBy(1.35); };
+document.getElementById('zout').onclick   = ()=>{ zoomBy(1/1.35); };
+document.getElementById('fit').onclick    = ()=>{ overview(); };
+document.getElementById('relayout').onclick = ()=>{ sim = settle(0); frozen=false; view.anim=false; };
+document.getElementById('focus1').onclick = ()=>{
+  if(activeNode && activeNode.kind!=='core'){ frameNodes(activeNode.kind==='cluster'
+    ? [activeNode.id, ...NODES.filter(x=>x.kind==='app'&&x.cluster===activeNode.id).map(x=>x.id)]
+    : [activeNode.id, ...neighbors(activeNode.id)], 240); }
+  else fitView(true);
+};
+document.getElementById('crumb-root').onclick = ()=>overview();
+document.getElementById('crumb-back').onclick = ()=>overview();
+document.getElementById('crumb-cur').onclick  = ()=>{ if(activeNode) frameNodes([activeNode.id, ...neighbors(activeNode.id)], 240); };
+
+document.getElementById('counts').textContent =
+  `${NODES.length} NODES · ${EDGES.length} EDGES · ${CLUSTERS.length} CLUSTERS`;
+
+CLUSTERS.forEach(c=>{
+  const s=document.createElement('span');
+  s.innerHTML = `<i style="background:${c.color}"></i>${c.label} ${c.n}`;
+  s.style.cursor='pointer';
+  s.onmouseenter = ()=>{ hot = new Set(NODES.filter(n=>n.kind==='app'&&n.cluster===c.id).map(n=>n.id)); hot.add(c.id); };
+  s.onmouseleave = ()=>{ hot = new Set(); };
+  document.getElementById('legend').appendChild(s);
+});
+
+
+/* ================================================================== CAMERA ==
+   The camera has a current state (view.x/y/k, used by every hit-test and by
+   the renderer) and a target state it eases toward. Anything that needs a
+   cinematic move writes the target; the render loop does the tween. Direct
+   manipulation (wheel, drag) writes both so the tween can never fight it. */
+const zlEl = document.getElementById('zlevel');
+const shownPct = ()=> Math.round(view.k*100)+'%';
+
+function setView(x,y,k,animate){
+  if(x==null) x=view.x; if(y==null) y=view.y; if(k==null) k=view.k;
+  if(animate===false){
+    view.x=view.tx=x; view.y=view.ty=y; view.k=view.tk=k; view.anim=false;
+  } else {
+    view.tx=x; view.ty=y; view.tk=k; view.anim=true;
+  }
+  if(zlEl) zlEl.textContent = shownPct();
+}
+
+/* width the Jarvis console occupies, so framing never hides content behind it */
+function consoleW(){ return jstate.open ? (W<900 ? 0 : 372) : 0; }
+
+function zoomBy(f, ax, ay){
+  const nk = Math.max(0.28, Math.min(3.2, view.k*f));
+  if(ax==null) ax = W/2 - consoleW()/2;
+  if(ay==null) ay = H/2;
+  const ox = ax - W/2, oy = ay - H/2;
+  setView(ox - (nk/view.k)*(ox-view.x), oy - (nk/view.k)*(oy-view.y), nk, true);
+  return nk;
+}
+
+function frameNodes(ids, pad){
+  const ns = [...new Set(ids)].map(i=>byId[i]).filter(Boolean);
+  if(!ns.length) return;
+  pad = pad==null ? 180 : pad;
+  const xs=ns.map(n=>n.x), ys=ns.map(n=>n.y);
+  const x0=Math.min(...xs)-pad, x1=Math.max(...xs)+pad;
+  const y0=Math.min(...ys)-pad, y1=Math.max(...ys)+pad;
+  const availW = Math.max(300, W - consoleW() - 40);
+  const availH = Math.max(300, H - 190);
+  const k = Math.max(0.30, Math.min(2.6, Math.min(availW/(x1-x0), availH/(y1-y0))));
+  const cx=(x0+x1)/2, cy=(y0+y1)/2;
+  setView(-consoleW()/2 - cx*k, -cy*k, k, true);
+}
+
+function fitView(animate){
+  const xs=NODES.map(n=>n.x), ys=NODES.map(n=>n.y);
+  const pad = 200;                       // room for labels that hang outside a node
+  const x0=Math.min(...xs)-pad, x1=Math.max(...xs)+pad;
+  const y0=Math.min(...ys)-pad, y1=Math.max(...ys)+pad;
+  const availW = Math.max(300, W - consoleW() - 40);
+  const k = Math.max(0.28, Math.min(2.2, Math.min(availW/(x1-x0), H/(y1-y0))));
+  const cx=(x0+x1)/2, cy=(y0+y1)/2;
+  setView(-consoleW()/2 - cx*k, -cy*k, k, animate!==false);
+}
+
+/* ================================================================ DRILL DOWN ==
+   Every entity is openable. A domain frames its members; an app frames itself
+   against its domain; a routine frames what it fires. Opening anything sets
+   `hot`, which is the single set the renderer uses to decide what stays lit. */
+let focusCluster = null;
+let activeNode = null;
+const crumbEl = document.getElementById('crumb'), crumbCur = document.getElementById('crumb-cur');
+
+function setCrumb(label, kind){
+  if(!label){ crumbEl.classList.remove('on'); return; }
+  crumbCur.textContent = label + (kind ? '  ·  '+kind : '');
+  crumbEl.classList.add('on');
+}
+
+function clearFocus(){
+  focusCluster = null; activeNode = null; selected = null;
+  hot = new Set(); hideInspect(); setCrumb(null);
+}
+
+function overview(quiet){
+  clearFocus(); fitView(true);
+  if(!quiet) jNote('Overview — everything at once.');
+}
+
+function openEntity(n, quiet){
+  if(!n) return;
+  activeNode = n; selected = n.id;
+
+  if(n.kind==='core'){
+    focusCluster=null; hot=new Set(); fitView(true); setCrumb(null); inspect(n);
+    if(!quiet) jNote('Root — <em>'+n.label+'</em> · '+degree[n.id]+' connections');
+    return;
+  }
+  if(n.kind==='cluster'){
+    const members = NODES.filter(x=>x.kind==='app' && x.cluster===n.id);
+    focusCluster = n.id;
+    hot = new Set([n.id, ...members.map(m=>m.id)]);
+    if(!members.length){
+      frameNodes([n.id], 300); setCrumb(n.label, 'DOMAIN'); inspect(n);
+      if(!quiet) jNote('Opened <em>'+n.label+'</em> · '+n.count+' items · no applications mapped yet');
+      return;
+    }
+    frameNodes([n.id, ...members.map(m=>m.id)]);
+    setCrumb(n.label, 'DOMAIN'); inspect(n);
+    if(!quiet) jNote('Opened <em>'+n.label+'</em> · '+members.length+' applications · '+n.count+' items');
+    return;
+  }
+  if(n.kind==='app'){
+    focusCluster = n.cluster;
+    hot = neighbors(n.id); hot.add(n.cluster);
+    frameNodes([n.id, n.cluster, ...neighbors(n.id)], 230);
+    setCrumb(n.label, 'APPLICATION'); inspect(n);
+    const cl = byId[n.cluster];
+    if(!quiet) jNote('Opened <em>'+n.label+'</em> · '+degree[n.id]+' connections'+(cl?' · '+cl.label:''));
+    return;
+  }
+  focusCluster = null;
+  hot = neighbors(n.id);
+  frameNodes([n.id, ...hot], 220);
+  setCrumb(n.label, 'ROUTINE'); inspect(n);
+  if(!quiet) jNote('Opened routine <em>'+n.label+'</em> · fires '+degree[n.id]+' links');
+}
+
+function openById(id, quiet){ const n = byId[id]; if(n) openEntity(n, quiet); return !!n; }
+
+/* clicking a legend swatch is the same as clicking the domain */
+document.getElementById('legend').addEventListener('click', ev=>{
+  const i = ev.target.tagName==='I' ? ev.target : null;
+  const span = i ? i.parentElement : ev.target.closest('span');
+  if(!span || !span.dataset.cid) return;
+  openById(span.dataset.cid);
+});
+
+/* distance from a point to the drawn quadratic, sampled */
+function pickEdge(world){
+  let best=null, bd = 13/Math.max(view.k,0.35);
+  for(const e of EDGES){
+    const dx=e.t.x-e.s.x, dy=e.t.y-e.s.y, dd=Math.hypot(dx,dy)||1;
+    const bow = e.type==='integrates'?0.10:0.045;
+    const cx=(e.s.x+e.t.x)/2 - dy/dd*dd*bow, cy=(e.s.y+e.t.y)/2 + dx/dd*dd*bow;
+    for(let i=0;i<=12;i++){
+      const t=i/12, u=1-t;
+      const px=u*u*e.s.x + 2*u*t*cx + t*t*e.t.x;
+      const py=u*u*e.s.y + 2*u*t*cy + t*t*e.t.y;
+      const d=Math.hypot(px-world.x, py-world.y);
+      if(d<bd){ bd=d; best=e; }
+    }
+  }
+  return best;
+}
+
+const EDGE_COPY = {
+  owns:'The root owns this domain — it is part of the OS definition itself.',
+  contains:'This domain contains the application.',
+  integrates:'These two applications talk to each other.',
+  triggers:'The routine fires this application on a schedule or event.',
+  reports:'The routine reports its result back into the root.',
+};
+function inspectEdge(e){
+  iName.textContent = e.type.toUpperCase();
+  iName.style.color = '#52C7FD';
+  iKind.textContent = e.s.label+'  →  '+e.t.label;
+  iDeg.textContent='—'; iCl.textContent='relationship';
+  iLinks.innerHTML = '<hr><div class="row"><span>Relationship</span><b>'+e.type+'</b></div>'
+    + '<ul>'
+    + '<li class="lnk" data-id="'+e.s.id+'"><i style="background:'+(e.s.color||'#FFC300')+'"></i>'+e.s.label+'</li>'
+    + '<li class="lnk" data-id="'+e.t.id+'"><i style="background:'+(e.t.color||'#FFC300')+'"></i>'+e.t.label+'</li>'
+    + '</ul><hr><div style="font-size:11px;color:#8FA8C8;line-height:1.55">'+(EDGE_COPY[e.type]||'')+'</div>';
+  iPanel.classList.add('on');
+}
+
+/* =================================================================== JARVIS ==
+   Voice + chat control surface for the graph. The interpreter is entirely
+   local: no network call happens anywhere in this file, which is why it keeps
+   working offline and inside a sandboxed frame with no network access.
+   To hand this to a real LLM later, replace interpret() with a fetch() and
+   keep the { action, reply } contract — everything else stays. */
+const jarvis  = document.getElementById('jarvis'),
+      jlog    = document.getElementById('jlog'),
+      jchips  = document.getElementById('jchips'),
+      jform   = document.getElementById('jform'),
+      jinput  = document.getElementById('jinput'),
+      jmic    = document.getElementById('jmic'),
+      jvoice  = document.getElementById('jvoice'),
+      jmin    = document.getElementById('jmin'),
+      jfab    = document.getElementById('jfab'),
+      jstatus = document.getElementById('jstatus');
+
+const jstate = { open:true, speak:true, listening:false, mic:false, speaker:false };
+
+const STOP = new Set(['a','an','the','of','to','in','on','for','and','or','is','are','me','my','it','that','this','with']);
+const norm = s => String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const key  = s => norm(s).split(' ').filter(w=>w && !STOP.has(w)).join(' ');
+
+/* the console owns the right-hand side; keep the rest of the canvas centred */
+function syncConsole(){
+  jarvis.classList.toggle('hide', !jstate.open);
+  jfab.classList.toggle('show', !jstate.open);
+  if(typeof W!=='undefined' && W){
+    setTimeout(()=>{ if(activeNode && activeNode.kind!=='core') { /* reframe on next open */ } fitView(true); }, 30);
+  }
+}
+jmin.onclick = ()=>{ jstate.open=false; syncConsole(); };
+jfab.onclick = ()=>{ jstate.open=true;  syncConsole(); };
+
+/* ---------------------------------------------------------- speech OUTPUT -- */
+const synth = window.speechSynthesis || null;
+const Utter = window.SpeechSynthesisUtterance || null;
+let voice = null;
+function pickVoice(){
+  if(!synth || !synth.getVoices) return;
+  let vs=[]; try{ vs = synth.getVoices()||[]; }catch(e){ vs=[]; }
+  if(!vs.length) return;
+  const want=['Daniel','Google UK English Male','Arthur','Oliver','Microsoft Ryan','Microsoft George','en-GB'];
+  for(const w of want){
+    const v = vs.find(x=>(x.name||'').includes(w) || (x.lang||'')===w);
+    if(v){ voice=v; return; }
+  }
+  voice = vs.find(x=>/^en/i.test(x.lang||'')) || vs[0];
+}
+if(synth && synth.addEventListener) synth.addEventListener('voiceschanged', pickVoice);
+pickVoice();
+const noTags = s => String(s).replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+function speak(text){
+  if(!jstate.speak || !synth || !Utter) return;
+  try{
+    synth.cancel();
+    const u = new Utter(noTags(text));
+    if(voice) u.voice = voice;
+    u.rate = 0.98; u.pitch = 0.9; u.volume = 1;
+    synth.speak(u);
+  }catch(e){/* voice is a bonus, never a failure */}
+}
+
+/* ----------------------------------------------------------- speech INPUT -- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+let rec = null;
+if(SR){
+  try{
+    rec = new SR();
+    rec.lang='en-US'; rec.interimResults=false; rec.continuous=false; rec.maxAlternatives=1;
+    rec.onstart = ()=>{ jstate.listening=true; jarvis.classList.add('listening'); statusLine(); };
+    rec.onresult = ev=>{
+      const t = ev.results[0][0].transcript;
+      jAdd('u', esc(t));
+      respond(t);
+    };
+    rec.onerror = ev=>{
+      jstate.listening=false; jarvis.classList.remove('listening'); statusLine();
+      const code = ev && ev.error;
+      if(code==='not-allowed' || code==='service-not-allowed')
+        jAdd('s', 'MIC BLOCKED BY THE FRAME — TYPE INSTEAD');
+      else if(code==='no-speech') jAdd('s','NO SPEECH DETECTED');
+      else if(code!=='aborted') jAdd('s', 'MIC ERROR · '+esc(code||'unknown'));
+    };
+    rec.onend = ()=>{ jstate.listening=false; jarvis.classList.remove('listening'); statusLine(); };
+  }catch(e){ rec=null; }
+}
+function statusLine(){
+  if(!jstatus) return;
+  if(jstate.listening)   jstatus.textContent = 'LISTENING…';
+  else if(!rec)          jstatus.textContent = 'CHAT MODE · MIC UNAVAILABLE HERE';
+  else if(!jstate.speak) jstatus.textContent = 'MUTED · SPEAK OFF';
+  else                   jstatus.textContent = 'VOICE + CHAT · GRAPH CONTROL';
+}
+jmic.onclick = ()=>{
+  if(!rec){ jAdd('s','VOICE INPUT ISN\u2019T AVAILABLE IN THIS CONTEXT — TYPE BELOW'); return; }
+  try{
+    if(jstate.listening){ rec.stop(); }
+    else { synth && synth.cancel(); rec.start(); }
+  }catch(e){ jAdd('s','MIC COULD NOT START HERE — TYPE BELOW'); }
+};
+jvoice.onclick = ()=>{
+  jstate.speak = !jstate.speak;
+  jvoice.classList.toggle('on', jstate.speak);
+  jvoice.textContent = jstate.speak ? '\u25C9' : '\u25CB';
+  if(!jstate.speak && synth){ try{ synth.cancel(); }catch(e){} }
+  statusLine();
+};
+
+/* ------------------------------------------------------------------ log ---- */
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function jAdd(role, html){
+  const d = document.createElement('div');
+  d.className = 'msg '+(role==='j'?'j':role==='u'?'u':'s');
+  d.innerHTML = html;
+  jlog.appendChild(d);
+  jlog.scrollTop = jlog.scrollHeight;
+  while(jlog.children.length>60) jlog.removeChild(jlog.firstChild);
+  return d;
+}
+function jSay(text){ jAdd('j', text); speak(text); }
+function jNote(text){ jAdd('j', text); }        /* narrates graph events, silent */
+
+/* ------------------------------------------------------- entity resolution -- */
+const ALIAS = {
+  'core':'core','root':'core','global':'core','claude':'core','claudemd':'core',
+  'claude md':'core','second brain':'core','brain':'core','os':'core','everything':'core',
+  'dev and prs':'dev','prs':'dev','dev prs':'dev','memory':'memory','mem':'memory',
+  'skills':'skills','knowledge':'knowledge','content media':'content','content and media':'content',
+  'media':'content','life os':'life','life':'life','meta infra':'meta','meta and infra':'meta',
+  'infra':'meta','collections':'collect','collection':'collect'
+};
+function resolve(q){
+  const t = key(q);
+  if(!t) return null;
+  if(ALIAS[t] && byId[ALIAS[t]]) return byId[ALIAS[t]];
+  let best=null, score=0;
+  NODES.forEach(n=>{
+    const cands = [key(n.label), key(n.id)].filter(Boolean);
+    for(const c of cands){
+      let s = 0;
+      if(c===t) s = 1;
+      else if(c.startsWith(t) || t.startsWith(c)) s = Math.min(t.length,c.length)/Math.max(t.length,c.length) * 0.92;
+      else if(c.includes(t)) s = 0.72;
+      else {
+        const a = new Set(c.split(' '));
+        const words = t.split(' ');
+        const ov = words.filter(w=>a.has(w) || [...a].some(x=>x.startsWith(w))).length;
+        s = (ov/words.length) * 0.66;
+      }
+      if(s>score){ score=s; best=n; }
+    }
+  });
+  return score>=0.45 ? best : null;
+}
+
+/* -------------------------------------------------------------- interpreter */
+const HELP = 'I can drive the whole map. Try <em>open memory</em> · <em>zoom in</em> · '
+  + '<em>what connects Assistant</em> · <em>list domains</em> · <em>how many nodes</em> · <em>overview</em>.';
+
+function interpret(raw){
+  const t = norm(raw);
+  if(!t) return { reply:null };
+  const words = t.split(' ');
+  let m;
+
+  /* --- voice control --- */
+  if(/^(mute|silence|quiet|shut up|stop talking)\b/.test(t)){
+    jstate.speak=false; jvoice.classList.remove('on'); jvoice.textContent='\u25CB'; statusLine();
+    return { reply:'Muted. I\u2019ll keep working, just silently.' };
+  }
+  if(/^(unmute|speak|talk|voice on|say it)\b/.test(t)){
+    jstate.speak=true; jvoice.classList.add('on'); jvoice.textContent='\u25C9'; statusLine();
+    return { reply:'Voice back on.' };
+  }
+
+  /* --- help --- */
+  if(/^(help|what can you|commands|what do you do|how do i)/.test(t)) return { reply:HELP };
+
+  /* --- zoom --- */
+  if((m = t.match(/^zoom (?:to |at |in to )?(\d{2,3})$/))){
+    const n=Math.max(28,Math.min(320,parseInt(m[1],10)));
+    setView(view.x, view.y, n/100, true);
+    return { reply:'Zoom at '+n+'%.' };
+  }
+  if(/^zoom (?:in|closer|up)|^(?:zoom|go|move) closer|^(?:get )?closer|^magnify|^bigger|^larger/.test(t)){
+    zoomBy(1.4); return { reply:'Closing in — '+shownPct()+'.' };
+  }
+  if(/^zoom (?:out|back)|^(?:pull|back) (?:out|off)|^smaller|^wider|^overview out/.test(t)){
+    zoomBy(1/1.4); return { reply:'Pulling back — '+shownPct()+'.' };
+  }
+  if(/^(fit|overview|reset view|reset zoom|home|whole graph|show everything|zoom to fit|everything|top level|root view)\b/.test(t)){
+    overview(true); return { reply:'Full overview. '+NODES.length+' nodes, '+EDGES.length+' edges.' };
+  }
+  if(/^(reset|clear|deselect|back|cancel|start over|never mind|close)\b/.test(t)){
+    q.value=''; overview(true); return { reply:'Cleared. Back at the overview.' };
+  }
+
+  /* --- counts --- */
+  if(/^(how many|count|total|how much)\b/.test(t)){
+    if(/edge|link|connection/.test(t)) return { reply:EDGES.length+' edges. '+(EDGES.filter(e=>e.type==='integrates').length)+' of them are app-to-app integrations.' };
+    if(/app|application/.test(t))      return { reply:APPS.length+' applications across '+CLUSTERS.length+' domains.' };
+    if(/routine|automation/.test(t))   return { reply:ROUTINES.length+' routines, each firing one or more applications.' };
+    if(/domain|cluster|folder|area/.test(t)) return { reply:CLUSTERS.length+' domains: '+CLUSTERS.map(c=>c.label).join(', ')+'.' };
+    return { reply:NODES.length+' nodes and '+EDGES.length+' edges across '+CLUSTERS.length+' domains.' };
+  }
+
+  /* --- listings --- */
+  if(/\b(domains?|clusters?|folders?|areas?)\b/.test(t) && /^(list|show|what|name|give|tell)/.test(t)){
+    CLUSTERS.forEach(c=>jNote('<em>'+c.label+'</em> — '+c.n+' items, '+NODES.filter(n=>n.kind==='app'&&n.cluster===c.id).length+' applications'));
+    return { reply:CLUSTERS.length+' domains listed. Say <em>open</em> and a name to enter one.' };
+  }
+  if(/\bapps?\b|\bapplications?\b/.test(t) && /^(list|show|what|which)/.test(t) && !/connect/.test(t)){
+    return { reply:'There are '+APPS.length+' applications. Name one and I\u2019ll open it — or open a domain to see its own.' };
+  }
+  if(/\broutines?\b|\bautomations?\b/.test(t) && /^(list|show|what|which)/.test(t)){
+    ROUTINES.forEach(r=>jNote('<em>'+r.label+'</em> — triggers '+(byId[r.near]?byId[r.near].label:r.near)));
+    return { reply:ROUTINES.length+' routines listed.' };
+  }
+
+  /* --- connections --- */
+  if((m = t.match(/^(?:what |whats |what is |what are |show me |show )*(?:connect(?:ed|s)?(?: to| with| of| for)?|links?(?: to| with| of| for)?|relations?(?: to| of)?|related to|neighbours? of|neighbors? of|connections? (?:to|of|for)|touches)\s+(.+)$/))){
+    const n = resolve(m[2] || m[1]);
+    if(!n) return { reply:'I couldn\u2019t find that node. Try <em>open memory</em> first.' };
+    openEntity(n, true);
+    const rel = EDGES.filter(e=>e.s.id===n.id||e.t.id===n.id);
+    const by = {}; rel.forEach(e=>{ by[e.type]=(by[e.type]||0)+1; });
+    const sum = Object.keys(by).map(k=>by[k]+' <em>'+k+'</em>').join(', ');
+    return { reply:'<em>'+n.label+'</em> has '+rel.length+' connections — '+sum+'. I\u2019ve lit them up.' };
+  }
+
+  /* --- find --- */
+  if((m = t.match(/^(?:find|search|locate|look for|where is|search for)\s+(.+)$/))){
+    const n = resolve(m[1]);
+    if(n){ openEntity(n, true); return { reply:'Found <em>'+n.label+'</em> — '+n.kind+'.' }; }
+    q.value = m[1];
+    const hits = NODES.filter(x=>x.label.toLowerCase().includes(m[1].toLowerCase()));
+    if(!hits.length) return { reply:'Nothing matches \u201c'+esc(m[1])+'\u201d.' };
+    hot = new Set(); hits.forEach(x=>neighbors(x.id).forEach(i=>hot.add(i)));
+    frameNodes(hits.map(x=>x.id).concat([...hot]), 200);
+    return { reply:hits.length+' match'+(hits.length>1?'es':'')+' — '+hits.map(x=>x.label).join(', ')+'.' };
+  }
+
+  /* --- open / focus --- */
+  if((m = t.match(/^(?:open|focus|go to|goto|drill into|drill|enter|show me|take me to|navigate to|select|inspect|zoom to|jump to|load)\s+(.+)$/))){
+    const n = resolve(m[1]);
+    if(!n) return { reply:'I don\u2019t know \u201c'+esc(m[1])+'\u201d. Say <em>list domains</em> to hear them all.' };
+    openEntity(n, true);
+    const kind = n.kind==='cluster' ? 'domain with '+NODES.filter(x=>x.kind==='app'&&x.cluster===n.id).length+' applications'
+               : n.kind==='app' ? 'application with '+degree[n.id]+' connections'
+               : n.kind==='routine' ? 'routine' : 'root node';
+    return { reply:'Opening <em>'+n.label+'</em> — '+kind+'.' };
+  }
+
+  /* --- bare entity name --- */
+  const bare = resolve(words.slice(-4).join(' '));
+  if(bare){
+    openEntity(bare, true);
+    return { reply:'That\u2019s <em>'+bare.label+'</em> — opening it.' };
+  }
+
+  return { reply:'I didn\u2019t hear a command in that. '+HELP };
+}
+
+function respond(text){
+  const r = interpret(text);
+  if(r && r.reply) jSay(r.reply);
+}
+
+/* ------------------------------------------------------------------ wiring -- */
+jform.addEventListener('submit', ev=>{
+  ev.preventDefault();
+  const t = jinput.value.trim();
+  if(!t) return;
+  jinput.value='';
+  jAdd('u', esc(t));
+  respond(t);
+});
+function chip(label, cmd){
+  const b=document.createElement('button');
+  b.type='button'; b.textContent=label;
+  b.onclick=()=>{ jAdd('u', esc(cmd)); respond(cmd); };
+  return b;
+}
+function buildChips(){
+  [['ZOOM IN','zoom in'],['OVERVIEW','overview'],['OPEN MEMORY','open memory'],
+   ['OPEN SKILLS','open skills'],['CONNECTIONS','what connects Assistant'],
+   ['DOMAINS','list domains'],['COUNTS','how many nodes']]
+   .forEach(([l,c])=>jchips.appendChild(chip(l,c)));
+}
+function jarvisBoot(){
+  statusLine();
+  jAdd('j','Systems online. I\u2019m wired into the map — I can open domains, fly the camera and trace connections. Try <em>open memory</em>.');
+  if(!rec) jAdd('s','VOICE INPUT NEEDS MIC ACCESS — CHAT WORKS EVERYWHERE');
+}
+
+/* ------------------------------------------------------------------ boot */
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+resize();
+settle(800);                    // settle instantly on first paint
+fitView(false);
+buildChips();
+jarvisBoot();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

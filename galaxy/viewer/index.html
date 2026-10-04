@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XYP3RN Jarvis</title>
+<link rel="icon" type="image/png" href="/xyp3rn-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -78,12 +79,15 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
   transition: opacity 700ms var(--ease), visibility 0s 700ms, filter 700ms; cursor: pointer; }
 .boot.done { opacity: 0; visibility: hidden; filter: blur(8px); }
 .boot-core { display: flex; flex-direction: column; align-items: center; gap: 26px; width: min(460px, 86vw); }
-.boot-ring { position: relative; width: 132px; height: 132px; }
+.boot-ring { position: relative; width: 204px; height: 204px; }
 .boot-ring i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid transparent; }
 .boot-ring i:nth-child(1) { border-top-color: var(--cyan); border-right-color: rgba(114, 214, 247, .3); animation: spin 1.6s linear infinite; }
-.boot-ring i:nth-child(2) { inset: 14px; border-bottom-color: var(--amber); border-left-color: rgba(216, 171, 85, .3); animation: spin 2.4s linear infinite reverse; }
-.boot-ring i:nth-child(3) { inset: 30px; border-top-color: var(--plum); animation: spin 3.2s linear infinite; }
-.boot-ring b { position: absolute; inset: 52px; border-radius: 50%; background: radial-gradient(circle, #fff 0%, var(--cyan) 35%, transparent 70%); filter: blur(1px); animation: breathe 1.8s ease-in-out infinite; }
+.boot-ring i:nth-child(2) { inset: 9px; border-bottom-color: var(--amber); border-left-color: rgba(216, 171, 85, .3); animation: spin 2.4s linear infinite reverse; }
+.boot-ring i:nth-child(3) { inset: 18px; border-top-color: var(--plum); animation: spin 3.2s linear infinite; }
+/* The logo is the core the rings orbit: whole and unaltered (docs/BRAND.md), only a gold glow breathes behind it. */
+.boot-logo { position: absolute; inset: 28px; width: calc(100% - 56px); height: calc(100% - 56px); object-fit: contain; border-radius: 50%; animation: aura 2.4s ease-in-out infinite alternate; }
+@keyframes aura { from { box-shadow: 0 0 18px rgba(216, 171, 85, .18); } to { box-shadow: 0 0 46px rgba(216, 171, 85, .5); } }
+@media (prefers-reduced-motion: reduce) { .boot-ring i, .boot-logo { animation: none; } }
 @keyframes breathe { 50% { transform: scale(.7); opacity: .6; } }
 .boot-word { font: 700 34px/1 var(--font-display); letter-spacing: .42em; padding-left: .42em; color: var(--silver);
   background: linear-gradient(90deg, var(--silver), #fff, var(--cyan), var(--silver)); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -343,8 +347,7 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
 <body data-status="idle" class="booting">
 <div class="boot" id="boot" role="status" aria-live="polite" title="Click to skip">
   <div class="boot-core">
-    <div class="boot-ring" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
-    <div class="boot-word">XYP3RN</div>
+    <div class="boot-ring"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i><img class="boot-logo" src="/xyp3rn-logo.png" width="148" height="148" alt="XYP3RN Agentic OS"></div>
     <div class="boot-sub">Agentic OS 2 · Jarvis</div>
     <div class="boot-bar"><span id="boot-bar"></span></div>
     <ul class="boot-log" id="boot-log"></ul>
@@ -359,7 +362,7 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
 
 <header class="bar glass">
   <div class="bar-row">
-    <span class="wordmark">XYP3RN</span>
+    <img src="/xyp3rn-logo.png" width="56" height="56" alt="XYP3RN Agentic OS" style="flex-shrink:0;object-fit:contain">
     <div class="bar-title">
       <span class="label">Jarvis · Knowledge Galaxy</span>
       <span class="label muted">Agentic OS 2 · Engine</span>
@@ -457,8 +460,19 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
 </div>
 
 <script src="graph-data.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.80.1/dist/3d-force-graph.min.js" integrity="sha384-i98VDQKdpyVrtyuFn0fjUWJBLBmxnqHqOANcvYe9HLJUgT2wPixa4ZkLd7Dh3VEk" crossorigin="anonymous"></script>
 <script type="module">
+const GRAPH_DEFAULT = true; // Accepted graph default; ?view=galaxy remains the one-release rollback.
+const graphView = new URLSearchParams(location.search).get('view') === 'graph' ||
+  (GRAPH_DEFAULT && new URLSearchParams(location.search).get('view') !== 'galaxy');
+if (graphView) document.body.classList.add('graph-mode');
+if (!graphView) {
+  await new Promise(resolve => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/3d-force-graph@1.80.1/dist/3d-force-graph.min.js';
+    script.integrity = 'sha384-i98VDQKdpyVrtyuFn0fjUWJBLBmxnqHqOANcvYe9HLJUgT2wPixa4ZkLd7Dh3VEk';
+    script.crossOrigin = 'anonymous'; script.onload = script.onerror = resolve; document.head.append(script);
+  });
+}
 // ── Voice: the single most personal number in the build. ─────────────────────────
 const FINISH_MS = 900;           // pause that ends a thought; tune after a day of real use
 const INTERRUPT = /^(stop|wait|hold on|quiet|shush|enough)\W*$/i;
@@ -499,7 +513,7 @@ addEventListener('keydown', () => { if (!boot.done) bootFinish(); });
 setTimeout(bootFinish, 8000);   // a slow CDN or a sleeping server never traps you behind the boot screen
 bootStep('Mercury core online');
 
-if (typeof GRAPH === 'undefined' || typeof ForceGraph3D === 'undefined') {
+if (typeof GRAPH === 'undefined' || (!graphView && typeof ForceGraph3D === 'undefined')) {
   bootFinish();
   const msg = typeof GRAPH === 'undefined' ? 'No galaxy yet. Run python build.py, then reload.' : '3d-force-graph did not load. Check your connection, then reload.';
   document.body.insertAdjacentHTML('beforeend', `<div class="empty"><p class="label">${esc(msg)}</p></div>`);
@@ -511,7 +525,16 @@ const PALETTE = ['#d2a44e', '#53a2ce', '#b258a5', '#d5d3de', '#9188df', '#d4bc96
 const DIM = '#22203a';
 const { nodes, links } = GRAPH;
 const count = {};
-nodes.forEach(n => { count[n.group] = (count[n.group] || 0) + 1; n.neighbors = []; n.links = []; });
+nodes.forEach(n => {
+  count[n.group] = (count[n.group] || 0) + 1;
+  n.neighbors = [];
+  n.links = [];
+  if (n.id === 0 || n.group === 'root') {
+    n.fx = 0;
+    n.fy = 0;
+    n.fz = 0;
+  }
+});
 const groups = Object.keys(count).sort((a, b) => count[b] - count[a] || a.localeCompare(b));
 const colorOf = Object.fromEntries(groups.map((g, i) => [g, PALETTE[i % PALETTE.length]]));
 function wire(l) {
@@ -536,28 +559,77 @@ bootStep(`Indexed ${nodes.length} notes · ${links.length} links`);
 
 let hiNodes = new Set(), hiLinks = new Set();
 const el = $('galaxy'), panel = $('panel');
-const Graph = new ForceGraph3D(el, { controlType: 'orbit' })
+let Graph;
+if (graphView) {
+  const stylesheet = document.createElement('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = '/graph-view.css'; document.head.append(stylesheet);
+  const { createGraphView } = await import('./graph-view.js');
+  Graph = await createGraphView(el, { source: { nodes, links }, colors: colorOf, onNote: openNote,
+    onClear: () => clearFocus(true), onGroup: group => {
+      closePanel(); setLegendPressed(group); light(nodes.filter(n => n.group === group)); Graph.filterGroup(group);
+    }, onDomain: filterDomain });
+  window.graphView = Graph;
+} else {
+Graph = new ForceGraph3D(el, { controlType: 'orbit' })
   .backgroundColor('#05050d')
   .showNavInfo(false)
   .graphData({ nodes, links })
   .nodeLabel(n => `<div class="tip"><span>${esc(n.group)}</span>${esc(n.label)}</div>`)
-  .nodeVal(n => 1 + n.neighbors.length / 3)
+  .nodeVal(n => (n.id === 0 || n.group === 'root') ? 8 : (1.5 + (n.neighbors ? n.neighbors.length / 2.5 : 0)))
   .nodeRelSize(3)
   .nodeResolution(12)
   .nodeOpacity(1)
-  .nodeColor(n => !hiNodes.size || hiNodes.has(n) ? colorOf[n.group] : DIM)
+  .nodeColor(n => !hiNodes.size || hiNodes.has(n) ? ((n.id === 0 || n.group === 'root') ? '#72d6f7' : colorOf[n.group]) : DIM)
+  .nodeThreeObject(n => {
+    if ((n.id === 0 || n.group === 'root') && typeof THREE !== 'undefined') {
+      const group = new THREE.Group();
+      const texture = new THREE.TextureLoader().load('/xyp3rn-logo.png');
+      const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(16, 16, 1);
+      group.add(sprite);
+
+      const ringGeo = new THREE.RingGeometry(8.5, 9.6, 32);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x72d6f7, side: THREE.DoubleSide, transparent: true, opacity: 0.7 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      group.add(ring);
+      return group;
+    }
+    return false;
+  })
   .linkOpacity(1)
-  .linkColor(l => hiLinks.has(l) ? 'rgba(210,164,78,0.9)' : hiNodes.size ? 'rgba(145,136,223,0.05)' : 'rgba(145,136,223,0.2)')
-  .linkWidth(l => hiLinks.has(l) ? 0.35 : 0)
-  .linkDirectionalParticles(l => hiLinks.has(l) ? 2 : 0)
-  .linkDirectionalParticleWidth(1.8)
+  .linkColor(l => {
+    const isRoot = (typeof l.source === 'object' ? l.source.id === 0 || l.source.group === 'root' : l.source === 0) || (typeof l.target === 'object' ? l.target.id === 0 || l.target.group === 'root' : l.target === 0);
+    if (hiLinks.has(l)) return 'rgba(210,164,78,0.95)';
+    if (hiNodes.size) return 'rgba(145,136,223,0.06)';
+    if (isRoot) return 'rgba(114,214,247,0.45)';
+    return 'rgba(145,136,223,0.22)';
+  })
+  .linkWidth(l => {
+    const isRoot = (typeof l.source === 'object' ? l.source.id === 0 || l.source.group === 'root' : l.source === 0) || (typeof l.target === 'object' ? l.target.id === 0 || l.target.group === 'root' : l.target === 0);
+    return hiLinks.has(l) ? 1.2 : isRoot ? 0.45 : 0.3;
+  })
+  .linkDirectionalParticles(l => {
+    const isRoot = (typeof l.source === 'object' ? l.source.id === 0 || l.source.group === 'root' : l.source === 0) || (typeof l.target === 'object' ? l.target.id === 0 || l.target.group === 'root' : l.target === 0);
+    return hiLinks.has(l) ? 3 : isRoot ? 1 : 0;
+  })
+  .linkDirectionalParticleWidth(l => hiLinks.has(l) ? 2.2 : 1.4)
   .linkDirectionalParticleSpeed(0.005)
-  .linkDirectionalParticleColor(() => '#6fd3f5')
+  .linkDirectionalParticleColor(l => {
+    const isRoot = (typeof l.source === 'object' ? l.source.id === 0 || l.source.group === 'root' : l.source === 0) || (typeof l.target === 'object' ? l.target.id === 0 || l.target.group === 'root' : l.target === 0);
+    return isRoot ? '#72d6f7' : '#6fd3f5';
+  })
   .onNodeHover(n => { el.style.cursor = n ? 'pointer' : ''; })
   .onNodeClick(n => openNote(n))
   .onBackgroundClick(() => clearFocus(true))
   .warmupTicks(90)      // the layout settles behind the boot screen, so the galaxy appears already formed
   .cooldownTicks(140);
+
+// Tune d3 forces for clean 3D orbital spacing around center logo
+Graph.d3Force('charge').strength(-140);
+Graph.d3Force('link').distance(l => {
+  const isRoot = (typeof l.source === 'object' ? l.source.id === 0 || l.source.group === 'root' : l.source === 0) || (typeof l.target === 'object' ? l.target.id === 0 || l.target.group === 'root' : l.target === 0);
+  return isRoot ? 65 : 42;
+});
 
 window.galaxy = Graph; // handle for devtools
 Graph.renderer().setPixelRatio(Math.min(devicePixelRatio, 1.75)); // 4K screens: same look, a third of the pixels
@@ -570,6 +642,7 @@ Graph.onEngineStop(() => {
   reframe();
   bootMark('graph');
 });
+}
 // Centre the galaxy in the space the glass leaves free, not behind the side panel: a camera view
 // offset, eased when the note panel opens. Clicks stay exact, since the offset lives in the projection.
 let viewShift = 0, viewTarget = 0, viewEasing = false;
@@ -585,6 +658,7 @@ function applyView() {
   cam.updateProjectionMatrix();
 }
 function reframe() {
+  if (graphView) { Graph.resize(); return; }
   viewTarget = frameTarget();
   if (viewEasing) return;
   viewEasing = true;
@@ -597,26 +671,30 @@ function reframe() {
 }
 new MutationObserver(() => setTimeout(reframe, 30)).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 let resizing;
-addEventListener('resize', () => { clearTimeout(resizing); resizing = setTimeout(() => { Graph.width(innerWidth).height(innerHeight); reframe(); }, 120); });
+addEventListener('resize', () => { clearTimeout(resizing); resizing = setTimeout(() => { if (!graphView) Graph.width(innerWidth).height(innerHeight); reframe(); }, 120); });
 document.addEventListener('visibilitychange', () => document.hidden ? Graph.pauseAnimation() : Graph.resumeAnimation());
 
 // Slow idle rotation; pauses while you steer and resumes after a quiet spell.
-const controls = Graph.controls();
+const controls = graphView ? null : Graph.controls();
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let idle;
-const pauseSpin = ms => { controls.autoRotate = false; clearTimeout(idle); if (!still) idle = setTimeout(() => { controls.autoRotate = true; }, ms); };
-controls.autoRotate = !still;
-controls.autoRotateSpeed = 0.35;
-controls.addEventListener('start', () => pauseSpin(1e9));
-controls.addEventListener('end', () => pauseSpin(7000));
+const pauseSpin = ms => { if (!controls) return; controls.autoRotate = false; clearTimeout(idle); if (!still) idle = setTimeout(() => { controls.autoRotate = true; }, ms); };
+if (controls) {
+  controls.autoRotate = !still;
+  controls.autoRotateSpeed = 0.35;
+  controls.addEventListener('start', () => pauseSpin(1e9));
+  controls.addEventListener('end', () => pauseSpin(7000));
+}
 
 function repaint() {
+  if (graphView) { Graph.highlight(hiNodes); return; }
   nodes.forEach(n => n.glow && n.glow.material.color.set(!hiNodes.size || hiNodes.has(n) ? colorOf[n.group] : '#000000'));
   Graph.nodeColor(Graph.nodeColor()).linkColor(Graph.linkColor()).linkWidth(Graph.linkWidth())
     .linkDirectionalParticles(Graph.linkDirectionalParticles());
 }
 
 function flyTo(n, ms = 1600) {
+  if (graphView) { Graph.focusNote(n); return; }
   const k = 1 + 190 / (Math.hypot(n.x, n.y, n.z) || 1);   // close enough to read, far enough to see its neighbours
   pauseSpin(ms + 5000);
   Graph.cameraPosition({ x: n.x * k, y: n.y * k, z: n.z * k }, { x: n.x, y: n.y, z: n.z }, ms);
@@ -648,12 +726,13 @@ function fillChips(box, list) {
 }
 
 function openNote(n) {
+  $('nav').querySelectorAll('button[data-domain]').forEach(b => b.setAttribute('aria-pressed', 'false'));
   $('note-excerpt').classList.remove('draft');
   const linked = [...n.neighbors].sort((a, b) => a.label.localeCompare(b.label));
   hiNodes = new Set([n, ...linked]);
   hiLinks = new Set(n.links);
   repaint();
-  flyTo(n);
+  if (!graphView) flyTo(n);
   setLegendPressed(null);
   $('note-group').replaceChildren(swatch(n.group), n.group);
   $('note-title').textContent = n.label;
@@ -667,6 +746,7 @@ function openNote(n) {
   panel.inert = false;
   panel.setAttribute('aria-hidden', 'false');
   document.body.classList.add('panel-open');
+  if (graphView) flyTo(n);
 }
 
 function closePanel() {
@@ -677,6 +757,8 @@ function closePanel() {
 }
 
 function clearFocus(refit) {
+  if (graphView) Graph.clearSelection();
+  $('nav').querySelectorAll('button[data-domain]').forEach(b => b.setAttribute('aria-pressed', 'false'));
   hiNodes = new Set();
   hiLinks = new Set();
   repaint();
@@ -711,6 +793,7 @@ function addGroup(g) {
     const list = nodes.filter(n => n.group === g);
     light(list);
     pauseSpin(7000);
+    if (graphView) Graph.filterGroup(g);
     Graph.zoomToFit(1400, 80, n => hiNodes.has(n));
   });
   const li = document.createElement('li');
@@ -881,7 +964,8 @@ function renderNav() {
   nav.append(head('Domains'));
   desk.domains.forEach(d => {
     const b = document.createElement('button');
-    b.type = 'button'; b.dataset.domain = d.id; b.setAttribute('aria-pressed', 'false');
+    b.type = 'button'; b.dataset.domain = d.id;
+    b.setAttribute('aria-pressed', String(graphView && new URLSearchParams(location.search).get('domain') === d.id));
     const dot = document.createElement('i'); dot.className = 'dom'; dot.style.color = DOMAIN_COLOR[d.id];
     const count = nodes.filter(n => n.domain === d.id).length;
     const c = document.createElement('span'); c.className = 'ext txt'; c.textContent = count;
@@ -901,6 +985,7 @@ function filterDomain(d) {
   if (!list.length) return;
   light(list);
   pauseSpin(9000);
+  if (graphView) Graph.filterDomain(d);
   Graph.zoomToFit(1400, 80, n => hiNodes.has(n));
 }
 function openArea(url, label) {   // voice has no click, so a blocked pop-up becomes a link to press
@@ -1180,10 +1265,10 @@ function birth({ node, links: linkedIds, near }, fly = true) {
   legend.querySelector(`button[data-group="${CSS.escape(n.group)}"] .count`).textContent = count[n.group];
   nodes.push(n);
   linkedIds.forEach(i => { const l = { source: n, target: nodes[i] }; links.push(l); wire(l); });
-  Graph.graphData({ nodes, links });
+  const update = Graph.graphData({ nodes, links });
+  if (graphView) update.catch(error => { $('status-label').textContent = error.message; console.error(error); });
   updateStats();
-  n.bornAt = performance.now();
-  startPulse();
+  if (!graphView) { n.bornAt = performance.now(); startPulse(); }
   if (fly) setTimeout(() => openNote(n), 450);   // run stars pulse in place; only your own captures fly
 }
 
@@ -1400,12 +1485,47 @@ function glowTexture(THREE) {
   g.fillRect(0, 0, 64, 64);
   return new THREE.CanvasTexture(c);
 }
+// Jarvis's core: a physical sphere with the approved artwork projected onto each hemisphere.
+// No billboard: orbiting the graph reveals the surface curvature, rim and equatorial band.
+function core(THREE, glow) {
+  const PULSE = { idle: [0.35, 0.6], listening: [0.6, 1.2], thinking: [0.5, 4], speaking: [0.7, 7] };
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  const tex = new THREE.TextureLoader().load('/xyp3rn-logo.png');
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = Math.min(4, Graph.renderer().capabilities.getMaxAnisotropy());
+  const group = new THREE.Group();
+  group.name = 'XYP3RN brand sphere';
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xd6a24f, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+  const geometry = new THREE.SphereGeometry(110, 48, 32);
+  const position = geometry.attributes.position, uv = geometry.attributes.uv;
+  for (let i = 0; i < position.count; i++) {
+    uv.setXY(i, 0.5 + (position.getZ(i) < 0 ? -1 : 1) * position.getX(i) / 220, 0.5 + position.getY(i) / 220);
+  }
+  const logo = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({
+    map: tex, color: 0xffffff, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.22,
+    specular: 0xe3c88f, shininess: 48,
+  }));
+  logo.name = 'XYP3RN logo surface';
+  const band = new THREE.Mesh(new THREE.TorusGeometry(110.5, 0.65, 8, 96), new THREE.MeshBasicMaterial({ color: 0xd6a24f }));
+  band.rotation.x = Math.PI / 2;
+  logo.add(band);
+  halo.scale.set(480, 480, 1);
+  halo.renderOrder = -1;
+  halo.raycast = logo.raycast = band.raycast = () => {}; // decoration never captures graph selection
+  halo.onBeforeRender = () => {
+    const [base, hz] = PULSE[document.body.dataset.status] ?? PULSE.idle;
+    halo.material.opacity = motion.matches ? base : base * (0.75 + 0.25 * Math.sin(performance.now() / 1000 * hz));
+  };
+  group.add(halo, logo);
+  return group;
+}
 // Additive halo sprites instead of a bloom pass: the post-processing chain double-encodes
 // colour and turns the black background lavender.
-try {
+if (!graphView) try {
   const THREE = await import(THREE_URL);
   Graph.scene().add(starfield(THREE));
   const glow = glowTexture(THREE);
+  Graph.scene().add(core(THREE, glow));
   Graph.nodeThreeObjectExtend(true).nodeThreeObject(n => {
     n.glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: colorOf[n.group], blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
     n.glow.raycast = () => {};  // clicks go to the star, never its halo
@@ -1416,6 +1536,12 @@ try {
   repaint();
 } catch (err) {
   console.warn('Starfield and glow unavailable:', err);
+}
+if (graphView) {
+  Graph.restore();
+  document.querySelector('.side .hint').textContent = 'Click a node to read it · drag a node to move it · drag space to pan · scroll to zoom · Ctrl K commands';
+  bootStep('Graph settled');
+  bootMark('graph');
 }
 </script>
 </body>

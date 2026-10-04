@@ -6,6 +6,7 @@ import { createAgentRegistry } from '../../../core/agent-registry/registry.ts';
 import { scanRoots } from '../../../knowledge/knowledge-graph/scan.ts';
 import { createLocalVaultStore } from '../../../knowledge/source-registry/vault-store.ts';
 import { createTestDb, type TestDb } from '../../../tests/helpers/db.ts';
+import { hudComponents, hudEventsSince, hudStatus } from './hud-loaders.ts';
 import { hudComponents, hudStatus } from './hud-loaders.ts';
 
 // Mercury HUD (F52): what /api/graph/components and /api/system/status answer, against a scanned fixture root.
@@ -81,5 +82,35 @@ describe('hudStatus', () => {
     expect(s.runsPerHour).toHaveLength(24);
     expect(s.lastScan?.status).toBe('success');
     expect(JSON.stringify(s)).not.toContain('sk-SECRET-FIXTURE');
+  });
+});
+
+describe('hudEventsSince', () => {
+  it('reports each new run once when it starts and once when it finishes, with the real edge it touched', async () => {
+    const first = await hudEventsSince(db.sql, null);
+    expect(first.events).toEqual([]); // nothing after the database's now()
+    const [wf] = await db.sql<{ id: string }[]>`
+      insert into workflow_runs (workflow_name, spec_sha256, spec, input, status) values ('hud', repeat('b', 64), '{}'::jsonb, '{}'::jsonb, 'running') returning id`;
+    const [run] = await db.sql<{ id: string }[]>`
+      insert into agent_runs (agent_name, input, workflow_run_id, step_id) values ('x3lius-vocal-dna', '{}'::jsonb, ${wf!.id}, 'one') returning id`;
+    const a = await hudEventsSince(db.sql, first.cursor, first.seen);
+    const step = a.events.find((e) => e.kind === 'agent');
+    expect(step).toMatchObject({ title: 'x3lius-vocal-dna', status: 'pending', component: 'RECORDS:vocal-dna', domain: 'RECORDS',
+      bead: { from: 'RECORDS:other', to: 'RECORDS:vocal-dna', relation: 'step_uses_agent' } });
+    expect(a.events.find((e) => e.kind === 'workflow')).toMatchObject({ title: 'hud', status: 'running', bead: null });
+    // Polling again sends nothing new.
+    const again = await hudEventsSince(db.sql, a.cursor, a.seen);
+    expect(again.events).toEqual([]);
+    // Finishing the run is a second event for the same run.
+    await db.sql`update agent_runs set status = 'success', completed_at = now() where id = ${run!.id}`;
+    const b = await hudEventsSince(db.sql, again.cursor, again.seen);
+    expect(b.events.map((e) => `${e.kind}:${e.status}`)).toEqual(['agent:success']);
+  });
+
+  it('a run with no step pulses its component, with no bead', async () => {
+    const c = await hudEventsSince(db.sql, null);
+    await db.sql`insert into agent_runs (agent_name, input) values ('records-catalog', '{}'::jsonb)`;
+    const d = await hudEventsSince(db.sql, c.cursor, c.seen);
+    expect(d.events).toEqual([expect.objectContaining({ title: 'records-catalog', component: 'RECORDS:catalog', bead: null })]);
   });
 });

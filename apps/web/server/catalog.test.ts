@@ -22,7 +22,7 @@ import { songCreate, songRevise, uploadFiles } from './ops.ts';
 let db: TestDb;
 let deps: DispatchDeps;
 const vaultDir = mkdtempSync(join(tmpdir(), 'aos02-web-vault-'));
-const today = () => new Date().toISOString().slice(0, 10);
+const today = async () => (await db.sql<{ day: string }[]>`select current_date::text as day`)[0]!.day;
 const wav = (n: number): Uint8Array => {
   const h = Buffer.alloc(44);
   h.write('RIFF', 0); h.writeUInt32LE(36 + 1600, 4); h.write('WAVE', 8); h.write('fmt ', 12); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20);
@@ -48,7 +48,7 @@ beforeAll(async () => {
   personId = (await addPerson(deps, 'X3LIUS')).personId;
   await addAlias(deps, personId, 'Xelius');
   await credit(deps, { person: 'xelius', role: 'writer', songId });
-  taskId = (await createTask(deps, { title: 'Get the cover finished', releaseId, dueDate: today() })).taskId;
+  taskId = (await createTask(deps, { title: 'Get the cover finished', releaseId, dueDate: await today() })).taskId;
   await createTask(deps, { title: 'Renew the distributor plan' });
   const researchRun = await insertResearchRun(db.sql);
   questionId = (await db.sql<{ question_id: string }[]>`select question_id from research_runs where id = ${researchRun}`)[0]!.question_id;
@@ -103,8 +103,8 @@ describe('releases', () => {
     const c = await credit(deps, { personId, role: 'mastering_engineer', trackId });
     await uncredit(deps, c.creditId, 'mastered elsewhere');
     await assignCode(deps, { releaseId, upc: '070000260025' });
-    await expect(scheduleRelease(deps, { releaseId: '00000000-0000-4000-8000-000000000000', releaseDate: today() })).rejects.toThrow(/no release/);
-    expect(await scheduleRelease(deps, { releaseId, releaseDate: today() })).toMatchObject({ status: 'scheduled' });
+    await expect(scheduleRelease(deps, { releaseId: '00000000-0000-4000-8000-000000000000', releaseDate: await today() })).rejects.toThrow(/no release/);
+    expect(await scheduleRelease(deps, { releaseId, releaseDate: await today() })).toMatchObject({ status: 'scheduled' });
     expect(await markReleased(deps, releaseId)).toMatchObject({ status: 'released' });
     const r = await releaseDetail(db.sql, releaseId);
     expect(r!.release.status).toBe('released');

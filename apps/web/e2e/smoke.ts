@@ -108,6 +108,12 @@ try {
 
   await page.goto(`${BASE}/vault`);
   await page.waitForURL(`${BASE}/login?next=%2Fvault`);
+  const brand = page.locator('a[aria-label="XYP3RN Mercury, Command"] img');
+  await brand.evaluate((img: HTMLImageElement) => img.decode());
+  check(await brand.evaluate((img: HTMLImageElement) => img.naturalWidth > 0 && img.currentSrc.includes('xyp3rn-logo')),
+    'the approved logo loads before login');
+  const iconHref = await page.locator('link[rel=icon]').getAttribute('href');
+  check(Boolean(iconHref) && (await fetch(new URL(iconHref!, BASE))).ok, 'the browser icon is available without a session');
   check(true, 'without a session, /vault answers 401 and sends the browser to /login on the same host');
   check((await fetch(`${BASE}/vault/files/00000000-0000-4000-8000-000000000000/raw`)).status === 401, 'the raw file route is guarded too (401)');
   await page.fill('input[name=token]', 'a-wrong-token-of-enough-length');
@@ -182,6 +188,8 @@ try {
   await page.selectOption('select[name=recording]', { label: 'night-city-master.wav' });
   await page.click('button:text("Register on a new release")');
   await page.waitForURL(/\/releases\/[0-9a-f-]{36}$/);
+  await page.getByText('the release has no artwork', { exact: false }).waitFor();
+  await page.getByText('the track has no rights split set', { exact: false }).waitFor();
   const releaseId = page.url().split('/').pop()!;
   const draft = (await page.textContent('body')) ?? '';
   check(draft.includes('the release has no artwork') && draft.includes('the track has no rights split set'),
@@ -478,6 +486,7 @@ try {
   const opened8: string[] = [];
   for (const [label, path, h1] of AREAS) {
     const res = await page.goto(`${BASE}${path}`);
+    await page.getByRole('heading', { level: 1, name: h1, exact: true }).waitFor();
     const heading = (await page.textContent('h1'))?.trim();
     const current = (await page.textContent('nav[aria-label="Primary"] a[aria-current="page"]'))?.trim();
     if (res?.status() !== 200 || heading !== h1 || current !== label) opened8.push(`${path}: ${res?.status()} "${heading}" current "${current}"`);
@@ -599,6 +608,10 @@ try {
     hp.on('pageerror', (e) => hudErrors.push(String(e)));
     await hp.goto(`${BASE}/hud`);
     await hp.waitForSelector('[data-hud-globe][data-level=System] [data-component]');
+    const hudBrands = hp.locator('[data-hud-root] img');
+    check(await hudBrands.count() === 2, '/hud uses the approved logo in its header and hub');
+    for (const img of await hudBrands.all()) await img.evaluate((e: HTMLImageElement) => e.decode());
+    await shot(hp, 'hud-brand-desktop');
     const zoom = async () => Number(await hp.getAttribute('[data-hud-globe]', 'data-zoom'));
     const canvasH = await hp.$eval('[data-hud-globe]', (e) => e.clientHeight);
     const globeR = Number(await hp.getAttribute('canvas[data-globe-r]', 'data-globe-r'));
@@ -623,6 +636,22 @@ try {
     await hp.click('button[role=tab]:has-text("Records")');
     await hp.waitForTimeout(700);
     check(/lens=RECORDS/.test(hp.url()) && (await zoom()) > 1.4, `/hud: the Records lens turns to its sector (${hp.url()}, ${await zoom()})`);
+    // Live events: a real step run of retrieve-and-summarize (Workflow Engine → Context Engine over step_uses_agent)
+    // arrives through /api/events/stream, lands in Live activity and lights the globe.
+    await hp.goto(`${BASE}/hud`);
+    await hp.waitForSelector('[data-live=open]', { timeout: 10_000 });
+    const litBefore = Number(await hp.getAttribute('[data-hud-globe]', 'data-lights'));
+    const [liveWf] = await db.sql<{ id: string }[]>`
+      insert into workflow_runs (workflow_name, spec_sha256, spec, input, status) values ('retrieve-and-summarize', repeat('c', 64), '{}'::jsonb, '{}'::jsonb, 'running') returning id`;
+    await db.sql`insert into agent_runs (agent_name, input, workflow_run_id, step_id) values ('context-retriever', '{}'::jsonb, ${liveWf!.id}, 'retrieve')`;
+    const arrived = await hp.waitForSelector('[data-live-event=agent]', { timeout: 10_000 }).then(() => true, () => false);
+    check(arrived && (await hp.textContent('[data-live-event=agent]'))?.includes('context-retriever') === true, '/hud: a new agent run arrives through the event stream into Live activity');
+    await hp.waitForFunction((n) => Number(document.querySelector('[data-hud-globe]')?.getAttribute('data-lights')) > n, litBefore, { timeout: 5000 }).catch(() => undefined);
+    const light = await hp.getAttribute('[data-hud-globe]', 'data-last-light');
+    check(Number(await hp.getAttribute('[data-hud-globe]', 'data-lights')) > litBefore && light === 'bead:CORE:context-engine',
+      `/hud: the step run sends a bead along its real step_uses_agent link, Workflow Engine to Context Engine (${light})`);
+    const noSession = await fetch(`${BASE}/api/events/stream`);
+    check(noSession.status === 401, `/api/events/stream answers 401 without a session (${noSession.status})`);
     check(hudErrors.length === 0, `/hud: no console error (${hudErrors.join(' | ') || 'none'})`);
     await hudCtx.close();
 
@@ -640,6 +669,7 @@ try {
     await np.waitForSelector('[data-hud-root]');
     const sw = await np.$eval('[data-hud-root]', (e) => e.scrollWidth);
     check(sw <= 390, `/hud: no sideways scroll at 390 px (${sw})`);
+    await shot(np, 'hud-brand-mobile');
     await narrow.close();
   }
 

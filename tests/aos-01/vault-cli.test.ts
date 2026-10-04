@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -45,7 +45,7 @@ describe('pnpm vault', () => {
     const { file, lyrics } = added.json();
     expect(file).toMatchObject({ status: 'added', mediaClass: 'lyric_sheet' });
     expect(lyrics).toMatchObject({ version: 1, warnings: [] });
-    expect(spawnSync('ls', [join(vaultDir, (file.sha256 as string).slice(0, 2))], { encoding: 'utf8' }).stdout.trim()).toBe(file.sha256);
+    expect(readdirSync(join(vaultDir, (file.sha256 as string).slice(0, 2)))).toEqual([file.sha256]);
 
     const edit = join(files, 'night-city-v2.txt');
     writeFileSync(edit, '[Verse 1]\nNight city lights, neon rain\n[Chorus]\nWe run tonight\n');

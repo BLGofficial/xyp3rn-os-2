@@ -1,5 +1,4 @@
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { bestSample, offsetFromSample, SYNC_EVERY_MS, sofiaParts, sofiaStamp, STALE_AFTER_MS, syncState } from './clock.ts';
 
@@ -26,7 +25,7 @@ describe('sofiaParts', () => {
   });
 
   it('gives the same answer whatever the process timezone is', () => {
-    const script = `import { sofiaParts } from ${JSON.stringify(join(import.meta.dirname, 'clock.ts'))};
+    const script = `import { sofiaParts } from ${JSON.stringify(new URL('./clock.ts', import.meta.url).href)};
       console.log(JSON.stringify(sofiaParts(Date.parse('2026-07-15T12:00:00Z'))));`;
     for (const tz of ['America/New_York', 'Asia/Tokyo', 'UTC']) {
       const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, TZ: tz }, encoding: 'utf8' });

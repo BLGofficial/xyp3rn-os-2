@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic';
 const STATUSES = ['open', 'done', 'cancelled'] as const;
 
 // Tasks (AOS-02 B2): each move is an event, so a task's history is kept; the list shows the latest.
-export default async function TasksPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function TasksPage({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const searchParams = await pendingSearchParams;
   const status = STATUSES.find((s) => s === first(searchParams.status)) ?? 'open';
   const tasks = await (await catalogLoaders()).taskList((await runtime()).sql, status);
   const back = `/tasks?status=${status}`;
