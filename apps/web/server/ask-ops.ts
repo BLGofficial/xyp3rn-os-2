@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { formatReply, refsOf, runPlan, type AskResult, type RunnablePlan } from '../../../core/orchestrator/ask.ts';
 import type { DispatchDeps } from '../../../core/orchestrator/dispatch.ts';
 import { answerLookup, summarizerFromEnv, type LookupAnswer } from '../../../core/orchestrator/lookup.ts';
-import { ENTRYPOINTS, planRequest } from '../../../core/orchestrator/orchestrate.ts';
+import { ENTRYPOINTS, planRequest, planDirect } from '../../../core/orchestrator/orchestrate.ts';
+import { taskOf } from '../lib/task-catalog.ts';
 import { cancelJob, createJob, findJob, MAX_DEEP_PER_USER, MAX_RUNNING_PER_USER, runningCount, type AskView } from '../lib/ask-jobs.ts';
 import { runDeep, runSkill, type HeadlessOutcome } from '../lib/claude-headless.ts';
 import type { SkillName } from '../lib/skills.ts';
@@ -45,12 +46,14 @@ export const askRunners = (deps: DispatchDeps, env: Readonly<Record<string, stri
  */
 export const startAsk = async (
   owner: string,
-  input: { readonly text: string; readonly skill?: string; readonly deep?: boolean },
+  input: { readonly text: string; readonly skill?: string; readonly deep?: boolean; readonly task?: string },
   runners: AskRunners,
 ): Promise<string> => {
-  const text = input.text.trim();
-  if (!text) throw new Error('Type a request first');
-  const tier = selectTier(text, { ...(input.skill ? { skill: input.skill } : {}), deep: input.deep === true, engine: runners.engine });
+  const task = input.task === undefined ? undefined : taskOf(input.task);
+  if (input.task !== undefined && !task) throw new Error('Unknown task');
+  if (!input.text.trim()) throw new Error('Type a request first');
+  const text = (task?.prefix ?? '') + input.text.trim();
+  const tier = task?.target ? { kind: 'plan' as const } : selectTier(text, { ...(input.skill ? { skill: input.skill } : {}), deep: input.deep === true, engine: runners.engine });
   if (tier.kind === 'engine-off') throw new Error('Skills and deep tasks need LLM_ENGINE=claude-code on the Mercury server');
   if (tier.kind === 'invalid-skill') throw new Error('Unknown skill');
   const requestId = randomUUID();
@@ -85,8 +88,8 @@ export const startAsk = async (
     return done({ action: 'lookup', route: { status: 'lookup' }, status: a.source, reply: a.reply });
   }
 
-  const plan = planRequest(text, ENTRYPOINTS);
-  const route = { status: plan.route.status, ...('domain' in plan.route ? { domain: plan.route.domain } : {}) };
+  const plan = task?.target ? planDirect(text, task.target) : planRequest(text, ENTRYPOINTS);
+  const route = task?.target ? { status: 'explicit-task', domain: 'domain' in task.target ? task.target.domain : task.id } : { status: plan.route.status, ...('domain' in plan.route ? { domain: plan.route.domain } : {}) };
   if (plan.action === 'hold' || plan.action === 'clarify') return done({ action: plan.action, route, status: plan.action, reply: formatReply(plan) });
   return running(
     { action: plan.action, route, reply: 'Working. The run is still in progress.' },

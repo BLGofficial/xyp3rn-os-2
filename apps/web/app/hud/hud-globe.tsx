@@ -8,6 +8,8 @@ import { HUD_DOMAIN, HUD_STATUS, levelAt, ORBIT_ORDER, ZOOM, type HudOwner, type
 import { DomainIcon } from './hud-icons';
 import { BrandLogo } from '../brand/logo';
 import type { Motion } from './hud-shell';
+import { motionFor, type VoiceEvent } from '../../lib/voice-status';
+import { coreCue } from '../../lib/hud-voice';
 
 /**
  * The Mercury HUD's centre (F52): a compact glass globe, the six domain medallions on their compass bearings, each
@@ -24,6 +26,8 @@ type Props = {
   readonly motion: Motion;
   /** The newest live event (seq increases per event): a bead along its real link, or a pulse on its component. */
   readonly pulse?: { readonly seq: number; readonly event: HudEvent } | null;
+  /** The voice agent's current status (lib/voice-status.ts). Null or absent draws the core exactly as before voice existed. */
+  readonly voice?: VoiceEvent | null;
 };
 
 /** A bead travels a real link (1.2 s); a pulse rings a component (0.9 s). With Motion Off both are a static highlight (1.5 s). */
@@ -46,7 +50,7 @@ const glowSprite = (hue: string) => {
   return s;
 };
 
-export function HudGlobe({ data, error, hidden, lens, focus, identity, motion, pulse }: Props) {
+export function HudGlobe({ data, error, hidden, lens, focus, identity, motion, pulse, voice = null }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
@@ -176,6 +180,11 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion, p
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The voice status as motion. voiceRun keeps the loop alive in Calm; voiceFast (ripple, arc, beat) is live activity: 60 fps.
+  const vspec = useMemo(() => (voice ? motionFor(voice.status, voice.level, motion) : null), [voice, motion]);
+  const voiceRun = vspec?.animate ?? false;
+  const voiceFast = !!vspec && (vspec.rippleSec !== null || vspec.arcSec !== null || vspec.beatSec !== null);
+
   // Ambient light needs 30 fps; live activity keeps 60 fps. Stop scheduling in hidden tabs or collapsed views.
   useEffect(() => {
     if (!size.w || !size.h) return;
@@ -184,10 +193,10 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion, p
     const alive = () => lights.current.some((l) => performance.now() - l.t0 < (motion === 'off' ? STILL_MS : l.kind === 'bead' ? BEAD_MS : PULSE_MS));
     const loop = (now: number) => {
       if (document.hidden) return;
-      const interval = alive() ? 0 : 1000 / 30;
+      const interval = alive() || voiceFast ? 0 : 1000 / 30;
       if (now - last >= interval - 1) { setTick(now); last = now; }
       lights.current = lights.current.filter((l) => now - l.t0 < STILL_MS + BEAD_MS);
-      if (motion === 'cinematic' || alive()) id = requestAnimationFrame(loop);
+      if (motion === 'cinematic' || alive() || voiceRun) id = requestAnimationFrame(loop);
     };
     const resume = () => {
       cancelAnimationFrame(id); clearTimeout(expiry);
@@ -195,11 +204,11 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion, p
       setTick(performance.now());
       if (motion === 'off') {
         if (alive()) expiry = setTimeout(() => setTick(performance.now()), STILL_MS + 1);
-      } else if (motion === 'cinematic' || alive()) id = requestAnimationFrame(loop);
+      } else if (motion === 'cinematic' || alive() || voiceRun) id = requestAnimationFrame(loop);
     };
     resume(); document.addEventListener('visibilitychange', resume);
     return () => { cancelAnimationFrame(id); clearTimeout(expiry); document.removeEventListener('visibilitychange', resume); };
-  }, [motion, lit, size.w, size.h]);
+  }, [motion, lit, size.w, size.h, voiceRun, voiceFast]);
 
   const visible = useCallback((d: HudOwner) => !hidden.has(d), [hidden]);
   const relations = LENS_RELATIONS[lens];
@@ -261,9 +270,18 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion, p
       const s = ((now % 8) / 8) * Math.PI * 2 - Math.PI / 2;
       g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 2 / view.z; g.beginPath(); g.arc(C.x, C.y, R, s, s + 0.35); g.stroke();
     }
-    g.globalCompositeOperation = 'lighter';
-    g.drawImage(glowSprite('#F7C948'), C.x - R * 0.45, C.y - R * 0.45, R * 0.9, R * 0.9);
-    g.globalCompositeOperation = 'source-over';
+    // Core glow. With no voice status this is the original gold sprite at R * 0.9; a status tints and sizes it (lib/hud-voice.ts).
+    const cue = vspec ? coreCue(vspec, now) : null;
+    const glowSize = R * 0.9 * (cue?.glowScale ?? 1);
+    g.globalCompositeOperation = 'lighter'; g.globalAlpha = cue?.glowAlpha ?? 1;
+    g.drawImage(glowSprite(cue?.tint ?? '#F7C948'), C.x - glowSize / 2, C.y - glowSize / 2, glowSize, glowSize);
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    if (cue) { // listening: ripple rings out of the core; thinking: an arc turning on the rim
+      g.strokeStyle = cue.tint; g.lineWidth = 1.5 / view.z;
+      for (const ring of cue.rings) { g.globalAlpha = ring.alpha * 0.6; g.beginPath(); g.arc(C.x, C.y, R * 0.25 * ring.r, 0, Math.PI * 2); g.stroke(); }
+      if (cue.arc) { g.globalAlpha = 0.9; g.lineWidth = 2.2 / view.z; g.beginPath(); g.arc(C.x, C.y, R, cue.arc.start, cue.arc.start + cue.arc.length); g.stroke(); }
+      g.globalAlpha = 1;
+    }
 
     const dim = (d: HudOwner) => (focus && d !== focus ? 0.3 : 1) * (visible(d) ? 1 : 0);
     const litBy = (id: string) => !hover || id === hover;
@@ -353,7 +371,7 @@ export function HudGlobe({ data, error, hidden, lens, focus, identity, motion, p
       if (l.kind === 'bead' && age > BEAD_MS * 0.85 && age < BEAD_MS) { g.globalAlpha = (BEAD_MS - age) / (BEAD_MS * 0.15); g.strokeStyle = l.hue; g.lineWidth = 2 / view.z; g.beginPath(); g.arc(b.x, b.y, 10, 0, Math.PI * 2); g.stroke(); }
     }
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
-  }, [size, view, L, C, links, items, byId, boot, tick, motion, pointer, rot, hover, level, focus, visible, exp, sats, hoverFile]);
+  }, [size, view, L, C, links, items, byId, boot, tick, motion, pointer, rot, hover, level, focus, visible, exp, sats, hoverFile, vspec]);
 
   // Minimap: the whole orbit at 160×100 and the viewport.
   useEffect(() => {

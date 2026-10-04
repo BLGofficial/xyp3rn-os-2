@@ -61,6 +61,10 @@ const sunoModelOf = (request: string): string => (SUNO_VERSION.exec(request)?.[0
  * with how to build its input from the request text (every workflow needs `request`; some need more).
  */
 export const WORKFLOWS: Readonly<Record<string, { readonly path: string; readonly input: (request: string) => { readonly request: string } & Readonly<Record<string, unknown>> }>> = {
+  'write-lyrics': {
+    path: 'records/x3lius/write-lyrics.workflow.yaml',
+    input: (request) => ({ request }),
+  },
   'song-to-suno': {
     path: 'records/x3lius/song-to-suno.workflow.yaml',
     input: (request) => ({ request, sunoModel: sunoModelOf(request) }),

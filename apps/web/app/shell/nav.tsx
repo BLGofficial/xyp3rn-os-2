@@ -13,6 +13,7 @@ export const PRIMARY: readonly Item[] = [
   { href: '/', label: 'Command Center', icon: 'command' },
   { href: '/songs', label: 'Songs & Releases', icon: 'songs', also: ['/releases'] },
   { href: '/studio', label: 'Studio', icon: 'studio' },
+  { href: '/tasks', label: 'Tasks & agents', icon: 'tasks' },
   { href: '/research', label: 'Research', icon: 'research' },
   { href: '/vault', label: 'Creative Vault', icon: 'vault' },
   { href: '/workflows', label: 'Workflow Builder', icon: 'workflow' },
@@ -22,7 +23,6 @@ export const PRIMARY: readonly Item[] = [
 export const SECONDARY: readonly Item[] = [
   { href: '/hud', label: 'Mercury HUD', icon: 'graph' },
   { href: '/search', label: 'Search everything', icon: 'search' },
-  { href: '/tasks', label: 'Tasks', icon: 'tasks' },
   { href: '/people', label: 'People', icon: 'people' },
   { href: '/ingest', label: 'Ingest', icon: 'ingest' },
 ];

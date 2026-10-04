@@ -1,0 +1,10 @@
+name: x3lius-write-lyrics
+description: Draft lyrics from a reviewed brief through the registered Lyrics agent; preserve artifact and approval records.
+input:
+  required: [request]
+steps:
+  - id: lyrics
+    agent: x3lius-lyrics
+    input:
+      request: { $from: input.request }
+output: { $from: steps.lyrics.output }

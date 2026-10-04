@@ -342,6 +342,14 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
   .aurora { display: none; }
 }
+/* Task entry and readable labels share the engine workspace. */
+.task-launch { color:#102c2c; background:#a9f1df; border:1px solid #a9f1df; min-height:44px; padding:0 16px; text-decoration:none; font:650 14px/1.2 var(--font-body); letter-spacing:.02em; }
+:root { --text-muted:#bab7d6; --text-faint:#a09bbb; }
+.nav a,.nav button { min-height:44px; font-size:15px; }
+.nav h4 .txt,.side .hint { font-size:12px; letter-spacing:.04em; }
+.tabs button { font-size:13px; letter-spacing:.04em; height:40px; }
+.task-launch:focus-visible { outline:3px solid #e8c47b; outline-offset:4px; }
+@media(max-width:700px) { .task-launch { padding:0 10px; font-size:13px; } }
 </style>
 </head>
 <body data-status="idle" class="booting">
@@ -373,6 +381,7 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
       <span class="stat"><b id="stat-groups">0</b><span class="label steel">Groups</span></span>
     </div>
     <div class="bar-end">
+      <a class="pill task-launch" href="http://127.0.0.1:3100/tasks" target="_blank" rel="noreferrer">Task list ?</a>
       <span class="pill live" id="live" hidden><i class="rec"></i>Screen live</span>
       <span class="pill armed" id="armed" hidden title="Standing order: only urgent calls">Urgent line</span>
       <div class="leds" id="leds" aria-label="System status">
@@ -461,6 +470,7 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
 
 <script src="graph-data.js"></script>
 <script type="module">
+import { createVoiceReporter, postVoiceStatus, createLevelMeter } from './voice-report.js';
 const GRAPH_DEFAULT = true; // Accepted graph default; ?view=galaxy remains the one-release rollback.
 const graphView = new URLSearchParams(location.search).get('view') === 'graph' ||
   (GRAPH_DEFAULT && new URLSearchParams(location.search).get('view') !== 'galaxy');
@@ -479,6 +489,9 @@ const INTERRUPT = /^(stop|wait|hold on|quiet|shush|enough)\W*$/i;
 const REMEMBER = /^\W*(?:jarvis\W+)?(?:remember that|note to self|don'?t let me forget|log this)\b/i;
 const MODEL_CMD = /\b(?:try on|switch (?:back )?to|swap (?:your brain )?to|change (?:your brain )?to|go back to (?:your )?(?:normal|usual|default) brain)\b/i;
 const MUTE = new URLSearchParams(location.search).get('mute') === '1';
+// Tells other faces (the HUD globe) what the voice is doing. A ?mute=1 test tab must not move them.
+const reporter = createVoiceReporter({ post: postVoiceStatus(fetch.bind(window)), enabled: !MUTE });
+addEventListener('pagehide', () => reporter.report('idle'));   // best effort: a closed tab must not leave 'speaking' behind
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -807,6 +820,7 @@ let listening = false;
 function setStatus(s) {
   document.body.dataset.status = s;
   $('status-label').textContent = s[0].toUpperCase() + s.slice(1);
+  reporter.report(s);   // thinking too: the server's own idle after a turn must not hide a later 'listening'
 }
 const settle = () => setStatus(listening ? 'listening' : 'idle');
 
@@ -818,7 +832,8 @@ function pickVoice() {
        || all.find(v => /en-GB/i.test(v.lang)) || all.find(v => /^en/i.test(v.lang)) || null;
 }
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-let audio = null, speakSeq = 0;
+let audio = null, speakSeq = 0, meter = null;
+const stopMeter = () => { if (meter) meter.stop(); meter = null; };
 const isSpeaking = () => !!audio || ('speechSynthesis' in window && speechSynthesis.speaking);
 async function speak(text) {
   if (MUTE || !unlocked || !text) return;
@@ -831,9 +846,15 @@ async function speak(text) {
         const url = URL.createObjectURL(await res.blob());
         if (seq !== speakSeq) return URL.revokeObjectURL(url);
         audio = new Audio(url);
-        audio.onplay = () => setStatus('speaking');
-        audio.onended = audio.onerror = () => { URL.revokeObjectURL(url); audio = null; settle(); };
-        await audio.play();
+        const a = audio;
+        a.onplay = () => setStatus('speaking');
+        a.onended = a.onerror = () => { stopMeter(); URL.revokeObjectURL(url); audio = null; settle(); };
+        // Real loudness, only for this Kokoro path: the browser's own speechSynthesis exposes none, so it reports speaking at level 0.
+        const m = await createLevelMeter({ audio: a, AudioContextCtor: window.AudioContext || window.webkitAudioContext,
+          onLevel: l => { if (document.body.dataset.status === 'speaking') reporter.report('speaking', l); } });
+        if (audio !== a) { m.stop(); return; }   // superseded or hushed while the meter was starting
+        meter = m;
+        await a.play();
         return;
       }
     } catch { audio = null; }
@@ -849,6 +870,7 @@ async function speak(text) {
   speechSynthesis.speak(u);
 }
 function stopVoices() {
+  stopMeter();
   if (audio) { audio.pause(); audio = null; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 }
