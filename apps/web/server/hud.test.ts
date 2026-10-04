@@ -7,6 +7,7 @@ import { scanRoots } from '../../../knowledge/knowledge-graph/scan.ts';
 import { createLocalVaultStore } from '../../../knowledge/source-registry/vault-store.ts';
 import { createTestDb, type TestDb } from '../../../tests/helpers/db.ts';
 import { hudComponents, hudEventsSince, hudStatus } from './hud-loaders.ts';
+import { hudComponents, hudStatus } from './hud-loaders.ts';
 
 // Mercury HUD (F52): what /api/graph/components and /api/system/status answer, against a scanned fixture root.
 // Pinned: sub-component file counts add up to the indexed total; the aggregated links, the internal edges and the

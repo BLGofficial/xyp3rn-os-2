@@ -585,6 +585,9 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 
 **F53. Open after F52.**
 - **Live events:** built (F52). Not done: a stream that survives a reconnect (a reconnect starts from now; missed events are in the activity list), and polling replaced by LISTEN/NOTIFY, which needs a migration.
+
+**F53. Open after F52.**
+- **Live events:** `GET /api/events/stream` (SSE) and the data-driven beads, odometer counts and pipeline sweep are not built. Status refreshes every 15 s while the tab is visible.
 - **Not built yet:**
   - hovering a file to light its own edges (hovering a component lights its aggregated links)
   - search results that fly the camera to a node (search opens `/search`)

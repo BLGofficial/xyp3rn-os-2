@@ -8,6 +8,11 @@ import { taskAction } from '../catalog-actions';
 import { HudGlobe } from './hud-globe';
 import { DomainIcon } from './hud-icons';
 import { BrandLogo } from '../brand/logo';
+import type { ComponentsData, StatusData } from '../../server/hud-loaders';
+import { HUD_DOMAIN, HUD_STATUS, LENS_DOMAIN, LENSES, ORBIT_ORDER, type HudOwner, type Lens } from '../../lib/hud-theme';
+import { askAction } from '../ask-actions';
+import { HudGlobe } from './hud-globe';
+import { DomainIcon, XGlyph } from './hud-icons';
 
 export type Motion = 'cinematic' | 'calm' | 'off';
 type Props = {
@@ -25,6 +30,7 @@ const ACTIVITY_DOMAIN: Record<string, HudOwner> = { song: 'RECORDS', agent: 'COR
 // time the page takes to arrive, and "12s" against "13s" is a hydration mismatch.
 const ago = (iso: string, now: number | null) => {
   if (now === null) return '';
+const ago = (iso: string, now: number) => {
   const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
 };
@@ -39,6 +45,10 @@ const useInertShell = () => useEffect(() => {
     .filter((e): e is Element => e !== null);
   for (const e of els) e.setAttribute('inert', '');
   return () => { document.body.style.overflow = overflow; for (const e of els) e.removeAttribute('inert'); };
+  const els = [document.querySelector('body > header'), document.querySelector('nav[aria-label="Primary"]'), document.querySelector('body > a[href="#main"]')]
+    .filter((e): e is Element => e !== null);
+  for (const e of els) e.setAttribute('inert', '');
+  return () => { for (const e of els) e.removeAttribute('inert'); };
 }, []);
 
 export function HudShell({ identity, owner, components, componentsError, status: initialStatus, lens: initialLens }: Props) {
@@ -56,6 +66,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
   const [taskExecuting, setTaskExecuting] = useState(false);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
+  const [now, setNow] = useState(() => Date.now());
   const search = useRef<HTMLInputElement>(null);
 
   // Settings per browser; reduced motion always wins.
@@ -115,6 +126,18 @@ export function HudShell({ identity, owner, components, componentsError, status:
     });
     return () => { es.close(); clearTimeout(refresh); clearTimeout(sweep); };
   }, [refreshStatus]);
+  // Status: refreshed every 15 s while the tab is visible (live events arrive with the event stream).
+  useEffect(() => {
+    const t = setInterval(async () => {
+      setNow(Date.now());
+      if (document.hidden) return;
+      try {
+        const r = await fetch('/api/system/status', { cache: 'no-store' });
+        if (r.ok) setStatus(await r.json() as StatusData);
+      } catch { /* keep the last reading; its as-of time says how old it is */ }
+    }, 15_000);
+    return () => clearInterval(t);
+  }, []);
 
   // "/" focuses search (not while typing somewhere else).
   useEffect(() => {
@@ -147,6 +170,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
       {/* A. Brand block */}
       <header className="hud-panel gold flex items-center gap-3 px-4" style={{ gridColumn: 1, gridRow: 1 }} aria-label="XYP3RN Agentic OS">
         <BrandLogo size={52} priority />
+        <XGlyph size={42} id="brand" />
         <div className="leading-tight">
           <div className="hud-display hud-gold-text text-[22px]">XYP3RN</div>
           <div className="hud-label hud-2 text-[11px]">Agentic OS <span className="hud-data">v{identity.version}</span></div>
@@ -189,6 +213,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
           <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
             <MapItem active={lens === 'GRAPH'} onClick={() => chooseLens('GRAPH')}>Graph View</MapItem>
             <MapItem href="/command">List View</MapItem>
+            <MapItem href="/">List View</MapItem>
             <MapItem active={lens === 'AGENTS'} onClick={() => chooseLens('AGENTS')}>Agent Mesh</MapItem>
             <MapItem active={lens === 'WORKFLOWS'} onClick={() => chooseLens('WORKFLOWS')}>Workflow Flow</MapItem>
             <MapItem active={lens === 'KNOWLEDGE'} onClick={() => chooseLens('KNOWLEDGE')}>Knowledge Graph</MapItem>
@@ -240,6 +265,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
       <main id="hud-main" className="relative" style={{ gridColumn: 2, gridRow: 2 }} aria-label="Graph view" data-show-globe={showGlobe}>
         <HudGlobe data={components} error={componentsError} hidden={hidden} lens={lens} focus={lens in LENS_DOMAIN ? LENS_DOMAIN[lens as keyof typeof LENS_DOMAIN] ?? null : null}
           identity={identity} motion={effectiveMotion} pulse={pulse} />
+          identity={identity} motion={effectiveMotion} />
       </main>
 
       {/* E. Right rail */}
@@ -292,6 +318,9 @@ export function HudShell({ identity, owner, components, componentsError, status:
               );
             })}
             {(status?.activity ?? []).slice(0, Math.max(0, 6 - live.length)).map((a, i) => {
+          <div className="flex items-baseline justify-between"><h2 id="live-h" className="hud-label hud-muted mb-2 mt-0">Live activity</h2><a href="/" className="hud-label text-[11px]">View all</a></div>
+          <ol className="m-0 flex list-none flex-col gap-2 p-0">
+            {(status?.activity ?? []).slice(0, 6).map((a, i) => {
               const d = HUD_DOMAIN[ACTIVITY_DOMAIN[a.kind] ?? 'shared'];
               return (
                 <li key={`${a.at}-${i}`} className="flex items-start gap-2">
@@ -305,6 +334,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
               );
             })}
             {status && status.activity.length === 0 && live.length === 0 && <li className="hud-muted">No activity recorded yet.</li>}
+            {status && status.activity.length === 0 && <li className="hud-muted">No activity recorded yet.</li>}
           </ol>
         </section>
         <section className="hud-panel" aria-labelledby="files-h">
@@ -342,6 +372,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
             <p className="m-0 mt-1 hud-muted">No platform connectors yet (Prompt 11).</p>
           </BottomSection>
           <BottomSection label="Data pipeline" sweep={scanSweep || status?.lastScan?.status === 'running'}>
+          <BottomSection label="Data pipeline">
             <p className="hud-data m-0">SCAN → HASH → PARSE → RESOLVE → PROJECT</p>
             <p className="m-0 mt-1">{status?.lastScan ? <>Last scan <strong>{status.lastScan.status}</strong>, started {new Date(status.lastScan.startedAt).toLocaleString('en-GB', { timeZone: 'Europe/Sofia' })}</> : 'No scan recorded yet.'}</p>
           </BottomSection>
@@ -497,6 +528,7 @@ function Row({ k, v, src, tone }: { k: string; v: number | string; src: string; 
     <div className="hud-row" title={`Source: ${src}`}>
       <dt className="hud-2 text-[13px]">{k}</dt>
       <dd className="hud-data m-0 text-[13px]" style={tone ? { color: HUD_STATUS[tone].color } : undefined}>{tone ? `${HUD_STATUS[tone].glyph} ` : ''}{typeof v === 'number' ? <Odometer value={v} /> : v}</dd>
+      <dd className="hud-data m-0 text-[13px]" style={tone ? { color: HUD_STATUS[tone].color } : undefined}>{tone ? `${HUD_STATUS[tone].glyph} ` : ''}{v}</dd>
     </div>
   );
 }
@@ -562,7 +594,12 @@ function BottomSection({ label, children, sweep }: { label: string; children: Re
   return (
     <details className="relative">
       <summary data-sweep={sweep ? 'true' : undefined} className="hud-label hud-sweepable cursor-pointer list-none border border-[var(--hud-border)] bg-[rgba(20,38,70,0.55)] px-3 py-1.5 text-[11px]" style={{ clipPath: 'polygon(8px 0,100% 0,100% 100%,0 100%,0 8px)' }}>{label}</summary>
+function BottomSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <details className="relative">
+      <summary className="hud-label cursor-pointer list-none border border-[var(--hud-border)] bg-[rgba(20,38,70,0.55)] px-3 py-1.5 text-[11px]" style={{ clipPath: 'polygon(8px 0,100% 0,100% 100%,0 100%,0 8px)' }}>{label}</summary>
       <div className="hud-panel absolute bottom-10 left-1/2 z-20 w-80 -translate-x-1/2 p-3 text-[13px]">{children}</div>
     </details>
   );
 }
+
