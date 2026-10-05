@@ -39,6 +39,7 @@ import desk
 import google
 import playbooks
 import songs
+import voice_status
 import whatchanged
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -113,7 +114,10 @@ SERVED_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; ch
 BODY_LIMIT = {"/chat": 16_384, "/remember": 16_384, "/model": 2_048, "/see": 6_000_000, "/tool_chat": 16_384,
               "/run": 8_192, "/run/confirm": 1_024, "/run/cancel": 1_024, "/run/launch": 8_192, "/desk/seen": 1_024,
               "/call": 1_024, "/stage": 1_024, "/briefing": 1_024, "/pocket/code": 1_024,
-              "/run/stop": 1_024, "/approval": 2_048, "/speak": 8_192}
+              "/run/stop": 1_024, "/approval": 2_048, "/speak": 8_192, "/voice/status": 1_024}
+# The brain's turns: while one runs the voice status is `thinking`.
+THINKING_PATHS = frozenset({"/chat", "/tool_chat", "/see"})
+voice = voice_status.VoiceBus()   # the one voice status; GET /voice/stream publishes it, POST /voice/status accepts the browser's
 KOKORO = {"url": "http://127.0.0.1:8880", "voice": "bm_george"}   # local, free; config "kokoro" overrides
 WEB_URL = "http://127.0.0.1:3100"   # the XYP3RN web app (apps/web); config "web_url" overrides
 # The web app's eight areas (apps/web/app/shell/nav.tsx): one table drives the nav dock, the palette and voice.
@@ -817,8 +821,13 @@ class Handler(BaseHTTPRequestHandler):
         path, _, query = self.path.partition("?")
         if path == "/state" or path == "/desk":
             return self.send_json(200, desk_snapshot())
+        if path == "/voice/stream":
+            return self.stream_voice()
         if path == "/tasks":
-            return self.send_json(200, task_catalog())
+            self.send_response(303)
+            self.send_header("Location", "http://127.0.0.1:3100/tasks")
+            self.end_headers()
+            return
         if path == "/oauth/start":
             try:
                 url = google.auth_url()
@@ -853,6 +862,30 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def stream_voice(self):
+        """Server-Sent Events: the current voice status first, then every change, a heartbeat comment between.
+        Same-origin only (do_GET has already refused foreign origins); the web app reaches this through its own proxy."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        try:
+            self.wfile.write(b"retry: 5000\n\n")
+            event = voice.current()
+            self.wfile.write(voice_status.format_sse(event))
+            self.wfile.flush()
+            last = event["seq"]
+            while True:
+                event = voice.wait(last, voice_status.HEARTBEAT_SEC)
+                if event is None:
+                    self.wfile.write(b": heartbeat\n\n")
+                else:
+                    self.wfile.write(voice_status.format_sse(event))
+                    last = event["seq"]
+                self.wfile.flush()
+        except OSError:   # the listener went away (broken pipe, reset, timeout)
+            return
+
     def read_json(self, limit):
         if "application/json" not in (self.headers.get("Content-Type") or ""):
             raise BrainError(415, "Send JSON.")
@@ -885,7 +918,7 @@ class Handler(BaseHTTPRequestHandler):
             body = self.read_json(limit)
             if self.path == "/speak":
                 return self.send_audio(str(body.get("text") or "")[:1500])
-            self.send_json(200, self.dispatch(body))
+            self.send_json(200, self.dispatch_with_voice(body))
         except BrainError as e:
             message = REMEMBER_FAILED.format(reason=e.message) if self.path == "/remember" else e.message
             self.fail(e.status, message)
@@ -912,9 +945,35 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json(200, {"result": f"The desk had a problem: {type(e).__name__}. Take a message instead."})
 
+    def dispatch_with_voice(self, body):
+        """Run a request, keeping the voice status honest around the brain's turns: thinking while one runs, then
+        idle, or error when it fails on our side. A refused request (4xx) is not a fault, so it ends idle.
+        Known gap: two overlapping turns share one status; the first to finish says idle while the second runs."""
+        thinking = self.path in THINKING_PATHS and not body.get("reset")
+        if thinking:
+            voice.publish("thinking")
+        try:
+            result = self.dispatch(body)
+        except BrainError as e:
+            if thinking:
+                voice.publish("error" if e.status >= 500 else "idle")
+            raise
+        except Exception:
+            if thinking:
+                voice.publish("error")
+            raise
+        if thinking:
+            voice.publish("idle")
+        return result
+
     def dispatch(self, body):
         import phone, runs, pocket
         p = self.path
+        if p == "/voice/status":
+            report = voice_status.parse_status(body)
+            if report is None:
+                raise BrainError(400, "status must be idle, listening, thinking, speaking or error, with a level from 0 to 1.")
+            return {"ok": True, **voice.publish(report["status"], report["level"])}
         if p == "/chat" and body.get("reset"):
             with lock:
                 history.clear()

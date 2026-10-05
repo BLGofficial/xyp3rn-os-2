@@ -16,6 +16,7 @@ export const CommandInput = () => {
         </label>
         <button type="submit">Search</button>
         <button type="submit" formAction={askAction}>Ask</button>
+        <a href="/tasks" className="inline-flex min-h-[44px] items-center rounded-control border border-mercury px-4 font-semibold">Task list ↗</a>
       </div>
       {engine ? (
         <div className="meta mt-2 flex flex-wrap items-center gap-2" role="group" aria-label="Skills and deep task">

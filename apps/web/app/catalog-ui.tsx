@@ -67,7 +67,7 @@ export const Tasks = ({ tasks, back, showTarget = true }: { tasks: readonly Task
     <ScrollTable label="Tasks">
       <tbody>{tasks.map((t) => (
         <tr key={t.id}>
-          <td>{t.title}</td>
+          <td>{t.title}{t.status === 'open' && <a className="mt-1 block text-sm" href={`/tasks?prepare=${encodeURIComponent(t.title)}#task-brief`}>Prepare agent task →</a>}</td>
           {showTarget && <td className="meta">{t.songTitle ? <a href={`/songs/${t.songId}`}>{t.songTitle}</a> : t.releaseTitle ? <a href={`/releases/${t.releaseId}`}>{t.releaseTitle}</a> : 'general'}</td>}
           <td className="meta">{t.dueDate ?? 'no date'}</td>
           <td><Status status={t.status} />{t.statusNote && <span className="meta"> {t.statusNote}</span>} <span className="meta"><Time at={t.statusAt} /></span></td>

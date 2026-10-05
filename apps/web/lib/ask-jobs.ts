@@ -29,6 +29,11 @@ export const MAX_DEEP_PER_USER = 1;
 const jobs = new Map<string, Job>();
 const keyOf = (userId: string, requestId: string) => `${userId}\n${requestId}`;
 
+/** Session-local status only; durable work records remain in Workflows and Research. */
+export const recentJobs = (userId: string) => [...jobs.values()].filter(j => j.userId === userId)
+  .sort((a, b) => b.createdAt - a.createdAt).slice(0, 12)
+  .map(j => ({ requestId: j.view.requestId, title: j.fingerprint.split('\n')[0]!.slice(0, 100), state: j.view.state, status: j.view.status, createdAt: j.createdAt }));
+
 /** The caller's own job, or undefined (another user's id never matches). */
 export const findJob = (userId: string, requestId: string) => jobs.get(keyOf(userId, requestId));
 

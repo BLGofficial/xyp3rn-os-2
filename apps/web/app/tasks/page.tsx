@@ -1,6 +1,8 @@
 import { catalogLoaders, runtime } from '../../lib/server';
 import { TaskForm, Tasks } from '../catalog-ui';
 import { ErrorBanner, first } from '../ui';
+import { TaskWorkbench } from './task-workbench';
+import './tasks.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +16,9 @@ export default async function TasksPage({ searchParams: pendingSearchParams }: {
   const back = `/tasks?status=${status}`;
   return (
     <section>
-      <h1>Tasks</h1>
+      <TaskWorkbench initialBrief={first(searchParams.prepare)?.slice(0, 8000) ?? ''} />
+      <h2 id="catalog-tasks">Saved task list</h2>
+      <p className="meta">Catalog tasks track work to do. Choose a task above to execute agent work.</p>
       <ErrorBanner error={searchParams.error} />
       <nav className="mt-2 flex gap-4 text-sm">
         {STATUSES.map((s) => (s === status ? <span key={s} aria-current="true" className="font-medium text-ink-1 underline decoration-mercury underline-offset-4">{s}</span> : <a key={s} href={`/tasks?status=${s}`}>{s}</a>))}

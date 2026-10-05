@@ -12,7 +12,6 @@ export const metadata = { title: 'XYP3RN Agentic OS · Mercury HUD' };
 // the error state, never as an empty graph.
 export default async function Hud({ searchParams: pendingSearchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const searchParams = await pendingSearchParams;
-export default async function Hud({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const [rt, hl] = [await runtime(), await hudLoaders()];
   const settle = async <T,>(p: Promise<T>): Promise<[T | null, string | null]> => {
     try { return [await p, null]; } catch (e) { console.error('hud load failed:', e); return [null, 'the server could not read the graph']; }

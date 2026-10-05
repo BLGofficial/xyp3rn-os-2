@@ -17,6 +17,7 @@ type WorkflowsLoaders = typeof import('../server/workflows-loaders.ts');
 type AnalyticsLoaders = typeof import('../server/analytics-loaders.ts');
 type AdminLoaders = typeof import('../server/admin-loaders.ts');
 type AskOps = typeof import('../server/ask-ops.ts');
+type TaskOps = typeof import('../server/task-ops.ts');
 type HudLoaders = typeof import('../server/hud-loaders.ts');
 type Runtime = typeof import('../server/runtime.ts');
 type Store = typeof import('../../../knowledge/source-registry/vault-store.ts');
@@ -38,6 +39,8 @@ export const analyticsLoaders = () => osImport<AnalyticsLoaders>('apps/web/serve
 export const adminLoaders = () => osImport<AdminLoaders>('apps/web/server/admin-loaders.ts');
 export const hudLoaders = () => osImport<HudLoaders>('apps/web/server/hud-loaders.ts');
 export const askOps = () => osImport<AskOps>('apps/web/server/ask-ops.ts');
+export const taskOps = () => osImport<TaskOps>('apps/web/server/task-ops.ts');
+export const askJobs = () => osImport<typeof import('./ask-jobs.ts')>('apps/web/lib/ask-jobs.ts');
 export const runtime = async () => (await osImport<Runtime>('apps/web/server/runtime.ts')).runtime();
 export const vaultStore = async () => {
   const s = await osImport<Store>('knowledge/source-registry/vault-store.ts');

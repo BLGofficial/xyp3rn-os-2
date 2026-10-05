@@ -4,15 +4,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ComponentsData, HudEvent, StatusData } from '../../server/hud-loaders';
 import { HUD_DOMAIN, HUD_STATUS, LENS_DOMAIN, LENSES, ORBIT_ORDER, type HudOwner, type Lens } from '../../lib/hud-theme';
 import { askAction } from '../ask-actions';
-import { taskAction } from '../catalog-actions';
 import { HudGlobe } from './hud-globe';
 import { DomainIcon } from './hud-icons';
 import { BrandLogo } from '../brand/logo';
-import type { ComponentsData, StatusData } from '../../server/hud-loaders';
-import { HUD_DOMAIN, HUD_STATUS, LENS_DOMAIN, LENSES, ORBIT_ORDER, type HudOwner, type Lens } from '../../lib/hud-theme';
-import { askAction } from '../ask-actions';
-import { HudGlobe } from './hud-globe';
-import { DomainIcon, XGlyph } from './hud-icons';
 
 export type Motion = 'cinematic' | 'calm' | 'off';
 type Props = {
@@ -30,7 +24,6 @@ const ACTIVITY_DOMAIN: Record<string, HudOwner> = { song: 'RECORDS', agent: 'COR
 // time the page takes to arrive, and "12s" against "13s" is a hydration mismatch.
 const ago = (iso: string, now: number | null) => {
   if (now === null) return '';
-const ago = (iso: string, now: number) => {
   const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`;
 };
@@ -45,10 +38,6 @@ const useInertShell = () => useEffect(() => {
     .filter((e): e is Element => e !== null);
   for (const e of els) e.setAttribute('inert', '');
   return () => { document.body.style.overflow = overflow; for (const e of els) e.removeAttribute('inert'); };
-  const els = [document.querySelector('body > header'), document.querySelector('nav[aria-label="Primary"]'), document.querySelector('body > a[href="#main"]')]
-    .filter((e): e is Element => e !== null);
-  for (const e of els) e.setAttribute('inert', '');
-  return () => { for (const e of els) e.removeAttribute('inert'); };
 }, []);
 
 export function HudShell({ identity, owner, components, componentsError, status: initialStatus, lens: initialLens }: Props) {
@@ -60,13 +49,8 @@ export function HudShell({ identity, owner, components, componentsError, status:
   const [contrast, setContrast] = useState<'normal' | 'high'>('normal');
   const [drawer, setDrawer] = useState<'left' | 'right' | null>(null);
   const [showGlobe, setShowGlobe] = useState(false);
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [taskType, setTaskType] = useState<'ask' | 'deep' | 'catalog'>('ask');
-  const [taskPrompt, setTaskPrompt] = useState('');
-  const [taskExecuting, setTaskExecuting] = useState(false);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
-  const [now, setNow] = useState(() => Date.now());
   const search = useRef<HTMLInputElement>(null);
 
   // Settings per browser; reduced motion always wins.
@@ -126,18 +110,6 @@ export function HudShell({ identity, owner, components, componentsError, status:
     });
     return () => { es.close(); clearTimeout(refresh); clearTimeout(sweep); };
   }, [refreshStatus]);
-  // Status: refreshed every 15 s while the tab is visible (live events arrive with the event stream).
-  useEffect(() => {
-    const t = setInterval(async () => {
-      setNow(Date.now());
-      if (document.hidden) return;
-      try {
-        const r = await fetch('/api/system/status', { cache: 'no-store' });
-        if (r.ok) setStatus(await r.json() as StatusData);
-      } catch { /* keep the last reading; its as-of time says how old it is */ }
-    }, 15_000);
-    return () => clearInterval(t);
-  }, []);
 
   // "/" focuses search (not while typing somewhere else).
   useEffect(() => {
@@ -170,7 +142,6 @@ export function HudShell({ identity, owner, components, componentsError, status:
       {/* A. Brand block */}
       <header className="hud-panel gold flex items-center gap-3 px-4" style={{ gridColumn: 1, gridRow: 1 }} aria-label="XYP3RN Agentic OS">
         <BrandLogo size={52} priority />
-        <XGlyph size={42} id="brand" />
         <div className="leading-tight">
           <div className="hud-display hud-gold-text text-[22px]">XYP3RN</div>
           <div className="hud-label hud-2 text-[11px]">Agentic OS <span className="hud-data">v{identity.version}</span></div>
@@ -190,10 +161,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
           </label>
           <button type="submit" className="hud-label">Search</button>
           <button type="submit" formAction={askAction} className="hud-label" style={{ background: 'linear-gradient(180deg,#F7C948,#D4912A)', color: '#1a1200', borderColor: '#F7C948' }}>Ask</button>
-          <button type="button" onClick={() => setTaskModalOpen(true)} className="hud-label flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold" style={{ background: 'linear-gradient(180deg, #72D6F7, #53A2CE)', borderColor: '#72D6F7', color: '#04040b', boxShadow: '0 0 10px rgba(114, 214, 247, 0.3)' }} title="Start a new task directly from the web UI window">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
-            <span>Start Task</span>
-          </button>
+          <a href="/tasks" className="hud-task-link">Task list <span aria-hidden="true">?</span></a>
         </form>
         <a href="/" className="relative no-underline" aria-label={`${status?.counts.alerts ?? 0} catalog checks open (Command Center)`} title="Open catalog checks (blockers and warnings), from catalog_checks">
           <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 1 1 12 0v6l2 2H4zm4 3a2 2 0 0 0 4 0" fill="none" stroke="#C3D0E4" strokeWidth="1.5" /></svg>
@@ -212,8 +180,9 @@ export function HudShell({ identity, owner, components, componentsError, status:
           <h2 id="map-h" className="hud-label hud-muted mb-2 mt-0">System map</h2>
           <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
             <MapItem active={lens === 'GRAPH'} onClick={() => chooseLens('GRAPH')}>Graph View</MapItem>
-            <MapItem href="/command">List View</MapItem>
             <MapItem href="/">List View</MapItem>
+            <MapItem href="/tasks">Tasks & workflows</MapItem>
+            <MapItem href="http://127.0.0.1:4700/">Knowledge Galaxy</MapItem>
             <MapItem active={lens === 'AGENTS'} onClick={() => chooseLens('AGENTS')}>Agent Mesh</MapItem>
             <MapItem active={lens === 'WORKFLOWS'} onClick={() => chooseLens('WORKFLOWS')}>Workflow Flow</MapItem>
             <MapItem active={lens === 'KNOWLEDGE'} onClick={() => chooseLens('KNOWLEDGE')}>Knowledge Graph</MapItem>
@@ -265,7 +234,6 @@ export function HudShell({ identity, owner, components, componentsError, status:
       <main id="hud-main" className="relative" style={{ gridColumn: 2, gridRow: 2 }} aria-label="Graph view" data-show-globe={showGlobe}>
         <HudGlobe data={components} error={componentsError} hidden={hidden} lens={lens} focus={lens in LENS_DOMAIN ? LENS_DOMAIN[lens as keyof typeof LENS_DOMAIN] ?? null : null}
           identity={identity} motion={effectiveMotion} pulse={pulse} />
-          identity={identity} motion={effectiveMotion} />
       </main>
 
       {/* E. Right rail */}
@@ -318,9 +286,6 @@ export function HudShell({ identity, owner, components, componentsError, status:
               );
             })}
             {(status?.activity ?? []).slice(0, Math.max(0, 6 - live.length)).map((a, i) => {
-          <div className="flex items-baseline justify-between"><h2 id="live-h" className="hud-label hud-muted mb-2 mt-0">Live activity</h2><a href="/" className="hud-label text-[11px]">View all</a></div>
-          <ol className="m-0 flex list-none flex-col gap-2 p-0">
-            {(status?.activity ?? []).slice(0, 6).map((a, i) => {
               const d = HUD_DOMAIN[ACTIVITY_DOMAIN[a.kind] ?? 'shared'];
               return (
                 <li key={`${a.at}-${i}`} className="flex items-start gap-2">
@@ -334,7 +299,6 @@ export function HudShell({ identity, owner, components, componentsError, status:
               );
             })}
             {status && status.activity.length === 0 && live.length === 0 && <li className="hud-muted">No activity recorded yet.</li>}
-            {status && status.activity.length === 0 && <li className="hud-muted">No activity recorded yet.</li>}
           </ol>
         </section>
         <section className="hud-panel" aria-labelledby="files-h">
@@ -372,7 +336,6 @@ export function HudShell({ identity, owner, components, componentsError, status:
             <p className="m-0 mt-1 hud-muted">No platform connectors yet (Prompt 11).</p>
           </BottomSection>
           <BottomSection label="Data pipeline" sweep={scanSweep || status?.lastScan?.status === 'running'}>
-          <BottomSection label="Data pipeline">
             <p className="hud-data m-0">SCAN → HASH → PARSE → RESOLVE → PROJECT</p>
             <p className="m-0 mt-1">{status?.lastScan ? <>Last scan <strong>{status.lastScan.status}</strong>, started {new Date(status.lastScan.startedAt).toLocaleString('en-GB', { timeZone: 'Europe/Sofia' })}</> : 'No scan recorded yet.'}</p>
           </BottomSection>
@@ -390,103 +353,7 @@ export function HudShell({ identity, owner, components, componentsError, status:
         <span className="hud-label hud-muted hidden text-right text-[10px] leading-tight xl:inline">Built by X3LIUS<br />for a higher tomorrow</span>
       </footer>
 
-      {/* Task Launcher Modal */}
-      {taskModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
-          <div className="hud-panel relative w-full max-w-lg p-6 shadow-2xl border" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--cyan)' }}>
-            <div className="flex items-center justify-between border-b border-[var(--hairline)] pb-3 mb-4">
-              <div>
-                <h2 id="task-modal-title" className="hud-display text-lg m-0 flex items-center gap-2" style={{ color: 'var(--cyan)' }}>
-                  <span className="text-amber-400">⚡</span> Jarvis OS Task Launcher
-                </h2>
-                <p className="hud-label hud-muted text-[11px] m-0 mt-0.5">Start an AI agent task or catalog action directly from this window</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTaskModalOpen(false)}
-                className="hud-label px-2 py-1 text-xs hover:bg-white/10"
-              >
-                ✕
-              </button>
-            </div>
 
-            <form action={taskType === 'catalog' ? taskAction : askAction} onSubmit={() => setTaskExecuting(true)}>
-              {taskType === 'deep' && <input type="hidden" name="deep" value="on" />}
-              {taskType === 'catalog' && <input type="hidden" name="back" value="/" />}
-
-              <div className="mb-4">
-                <label className="hud-label block mb-1 text-[11px] text-[var(--text-muted)]">Select Task Mode:</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTaskType('ask')}
-                    className={`hud-label p-2 text-center text-xs transition-all ${taskType === 'ask' ? 'border-[var(--amber)] text-amber-300 bg-amber-500/10 font-bold' : 'hud-muted border-transparent bg-white/5'}`}
-                  >
-                    ⚡ Fast Agent
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTaskType('deep')}
-                    className={`hud-label p-2 text-center text-xs transition-all ${taskType === 'deep' ? 'border-[var(--cyan)] text-cyan-300 bg-cyan-500/10 font-bold' : 'hud-muted border-transparent bg-white/5'}`}
-                  >
-                    🧠 Deep Agent
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTaskType('catalog')}
-                    className={`hud-label p-2 text-center text-xs transition-all ${taskType === 'catalog' ? 'border-[var(--plum)] text-purple-300 bg-purple-500/10 font-bold' : 'hud-muted border-transparent bg-white/5'}`}
-                  >
-                    📋 Catalog Task
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <label htmlFor="task-prompt-input" className="hud-label block mb-1 text-[11px] text-[var(--text-muted)]">
-                  {taskType === 'catalog' ? 'Task Title:' : 'Task Prompt / Instruction:'}
-                </label>
-                <textarea
-                  id="task-prompt-input"
-                  name={taskType === 'catalog' ? 'title' : 'q'}
-                  value={taskPrompt}
-                  onChange={(e) => setTaskPrompt(e.target.value)}
-                  required
-                  rows={4}
-                  placeholder={
-                    taskType === 'catalog'
-                      ? "Enter task title (e.g. 'Audit song splits for Sofia track', 'Schedule release press package')"
-                      : "Enter task prompt (e.g. 'Analyze catalog readiness', 'Check distributor requirements', 'Run code verification')"
-                  }
-                  className="hud-data w-full p-3 bg-black/60 border border-[var(--hairline)] text-xs rounded text-[var(--text-headline)] focus:outline-none focus:border-[var(--cyan)]"
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-[var(--hairline)]">
-                <span className="hud-data hud-muted text-[10px]">
-                  {taskType === 'deep' ? 'Claude Code headless execution' : taskType === 'ask' ? 'Agent router & skill dispatch' : 'Adds task to database'}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTaskModalOpen(false)}
-                    className="hud-label px-3 py-1.5 text-xs"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={taskExecuting || !taskPrompt.trim()}
-                    className="hud-label px-4 py-1.5 text-xs font-bold text-black disabled:opacity-50"
-                    style={{ background: 'linear-gradient(180deg, #F7C948, #D4912A)', borderColor: '#F7C948' }}
-                  >
-                    {taskExecuting ? 'Starting Task...' : '▶ Start Task Now'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -528,7 +395,6 @@ function Row({ k, v, src, tone }: { k: string; v: number | string; src: string; 
     <div className="hud-row" title={`Source: ${src}`}>
       <dt className="hud-2 text-[13px]">{k}</dt>
       <dd className="hud-data m-0 text-[13px]" style={tone ? { color: HUD_STATUS[tone].color } : undefined}>{tone ? `${HUD_STATUS[tone].glyph} ` : ''}{typeof v === 'number' ? <Odometer value={v} /> : v}</dd>
-      <dd className="hud-data m-0 text-[13px]" style={tone ? { color: HUD_STATUS[tone].color } : undefined}>{tone ? `${HUD_STATUS[tone].glyph} ` : ''}{v}</dd>
     </div>
   );
 }
@@ -594,12 +460,7 @@ function BottomSection({ label, children, sweep }: { label: string; children: Re
   return (
     <details className="relative">
       <summary data-sweep={sweep ? 'true' : undefined} className="hud-label hud-sweepable cursor-pointer list-none border border-[var(--hud-border)] bg-[rgba(20,38,70,0.55)] px-3 py-1.5 text-[11px]" style={{ clipPath: 'polygon(8px 0,100% 0,100% 100%,0 100%,0 8px)' }}>{label}</summary>
-function BottomSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <details className="relative">
-      <summary className="hud-label cursor-pointer list-none border border-[var(--hud-border)] bg-[rgba(20,38,70,0.55)] px-3 py-1.5 text-[11px]" style={{ clipPath: 'polygon(8px 0,100% 0,100% 100%,0 100%,0 8px)' }}>{label}</summary>
       <div className="hud-panel absolute bottom-10 left-1/2 z-20 w-80 -translate-x-1/2 p-3 text-[13px]">{children}</div>
     </details>
   );
 }
-

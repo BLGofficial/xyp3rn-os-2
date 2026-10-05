@@ -1,0 +1,19 @@
+{
+  "scope": "Live local UI and read-only knowledge; one real in-memory clarification request, one intercepted error. No provider execution or real microphone capture.",
+  "checks": [
+    "Real indexed music knowledge loads",
+    "Empty brief cannot execute",
+    "Knowledge combinations capped at six",
+    "Knowledge search has an honest empty state",
+    "Selections survive knowledge filtering",
+    "Failed launch preserves brief and selections",
+    "Actual launch returns an existing result route",
+    "Real task result explains clarification without pretending execution succeeded",
+    "Saved tasks can prepare a reviewed executable brief",
+    "Wispr Flow uses focused editable input and explicit start",
+    "Microphone control reflects existing transcription configuration",
+    "390px task workspace has no horizontal overflow",
+    "Task choices have visible keyboard focus"
+  ],
+  "errors": []
+}
