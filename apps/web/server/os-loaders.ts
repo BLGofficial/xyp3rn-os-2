@@ -22,6 +22,8 @@ export type AudioItem = {
   readonly takes: readonly { readonly id: string; readonly rating: number | null }[];
   /** Release tracks whose recording is this file, directly or through its take. */
   readonly tracks: readonly { readonly id: string; readonly title: string; readonly releaseTitle: string }[];
+  /** The file's tag slugs (an import marks a track `demo` or `release`). */
+  readonly tags: readonly string[];
 };
 
 /**
@@ -35,7 +37,7 @@ export const audioLibrary = (sql: Sql, limit = 50): Promise<{ readonly items: re
     const [count] = await tx<{ n: number }[]>`select count(*)::int as n from sources where storage is not null and media_class = 'audio'`;
     const rows = await tx<{
       id: string; title: string; mime_type: string | null; byte_size: string | null; language: string | null; created_at: Date;
-      songs: SongRef[]; takes: { id: string; rating: number | null }[]; tracks: { id: string; title: string; releaseTitle: string }[];
+      songs: SongRef[]; takes: { id: string; rating: number | null }[]; tracks: { id: string; title: string; releaseTitle: string }[]; tags: string[];
     }[]>`
       select s.id, s.title, s.mime_type, s.byte_size::text, s.language, s.created_at,
              coalesce((select jsonb_agg(jsonb_build_object('id', cs.id, 'title', cs.title) order by cs.title, cs.id)
@@ -45,7 +47,9 @@ export const audioLibrary = (sql: Sql, limit = 50): Promise<{ readonly items: re
                        from suno_takes t where t.source_id = s.id), '[]'::jsonb) as takes,
              coalesce((select jsonb_agg(jsonb_build_object('id', k.id, 'title', k.title, 'releaseTitle', rl.title) order by rl.title, k.position)
                        from tracks k join releases rl on rl.id = k.release_id
-                       where k.source_id = s.id or k.take_id in (select t.id from suno_takes t where t.source_id = s.id)), '[]'::jsonb) as tracks
+                       where k.source_id = s.id or k.take_id in (select t.id from suno_takes t where t.source_id = s.id)), '[]'::jsonb) as tracks,
+             coalesce((select jsonb_agg(g.slug order by g.slug) from source_tags st join tags g on g.id = st.tag_id
+                       where st.source_id = s.id), '[]'::jsonb) as tags
       from sources s
       where s.storage is not null and s.media_class = 'audio'
       order by s.created_at desc, s.id
@@ -54,7 +58,7 @@ export const audioLibrary = (sql: Sql, limit = 50): Promise<{ readonly items: re
       total: count!.n,
       items: rows.map((r) => ({
         id: r.id, title: r.title, mimeType: r.mime_type, byteSize: r.byte_size === null ? null : Number(r.byte_size), language: r.language,
-        createdAt: r.created_at.toISOString(), songs: r.songs, takes: r.takes, tracks: r.tracks,
+        createdAt: r.created_at.toISOString(), songs: r.songs, takes: r.takes, tracks: r.tracks, tags: r.tags,
       })),
     };
   });

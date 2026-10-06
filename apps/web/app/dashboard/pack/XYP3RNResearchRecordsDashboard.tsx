@@ -14,6 +14,7 @@ const nav = [
   { group: 'KNOWLEDGE', items: [{ id: 'obsidian' as const, label: 'Obsidian Folder', icon: '▤' }, { id: 'knowledge-graph' as const, label: 'Knowledge Graph', icon: '⌘' }, { id: 'galaxy' as const, label: 'Galaxy Map', icon: '✳' }] },
   { group: 'RECORDS', items: [{ id: 'records' as const, label: 'Track Library', icon: '♫' }] },
 ];
+const MAX_IMPORT_BYTES = 100 * 1024 * 1024;
 const endpoint = {
   notebooks: '/api/v1/research/notebooks',
   tracks: '/api/v1/records/tracks',
@@ -45,13 +46,15 @@ export default function XYP3RNResearchRecordsDashboard() {
   const [newNotebook, setNewNotebook] = useState(false);
   const [notebookName, setNotebookName] = useState('');
   const [showImport, setShowImport] = useState(false);
-  const [importTarget, setImportTarget] = useState<'knowledge' | 'obsidian' | 'audio' | 'notebook'>('knowledge');
+  const [importTarget, setImportTarget] = useState<'knowledge' | 'obsidian' | 'audio' | 'notebook' | 'lyrics' | 'metadata'>('knowledge');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const [folderMode, setFolderMode] = useState(false);
   const [audioTitle, setAudioTitle] = useState('');
   const [audioKind, setAudioKind] = useState<'release' | 'demo'>('demo');
+  const [lyricsLanguage, setLyricsLanguage] = useState('en');
+  const [storage, setStorage] = useState<{ lyrics?: string; metadata?: string }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,7 +67,7 @@ export default function XYP3RNResearchRecordsDashboard() {
       if (!alive) return; const rows = arrayFrom<Notebook>(data, 'notebooks'); setNotebooks(rows); setActiveNotebook(rows[0]?.id || ''); setNotebooksState('ready');
     }).catch(() => { if (alive) setNotebooksState('offline'); });
     fetch(endpoint.tracks).then((r) => { if (!r.ok) throw new Error(); return r.json(); }).then((data) => {
-      if (!alive) return; const rows = arrayFrom<Track>(data, 'tracks'); setTracks(rows); setActiveTrack(rows[0] || null); setTracksState('ready');
+      if (!alive) return; const rows = arrayFrom<Track>(data, 'tracks'); setTracks(rows); setActiveTrack(rows[0] || null); setStorage(obj(obj(data).storage) as { lyrics?: string; metadata?: string }); setTracksState('ready');
     }).catch(() => { if (alive) setTracksState('offline'); });
     fetch(endpoint.obsidian).then((r) => { if (!r.ok) throw new Error(); return r.json(); }).then((data) => {
       if (!alive) return; setObsidianFiles(arrayFrom<SourceFile>(data, 'files')); setObsidianState('ready');
@@ -73,26 +76,29 @@ export default function XYP3RNResearchRecordsDashboard() {
   }, []);
 
   useEffect(() => { if (folderInputRef.current) folderInputRef.current.setAttribute('webkitdirectory', ''); }, []);
-  const startImport = (target: 'knowledge' | 'obsidian' | 'audio' | 'notebook' = 'knowledge') => {
+  const startImport = (target: 'knowledge' | 'obsidian' | 'audio' | 'notebook' | 'lyrics' | 'metadata' = 'knowledge') => {
     setImportTarget(target); setSelectedFiles([]); setImportMessage(''); setFolderMode(false); setAudioTitle(''); setAudioKind('demo'); setShowImport(true);
   };
   const submitImport = async () => {
     if (!selectedFiles.length) { setImportMessage('Select at least one file first.'); return; }
     if (importTarget === 'audio' && !audioTitle.trim()) { setImportMessage('Enter a track title before importing audio.'); return; }
+    const tooBig = selectedFiles.find((file) => file.size > MAX_IMPORT_BYTES);
+    if (tooBig) { setImportMessage(`Import failed: ${tooBig.name} is ${sizeLabel(tooBig.size)}; the limit is 100 MB per file.`); return; }
     setImporting(true); setImportMessage('');
     const form = new FormData(); selectedFiles.forEach((file) => form.append('files', file, (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name));
-    form.append('destination', importTarget === 'obsidian' ? 'obsidian' : importTarget === 'audio' ? 'records' : importTarget === 'notebook' ? 'research-notebook' : 'knowledge');
+    form.append('destination', importTarget === 'obsidian' ? 'obsidian' : importTarget === 'audio' ? 'records' : importTarget === 'lyrics' || importTarget === 'metadata' ? importTarget : importTarget === 'notebook' ? 'research-notebook' : 'knowledge');
     if (importTarget === 'audio') { form.append('title', audioTitle.trim()); form.append('trackType', audioKind); }
+    if (importTarget === 'lyrics') form.append('language', lyricsLanguage);
     if (importTarget === 'notebook' && activeNotebookRecord) form.append('notebookId', activeNotebookRecord.id);
-    const url = importTarget === 'obsidian' ? endpoint.importObsidian : importTarget === 'audio' ? endpoint.importAudio : importTarget === 'notebook' && activeNotebookRecord ? `${endpoint.notebooks}/${encodeURIComponent(activeNotebookRecord.id)}/sources` : endpoint.importKnowledge;
+    const url = importTarget === 'obsidian' ? endpoint.importObsidian : importTarget === 'audio' || importTarget === 'lyrics' || importTarget === 'metadata' ? endpoint.importAudio : importTarget === 'notebook' && activeNotebookRecord ? `${endpoint.notebooks}/${encodeURIComponent(activeNotebookRecord.id)}/sources` : endpoint.importKnowledge;
     try {
-      const response = await fetch(url, { method: 'POST', body: form }); if (!response.ok) throw new Error(`Import failed (${response.status})`);
+      const response = await fetch(url, { method: 'POST', body: form }); if (!response.ok) { const body = obj(await response.json().catch(() => ({}))); throw new Error(typeof body.error === 'string' ? body.error : `Import failed (${response.status})`); }
       const result = await response.json().catch(() => ({})); setImportMessage(`${selectedFiles.length} file${selectedFiles.length === 1 ? '' : 's'} added${result?.message ? ` · ${result.message}` : '.'}`);
       if (importTarget === 'obsidian') { const refreshed = await fetch(endpoint.obsidian).then((r) => r.json()); setObsidianFiles(arrayFrom<SourceFile>(refreshed, 'files')); }
       if (importTarget === 'audio') { const refreshed = await fetch(endpoint.tracks).then((r) => r.json()); setTracks(arrayFrom<Track>(refreshed, 'tracks')); }
       if (importTarget === 'notebook') { const refreshed = await fetch(endpoint.notebooks).then((r) => r.json()); const rows = arrayFrom<Notebook>(refreshed, 'notebooks'); setNotebooks(rows); }
       setSelectedFiles([]); setAudioTitle('');
-    } catch (error) { setImportMessage(error instanceof Error ? `${error.message}. Check the import service and retry.` : 'Import service unavailable.'); }
+    } catch (error) { setImportMessage(error instanceof Error ? (error.message.startsWith('Import failed') ? error.message : `Import failed: ${error.message}`) : 'Import service unavailable.'); }
     finally { setImporting(false); }
   };
   const createNotebook = async (event: FormEvent) => {
@@ -157,7 +163,7 @@ export default function XYP3RNResearchRecordsDashboard() {
         </div>
       </section>}
 
-      {view === 'records' && <section className="xos-page xos-records-page"><header className="xos-page-header"><div><div className="xos-breadcrumb">RECORDS <i>/</i> AUDIO LIBRARY</div><h1>Track Library</h1><p>Play recent releases and compare demos as each track moves toward release.</p></div><button className="xos-primary-button" onClick={() => startImport('audio')}>＋ Add audio</button></header>
+      {view === 'records' && <section className="xos-page xos-records-page"><header className="xos-page-header"><div><div className="xos-breadcrumb">RECORDS <i>/</i> AUDIO LIBRARY</div><h1>Track Library</h1><p>Play recent releases and compare demos as each track moves toward release.</p></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="xos-outline-button" onClick={() => startImport('lyrics')}>＋ Lyrics</button><button className="xos-outline-button" onClick={() => startImport('metadata')}>＋ Metadata</button><button className="xos-primary-button" onClick={() => startImport('audio')}>＋ Add audio</button></div></header>
         <div className="xos-records-layout"><div className="xos-player-panel"><div className="xos-player-art"><div className="xos-art-ring xos-art-ring-one"/><div className="xos-art-ring xos-art-ring-two"/><div className="xos-art-core">X<span>3</span></div><small>{activeTrack?.type === 'demo' ? 'DEMO / WORKING CUT' : 'XYP3RN RECORDS'}</small></div>
             <div className="xos-player-info"><small>NOW SELECTED <i>/</i> {activeTrack?.type?.toUpperCase() || 'TRACK'}</small><h2>{activeTrack?.title || 'Select a track'}</h2><p>{activeTrack?.releaseName || activeTrack?.artist || 'Audio playback and version comparison'}</p>
               {activeTrack?.audioUrl ? <audio controls preload="metadata" src={activeTrack.audioUrl} key={activeTrack.id} /> : <div className="xos-audio-empty">{tracksState === 'offline' ? 'Track service is not connected.' : tracks.length ? 'Audio file is not attached to this track.' : 'Latest tracks and demos will appear here when the Records endpoint is connected.'}</div>}
@@ -178,16 +184,17 @@ export default function XYP3RNResearchRecordsDashboard() {
       {view === 'galaxy' && <section className="xos-embedded-view"><GalaxyMapCanvas /></section>}
     </main>
 
-    {showImport && <div className="xos-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !importing) setShowImport(false); }}><section className="xos-import-modal"><header><div><small>KNOWLEDGE INGESTION</small><h2>{importTarget === 'audio' ? 'Add audio to Records' : importTarget === 'obsidian' ? 'Import to Obsidian Folder' : importTarget === 'notebook' ? `Add sources to ${activeNotebookRecord?.name || 'notebook'}` : 'Import to Knowledge'}</h2><p>{importTarget === 'audio' ? 'Add a release or a demo track to your audio library.' : 'Files become searchable sources for Notebook LLM and context retrieval.'}</p></div><button onClick={() => setShowImport(false)} disabled={importing}>×</button></header>
-        <div className="xos-import-dest"><span>DESTINATION</span><b>{importTarget === 'audio' ? 'Records / Track Library' : importTarget === 'obsidian' ? 'Knowledge / Obsidian Folder' : importTarget === 'notebook' ? `Research / ${activeNotebookRecord?.name || 'Notebook'} / Sources` : 'Knowledge / Imported Sources'}</b></div>
+    {showImport && <div className="xos-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !importing) setShowImport(false); }}><section className="xos-import-modal"><header><div><small>KNOWLEDGE INGESTION</small><h2>{importTarget === 'lyrics' ? 'Import lyrics' : importTarget === 'metadata' ? 'Import track metadata' : importTarget === 'audio' ? 'Add audio to Records' : importTarget === 'obsidian' ? 'Import to Obsidian Folder' : importTarget === 'notebook' ? `Add sources to ${activeNotebookRecord?.name || 'notebook'}` : 'Import to Knowledge'}</h2><p>{importTarget === 'audio' ? 'Add a release or a demo track to your audio library.' : 'Files become searchable sources for Notebook LLM and context retrieval.'}</p></div><button onClick={() => setShowImport(false)} disabled={importing}>×</button></header>
+        <div className="xos-import-dest"><span>DESTINATION</span><b>{importTarget === 'lyrics' ? `Records / Lyrics · ${storage.lyrics || 'Documents/XYP3RN Records/lyrics'}` : importTarget === 'metadata' ? `Records / Metadata · ${storage.metadata || 'Documents/XYP3RN Records/metadata'}` : importTarget === 'audio' ? 'Records / Track Library · Creative Vault' : importTarget === 'obsidian' ? 'Knowledge / Obsidian Folder' : importTarget === 'notebook' ? `Research / ${activeNotebookRecord?.name || 'Notebook'} / Sources` : 'Knowledge / Imported Sources'}</b></div>
+        {importTarget === 'lyrics' && <div className="xos-audio-import-meta"><select value={lyricsLanguage} onChange={(e) => setLyricsLanguage(e.target.value)} aria-label="Lyrics language"><option value="en">English</option><option value="bg">Bulgarian</option><option value="mixed">Mixed</option></select></div>}
         {importTarget === 'audio' && <div className="xos-audio-import-meta"><input value={audioTitle} onChange={(e) => setAudioTitle(e.target.value)} placeholder="Track title" aria-label="Track title" /><select value={audioKind} onChange={(e) => setAudioKind(e.target.value as 'release' | 'demo')} aria-label="Track type"><option value="demo">Demo</option><option value="release">Release</option></select></div>}
-        <button className="xos-dropzone" onClick={() => fileInputRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); setSelectedFiles((files) => [...files, ...Array.from(e.dataTransfer.files)]); }}><span>＋</span><b>Choose files or drop them here</b><small>{importTarget === 'audio' ? 'WAV, MP3, M4A, FLAC' : 'Markdown, PDF, DOCX, TXT, audio, and more'}</small></button>
+        <button className="xos-dropzone" onClick={() => fileInputRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); setSelectedFiles((files) => [...files, ...Array.from(e.dataTransfer.files)]); }}><span>＋</span><b>Choose files or drop them here</b><small>{importTarget === 'audio' ? 'WAV, MP3, M4A, FLAC, AIFF, OGG · up to 100 MB each' : importTarget === 'lyrics' ? 'TXT or Markdown lyric sheets · up to 100 MB each' : importTarget === 'metadata' ? 'JSON, CSV, YAML, XML, TXT, MD, PDF, DOCX · up to 100 MB each' : 'Markdown, PDF, DOCX, TXT, audio, and more'}</small></button>
         {folderMode && <button className="xos-folder-picker" onClick={() => folderInputRef.current?.click()}>▤ Choose an Obsidian vault folder</button>}
         {selectedFiles.length > 0 && <div className="xos-selected-files"><small>SELECTED · {selectedFiles.length}</small>{selectedFiles.slice(0, 5).map((file, i) => <span key={`${file.name}-${i}`}>{(file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name}<i>{sizeLabel(file.size)}</i></span>)}{selectedFiles.length > 5 && <em>+ {selectedFiles.length - 5} more files</em>}</div>}
         {importMessage && <div className={`xos-import-message ${importMessage.includes('failed') || importMessage.includes('unavailable') ? 'is-error' : ''}`}>{importMessage}</div>}
         <footer><button className="xos-outline-button" disabled={importing} onClick={() => setShowImport(false)}>Cancel</button><button className="xos-primary-button" disabled={importing || !selectedFiles.length || (importTarget === 'audio' && !audioTitle.trim())} onClick={submitImport}>{importing ? 'IMPORTING…' : `Import ${selectedFiles.length || ''} ${selectedFiles.length === 1 ? 'file' : 'files'}`}</button></footer>
       </section></div>}
-    <input ref={fileInputRef} className="xos-hidden-input" type="file" multiple accept={importTarget === 'audio' ? 'audio/*' : undefined} onChange={(e) => setSelectedFiles((files) => [...files, ...Array.from(e.target.files || [])])} />
+    <input ref={fileInputRef} className="xos-hidden-input" type="file" multiple accept={importTarget === 'audio' ? '.wav,.mp3,.flac,.m4a,.aiff,.ogg' : importTarget === 'lyrics' ? '.txt,.md' : importTarget === 'metadata' ? '.json,.csv,.yaml,.yml,.xml,.txt,.md,.pdf,.docx' : undefined} onChange={(e) => setSelectedFiles((files) => [...files, ...Array.from(e.target.files || [])])} />
     <input ref={folderInputRef} className="xos-hidden-input" type="file" multiple onChange={(e) => { setSelectedFiles(Array.from(e.target.files || [])); setImportTarget('obsidian'); setFolderMode(true); }} />
     {newNotebook && <div className="xos-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setNewNotebook(false); }}><form className="xos-new-notebook-modal" onSubmit={createNotebook}><button type="button" className="xos-modal-close" onClick={() => setNewNotebook(false)}>×</button><small>RESEARCH WORKSPACE</small><h2>Create a notebook</h2><p>Group source material around one investigation, topic, or project.</p><input autoFocus value={notebookName} onChange={(e) => setNotebookName(e.target.value)} placeholder="Notebook name" /><footer><button type="button" className="xos-outline-button" onClick={() => setNewNotebook(false)}>Cancel</button><button className="xos-primary-button" disabled={!notebookName.trim()}>Create notebook</button></footer></form></div>}
   </div>;
