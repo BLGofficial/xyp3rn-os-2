@@ -3,7 +3,9 @@ import type { FormEvent } from 'react';
 import ContextDispatchPipeline from './ContextDispatchPipeline';
 import KnowledgeGraphExplorer from './KnowledgeGraphExplorer';
 import GalaxyMapCanvas from './GalaxyMapCanvas';
+import AudioDeck from './AudioDeck';
 import './XYP3RNResearchRecordsDashboard.css';
+import '../enhance.css'; // after the pack's own CSS: the finish layer must win ties
 
 type Destination = 'research' | 'obsidian' | 'records' | 'dispatch' | 'knowledge-graph' | 'galaxy';
 type Notebook = { id: string; name: string; description?: string; sourceCount?: number; sources?: SourceFile[]; updatedAt?: string; status?: string };
@@ -166,7 +168,7 @@ export default function XYP3RNResearchRecordsDashboard() {
       {view === 'records' && <section className="xos-page xos-records-page"><header className="xos-page-header"><div><div className="xos-breadcrumb">RECORDS <i>/</i> AUDIO LIBRARY</div><h1>Track Library</h1><p>Play recent releases and compare demos as each track moves toward release.</p></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="xos-outline-button" onClick={() => startImport('lyrics')}>＋ Lyrics</button><button className="xos-outline-button" onClick={() => startImport('metadata')}>＋ Metadata</button><button className="xos-primary-button" onClick={() => startImport('audio')}>＋ Add audio</button></div></header>
         <div className="xos-records-layout"><div className="xos-player-panel"><div className="xos-player-art"><div className="xos-art-ring xos-art-ring-one"/><div className="xos-art-ring xos-art-ring-two"/><div className="xos-art-core">X<span>3</span></div><small>{activeTrack?.type === 'demo' ? 'DEMO / WORKING CUT' : 'XYP3RN RECORDS'}</small></div>
             <div className="xos-player-info"><small>NOW SELECTED <i>/</i> {activeTrack?.type?.toUpperCase() || 'TRACK'}</small><h2>{activeTrack?.title || 'Select a track'}</h2><p>{activeTrack?.releaseName || activeTrack?.artist || 'Audio playback and version comparison'}</p>
-              {activeTrack?.audioUrl ? <audio controls preload="metadata" src={activeTrack.audioUrl} key={activeTrack.id} /> : <div className="xos-audio-empty">{tracksState === 'offline' ? 'Track service is not connected.' : tracks.length ? 'Audio file is not attached to this track.' : 'Latest tracks and demos will appear here when the Records endpoint is connected.'}</div>}
+              {activeTrack?.audioUrl ? <AudioDeck src={activeTrack.audioUrl} title={activeTrack.title} /> : <div className="xos-audio-empty">{tracksState === 'offline' ? 'Track service is not connected.' : tracks.length ? 'Audio file is not attached to this track.' : 'Latest tracks and demos will appear here when the Records endpoint is connected.'}</div>}
               {activeTrack?.type === 'demo' && (activeTrack.progress || activeTrack.progressPercent != null) && <div className="xos-demo-progress"><span>RELEASE READINESS</span><b>{activeTrack.progress || `${activeTrack.progressPercent}% COMPLETE`}</b>{activeTrack.progressPercent != null && <i><em style={{ width: `${Math.max(0, Math.min(100, activeTrack.progressPercent))}%` }} /></i>}</div>}
             </div>
           </div>

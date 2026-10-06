@@ -5,61 +5,61 @@
   position: relative; isolation: isolate; overflow: hidden; min-height: 720px; height: min(900px, 88vh); width: 100%;
   color: #e6edf5; background: radial-gradient(ellipse at 50% 50%, rgba(23, 29, 48, .65), transparent 56%),
     radial-gradient(ellipse at 50% 100%, rgba(8, 18, 29, .5), transparent 60%), #0b0f19;
-  border: 1px solid rgba(148, 163, 184, .13); border-radius: 20px; font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  border: 1px solid rgba(148, 163, 184, .13); border-radius: 20px; font-family:'Inter Variable',Inter, ui-sans-serif, system-ui, sans-serif;
   box-shadow: 0 24px 80px rgba(0, 0, 0, .34), inset 0 1px rgba(255,255,255,.035);
 }
 .galaxy-map::before { content:""; position:absolute; inset:0; pointer-events:none; z-index:-1; opacity:.28; background-image: radial-gradient(1px 1px at 12% 22%, #b4c7da 60%, transparent), radial-gradient(1px 1px at 82% 17%, #8196ad 60%, transparent), radial-gradient(1px 1px at 68% 76%, #8aa0b6 60%, transparent), radial-gradient(1px 1px at 24% 84%, #a7b3c3 60%, transparent); background-size: 247px 213px, 320px 277px, 281px 307px, 350px 299px; }
 .galaxy-map__header { position:absolute; z-index:2; top:26px; left:30px; right:30px; display:flex; align-items:flex-start; justify-content:space-between; }
 .galaxy-map__eyebrow, .galaxy-map__connection, .galaxy-map__stats, .galaxy-map__orbit-label, .galaxy-map__legend, .galaxy-map__footer, .galaxy-map__scale-note, .galaxy-map__drawer-kicker { font-family:'IBM Plex Mono', ui-monospace, monospace; letter-spacing:.1em; }
-.galaxy-map__eyebrow { color:#8d9aac; font-size:10px; font-weight:600; display:flex; align-items:center; gap:9px; }
+.galaxy-map__eyebrow { color:#8d9aac; font-size:12.5px; font-weight:600; display:flex; align-items:center; gap:9px; }
 .galaxy-map__live-dot { width:5px; height:5px; border-radius:50%; background:#10b981; box-shadow:0 0 10px #10b981; }
 .galaxy-map__slash { color:#465365; }
 .galaxy-map h2 { margin:9px 0 0; font-size:21px; font-weight:500; letter-spacing:-.035em; color:#edf2f7; }
 .galaxy-map h2 span { color:#d4af37; }
-.galaxy-map__connection { display:flex; align-items:center; gap:8px; margin-top:3px; color:#9baabe; font-size:9px; border:1px solid var(--gm-line); background:rgba(14,20,31,.72); border-radius:999px; padding:9px 12px; }
+.galaxy-map__connection { display:flex; align-items:center; gap:8px; margin-top:3px; color:#9baabe; font-size:12px; border:1px solid var(--gm-line); background:rgba(14,20,31,.72); border-radius:999px; padding:9px 12px; }
 .galaxy-map__connection i { width:6px; height:6px; border-radius:50%; background:#64748b; }
 .galaxy-map__connection--live i { background:#10b981; box-shadow:0 0 8px #10b981; }
 .galaxy-map__connection--loading i { background:#d4af37; animation:gmBlink 1s infinite; }
 .galaxy-map__connection--fallback i { background:#f59e0b; }
-.galaxy-map__stats { position:absolute; z-index:2; top:99px; left:30px; display:flex; gap:20px; color:#657387; font-size:8px; }
+.galaxy-map__stats { position:absolute; z-index:2; top:99px; left:30px; display:flex; gap:20px; color:#657387; font-size:11.5px; }
 .galaxy-map__stats span { display:flex; align-items:center; gap:6px; }
-.galaxy-map__stats b { color:#ccd5e1; font-size:10px; font-weight:500; }
+.galaxy-map__stats b { color:#ccd5e1; font-size:12.5px; font-weight:500; }
 .galaxy-map__canvas { position:absolute; inset:78px 0 34px; overflow:hidden; touch-action:pan-y; }
 .galaxy-map__canvas canvas { display:block; width:100%!important; height:100%!important; outline:none; }
-.galaxy-map__center-label { position:absolute; z-index:1; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none; white-space:nowrap; text-align:center; color:#fff1bf; font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.1em; text-shadow:0 0 12px rgba(212,175,55,.62); }
-.galaxy-map__center-label small { display:block; margin-top:5px; color:rgba(207,190,133,.65); font-size:7px; letter-spacing:.09em; }
+.galaxy-map__center-label { position:absolute; z-index:1; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none; white-space:nowrap; text-align:center; color:#fff1bf; font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:.1em; text-shadow:0 0 12px rgba(212,175,55,.62); }
+.galaxy-map__center-label small { display:block; margin-top:5px; color:rgba(207,190,133,.65); font-size:11px; letter-spacing:.09em; }
 .galaxy-map__center-pulse { display:inline-block; width:4px; height:4px; border-radius:50%; margin:0 6px 2px 0; background:#fff0b3; box-shadow:0 0 9px #d4af37; }
-.galaxy-map__orbit-label { position:absolute; z-index:1; pointer-events:none; white-space:nowrap; color:rgba(139,162,185,.65); font-size:8px; }
+.galaxy-map__orbit-label { position:absolute; z-index:1; pointer-events:none; white-space:nowrap; color:rgba(139,162,185,.65); font-size:11.5px; }
 .galaxy-map__orbit-label--inner { top:calc(50% - 83px); left:50%; transform:translate(-50%,-50%); color:rgba(0,243,255,.58); }
 .galaxy-map__orbit-label--mid { top:calc(50% - 162px); left:50%; transform:translate(-50%,-50%); color:rgba(168,85,247,.68); }
 .galaxy-map__orbit-label--outer { top:calc(50% - 246px); left:50%; transform:translate(-50%,-50%); color:rgba(16,185,129,.7); }
-.galaxy-map__legend { position:absolute; z-index:1; right:28px; bottom:20px; display:flex; gap:14px; color:#68778b; font-size:7px; }
+.galaxy-map__legend { position:absolute; z-index:1; right:28px; bottom:20px; display:flex; gap:14px; color:#68778b; font-size:11px; }
 .galaxy-map__legend span { display:flex; align-items:center; gap:5px; }
 .galaxy-map__legend i { width:5px; height:5px; border-radius:50%; display:inline-block; }
 .galaxy-map__legend .is-cyan { background:#00f3ff; box-shadow:0 0 7px #00f3ff; }
 .galaxy-map__legend .is-purple { background:#a855f7; box-shadow:0 0 7px #a855f7; }
 .galaxy-map__legend .is-green { background:#10b981; box-shadow:0 0 7px #10b981; }
 .galaxy-map__tooltip { position:absolute; z-index:5; width:248px; padding:13px 14px; border:1px solid rgba(161,179,201,.2); border-radius:10px; background:rgba(11,16,26,.88); backdrop-filter:blur(18px); box-shadow:0 12px 38px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.045); pointer-events:none; }
-.galaxy-map__tooltip-head { display:flex; align-items:center; gap:7px; color:#e6edf5; font-size:11px; font-weight:600; }
+.galaxy-map__tooltip-head { display:flex; align-items:center; gap:7px; color:#e6edf5; font-size:13px; font-weight:600; }
 .galaxy-map__tooltip-dot { width:6px; height:6px; border-radius:50%; box-shadow:0 0 9px currentColor; }
-.galaxy-map__tooltip-id { margin:5px 0 11px 13px; color:#728199; font-family:'IBM Plex Mono',monospace; font-size:8px; }
+.galaxy-map__tooltip-id { margin:5px 0 11px 13px; color:#728199; font-family:'IBM Plex Mono',monospace; font-size:11.5px; }
 .galaxy-map__tooltip-grid { display:grid; grid-template-columns:1fr; gap:4px; border-top:1px solid rgba(151,171,195,.12); padding-top:9px; }
-.galaxy-map__tooltip-grid span { margin-top:3px; color:#68778b; font:8px 'IBM Plex Mono',monospace; letter-spacing:.06em; }
-.galaxy-map__tooltip-grid b { overflow:hidden; text-overflow:ellipsis; color:#b9c5d3; font:9px 'IBM Plex Mono',monospace; font-weight:400; white-space:nowrap; }
+.galaxy-map__tooltip-grid span { margin-top:3px; color:#68778b; font:11.5px 'IBM Plex Mono',monospace; letter-spacing:.06em; }
+.galaxy-map__tooltip-grid b { overflow:hidden; text-overflow:ellipsis; color:#b9c5d3; font:12px 'IBM Plex Mono',monospace; font-weight:400; white-space:nowrap; }
 .galaxy-map__drawer { position:absolute; z-index:4; top:50%; right:24px; transform:translateY(-50%); width:255px; padding:19px; border:1px solid rgba(161,179,201,.2); border-radius:13px; background:rgba(11,16,26,.91); backdrop-filter:blur(18px); box-shadow:0 20px 56px rgba(0,0,0,.42); }
 .galaxy-map__drawer-close { position:absolute; top:9px; right:12px; border:0; background:none; color:#8d9aac; font-size:21px; cursor:pointer; }
-.galaxy-map__drawer-kicker { color:#10b981; font-size:8px; }
+.galaxy-map__drawer-kicker { color:#10b981; font-size:11.5px; }
 .galaxy-map__drawer h3 { margin:10px 0 6px; font-size:18px; font-weight:500; }
-.galaxy-map__drawer p { color:#8492a5; font-size:10px; line-height:1.5; }
+.galaxy-map__drawer p { color:#8492a5; font-size:12.5px; line-height:1.5; }
 .galaxy-map__capability-row { display:flex; flex-direction:column; gap:5px; border-top:1px solid rgba(151,171,195,.12); padding:10px 0; }
-.galaxy-map__capability-row span { color:#68778b; font:8px 'IBM Plex Mono',monospace; }
-.galaxy-map__capability-row b { color:#c6d0dc; font:9px 'IBM Plex Mono',monospace; font-weight:400; }
-.galaxy-map__filter-chip { position:absolute; z-index:3; top:18px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; padding:8px 11px; border:1px solid rgba(168,85,247,.32); border-radius:99px; background:rgba(17,15,29,.85); color:#9b8aaf; font:8px 'IBM Plex Mono',monospace; letter-spacing:.06em; }
+.galaxy-map__capability-row span { color:#68778b; font:11.5px 'IBM Plex Mono',monospace; }
+.galaxy-map__capability-row b { color:#c6d0dc; font:12px 'IBM Plex Mono',monospace; font-weight:400; }
+.galaxy-map__filter-chip { position:absolute; z-index:3; top:18px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; padding:8px 11px; border:1px solid rgba(168,85,247,.32); border-radius:99px; background:rgba(17,15,29,.85); color:#9b8aaf; font:11.5px 'IBM Plex Mono',monospace; letter-spacing:.06em; }
 .galaxy-map__filter-chip span { width:5px; height:5px; border-radius:50%; background:#a855f7; box-shadow:0 0 8px #a855f7; }
 .galaxy-map__filter-chip b { color:#e2d3f4; font-weight:500; }
 .galaxy-map__filter-chip button { border:0; background:none; color:#9b8aaf; font-size:14px; cursor:pointer; }
-.galaxy-map__scale-note { position:absolute; left:28px; bottom:20px; color:#4e5e72; font-size:7px; }
-.galaxy-map__footer { position:absolute; z-index:2; left:24px; right:24px; bottom:0; height:34px; border-top:1px solid rgba(151,171,195,.1); display:flex; align-items:center; justify-content:space-between; color:#627086; font-size:7px; }
+.galaxy-map__scale-note { position:absolute; left:28px; bottom:20px; color:#4e5e72; font-size:11px; }
+.galaxy-map__footer { position:absolute; z-index:2; left:24px; right:24px; bottom:0; height:34px; border-top:1px solid rgba(151,171,195,.1); display:flex; align-items:center; justify-content:space-between; color:#627086; font-size:11px; }
 .galaxy-map__footer span { display:flex; align-items:center; gap:6px; }
 .galaxy-map__footer b { color:#9eb0c6; font-weight:500; }
 .galaxy-map__status-mark { width:5px; height:5px; border-radius:50%; background:#10b981; box-shadow:0 0 7px #10b981; }
@@ -68,16 +68,16 @@
   .galaxy-map { min-height:620px; height:78vh; border-radius:14px; }
   .galaxy-map__header { top:18px; left:17px; right:17px; }
   .galaxy-map h2 { font-size:17px; }
-  .galaxy-map__eyebrow { font-size:8px; }
-  .galaxy-map__connection { font-size:7px; padding:7px 8px; }
-  .galaxy-map__stats { top:79px; left:17px; gap:10px; font-size:7px; }
+  .galaxy-map__eyebrow { font-size:11.5px; }
+  .galaxy-map__connection { font-size:11px; padding:7px 8px; }
+  .galaxy-map__stats { top:79px; left:17px; gap:10px; font-size:11px; }
   .galaxy-map__canvas { inset:78px 0 34px; }
   .galaxy-map__orbit-label--outer { top:calc(50% - 212px); }
   .galaxy-map__orbit-label--mid { top:calc(50% - 145px); }
   .galaxy-map__orbit-label--inner { top:calc(50% - 77px); }
   .galaxy-map__legend { right:14px; bottom:18px; flex-direction:column; gap:5px; }
   .galaxy-map__scale-note { left:14px; bottom:18px; max-width:135px; line-height:1.5; }
-  .galaxy-map__footer { left:14px; right:14px; font-size:6px; }
+  .galaxy-map__footer { left:14px; right:14px; font-size:10.5px; }
   .galaxy-map__footer span:nth-child(2) { display:none; }
   .galaxy-map__tooltip { width:215px; }
   .galaxy-map__drawer { right:12px; width:225px; }

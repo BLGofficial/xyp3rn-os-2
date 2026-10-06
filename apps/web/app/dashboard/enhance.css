@@ -1,0 +1,79 @@
+/* The Dashboard Pack's finish (loaded after the pack's own CSS): readable type, glass panels over a slow aurora, entrance
+   motion, and a player whose art breathes with the music (--xos-level, set by AudioDeck). Every animation moves
+   transform or opacity only, and all of it stops under prefers-reduced-motion. */
+
+/* ── Type ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.xos-shell { -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; font-feature-settings:'cv11','ss01'; }
+.xos-shell h1, .xos-shell h2, .xos-page-header h1, .xos-player-info h2 { font-family:'Space Grotesk Variable','Inter Variable',sans-serif; letter-spacing:-.02em; }
+.xos-page-header h1 { font-size:clamp(26px,2.2vw,32px); font-weight:600; color:#f2f6fb; }
+.xos-page-header p { font-size:14px; color:#a3b0c2; max-width:62ch; }
+.xos-player-info h2 { font-size:22px; font-weight:600; color:#f4f7fb; }
+.xos-player-info p { font-size:13.5px; color:#a3b0c2; }
+.xos-track-meta b { font-size:13.5px; color:#e3eaf2; }
+.xos-track-meta small { font-size:11.5px; color:#93a1b5; }
+
+/* ── Aurora behind everything (fixed, GPU-composited drift) ───────────────────────────────────────────── */
+.xos-main { background:transparent; }
+.xos-main::before { content:""; position:fixed; inset:-20%; z-index:0; pointer-events:none;
+  background:radial-gradient(38% 34% at 22% 28%,rgba(0,217,245,.13),transparent 70%),
+             radial-gradient(34% 30% at 78% 24%,rgba(168,85,247,.12),transparent 70%),
+             radial-gradient(40% 36% at 62% 82%,rgba(212,175,55,.09),transparent 70%);
+  animation:xos-aurora 38s ease-in-out infinite alternate; will-change:transform; }
+.xos-main > * { position:relative; z-index:1; }
+@keyframes xos-aurora { 0% { transform:translate3d(0,0,0) rotate(0deg) scale(1); } 50% { transform:translate3d(4%,-3%,0) rotate(8deg) scale(1.08); } 100% { transform:translate3d(-3%,4%,0) rotate(-6deg) scale(1.02); } }
+
+/* ── Glass ────────────────────────────────────────────────────────────────────────────────────────────── */
+.xos-sidebar, .xos-player-panel, .xos-track-panel, .xos-ask-card, .xos-folder-banner, .xos-files-panel, .xos-import-modal {
+  background:linear-gradient(160deg,rgba(255,255,255,.055),rgba(255,255,255,.012)) , rgba(12,18,28,.52);
+  backdrop-filter:blur(20px) saturate(150%); -webkit-backdrop-filter:blur(20px) saturate(150%);
+  border-color:rgba(255,255,255,.08); box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 24px 60px -30px rgba(0,0,0,.85); }
+.xos-player-panel, .xos-track-panel { border-radius:16px; }
+.xos-modal-backdrop { backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); animation:xos-fade .25s ease both; }
+.xos-import-modal { border-radius:18px; animation:xos-pop .35s cubic-bezier(.2,.9,.25,1.1) both; }
+
+/* ── Entrance motion ─────────────────────────────────────────────────────────────────────────────────── */
+.xos-page { animation:xos-rise .55s cubic-bezier(.2,.8,.2,1) both; }
+.xos-player-panel { animation:xos-rise .6s .05s cubic-bezier(.2,.8,.2,1) both; }
+.xos-track-panel { animation:xos-rise .6s .12s cubic-bezier(.2,.8,.2,1) both; }
+.xos-track-row { animation:xos-rise .5s cubic-bezier(.2,.8,.2,1) both; transition:background .2s, transform .2s cubic-bezier(.2,.8,.2,1); }
+.xos-track-row:nth-child(2) { animation-delay:.04s } .xos-track-row:nth-child(3) { animation-delay:.08s } .xos-track-row:nth-child(4) { animation-delay:.12s }
+.xos-track-row:nth-child(5) { animation-delay:.16s } .xos-track-row:nth-child(6) { animation-delay:.2s } .xos-track-row:nth-child(n+7) { animation-delay:.24s }
+.xos-track-row:hover { transform:translateX(3px); background:rgba(0,217,245,.06); }
+.xos-track-row.is-playing { background:linear-gradient(90deg,rgba(0,217,245,.12),rgba(0,217,245,.02) 70%); box-shadow:inset 2px 0 0 #00d9f5; }
+@keyframes xos-rise { from { opacity:0; transform:translate3d(0,14px,0); } to { opacity:1; transform:none; } }
+@keyframes xos-fade { from { opacity:0; } }
+@keyframes xos-pop { from { opacity:0; transform:translate3d(0,18px,0) scale(.96); } }
+
+/* Buttons lift; focus is always visible. */
+.xos-primary-button, .xos-outline-button { transition:transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s, background .2s; }
+.xos-primary-button:hover, .xos-outline-button:hover { transform:translateY(-1px); }
+.xos-primary-button:hover { box-shadow:0 10px 24px -10px rgba(212,175,55,.6); }
+.xos-shell :is(button, a, input, select, textarea):focus-visible { outline:2px solid #72d6f7; outline-offset:2px; }
+
+/* ── The player art: rings orbit while playing and swell with the bass ────────────────────────────────── */
+.xos-player-art { --xos-level:0; }
+.xos-art-ring { scale:calc(1 + var(--xos-level) * .28); transition:scale .08s linear; }
+.xos-art-core { scale:calc(1 + var(--xos-level) * .12); transition:scale .08s linear; }
+.xos-art-core::after { content:""; position:absolute; inset:-18px; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,rgba(0,217,245,.45),rgba(212,175,55,.18) 45%,transparent 70%); opacity:calc(var(--xos-level) * 1.4); }
+.xos-art-core { position:relative; }
+.xos-player-panel.is-playing .xos-art-ring-one { animation:xos-orbit-a 16s linear infinite; }
+.xos-player-panel.is-playing .xos-art-ring-two { animation:xos-orbit-b 22s linear infinite; }
+@keyframes xos-orbit-a { from { transform:scaleX(.72) rotate(-18deg); } to { transform:scaleX(.72) rotate(342deg); } }
+@keyframes xos-orbit-b { from { transform:scaleY(.68) rotate(23deg); } to { transform:scaleY(.68) rotate(-337deg); } }
+
+/* The playing row's index becomes a little equaliser. */
+.xos-records-layout[data-playing] .xos-track-row.is-playing .xos-track-index { font-size:0; display:flex; align-items:flex-end; justify-content:center; gap:2px; height:14px; }
+.xos-records-layout[data-playing] .xos-track-row.is-playing .xos-track-index::before,
+.xos-records-layout[data-playing] .xos-track-row.is-playing .xos-track-index::after { content:""; width:3px; height:14px; border-radius:2px; background:#00d9f5; transform-origin:bottom; animation:xos-eq .9s ease-in-out infinite; }
+.xos-records-layout[data-playing] .xos-track-row.is-playing .xos-track-index::after { background:#d4af37; animation-duration:.7s; animation-delay:-.3s; }
+@keyframes xos-eq { 0%,100% { transform:scaleY(.3); } 50% { transform:scaleY(1); } }
+
+@media (prefers-reduced-motion:reduce) {
+  .xos-shell *, .xos-shell *::before, .xos-shell *::after, .xos-main::before { animation:none !important; transition:none !important; }
+  .xos-art-ring, .xos-art-core { scale:1; }
+}
+/* Weaker GPUs: no blur where the browser can't do it cheaply. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+  .xos-sidebar, .xos-player-panel, .xos-track-panel, .xos-ask-card, .xos-folder-banner, .xos-files-panel, .xos-import-modal { background:rgba(12,18,28,.92); }
+}
