@@ -1,0 +1,58 @@
+/* The Track Library player (AudioDeck.tsx). Motion animates transform and opacity only, never layout. */
+.xos-deck { --deck-cyan:#00d9f5; --deck-gold:#d4af37; --deck-violet:#7c8cff; position:relative; display:flex; flex-direction:column; gap:10px; padding:14px 16px 12px;
+  border:1px solid rgba(255,255,255,.08); border-radius:14px; background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.015));
+  backdrop-filter:blur(18px) saturate(150%); -webkit-backdrop-filter:blur(18px) saturate(150%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 40px -22px rgba(0,0,0,.8); outline:none; }
+.xos-deck:focus-visible { box-shadow:0 0 0 2px rgba(0,217,245,.55),inset 0 1px 0 rgba(255,255,255,.08); }
+.xos-deck-spectrum { display:block; width:100%; height:58px; }
+
+/* The pack styles every input as a boxed field; the deck's sliders are bare. */
+.xos-shell .xos-deck input[type=range] { height:18px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+/* Scrubber: played (cyan → gold) over buffered over the rail; the thumb only shows on hover or focus. */
+.xos-deck-scrub input, .xos-deck-volume input { -webkit-appearance:none; appearance:none; width:100%; height:18px; margin:0; background:transparent; cursor:pointer; }
+.xos-deck-scrub input::-webkit-slider-runnable-track { height:6px; border-radius:6px;
+  background:linear-gradient(90deg,var(--deck-cyan),var(--deck-violet) 60%,var(--deck-gold)) 0/var(--p,0%) 100% no-repeat,
+             linear-gradient(rgba(255,255,255,.18),rgba(255,255,255,.18)) 0/var(--b,0%) 100% no-repeat, rgba(255,255,255,.07); }
+.xos-deck-scrub input::-moz-range-track { height:6px; border-radius:6px; background:rgba(255,255,255,.07); }
+.xos-deck-scrub input::-moz-range-progress { height:6px; border-radius:6px; background:linear-gradient(90deg,var(--deck-cyan),var(--deck-gold)); }
+.xos-deck-scrub input::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; margin-top:-5px; border:2px solid #fff; border-radius:50%; background:var(--deck-cyan);
+  box-shadow:0 0 0 4px rgba(0,217,245,.18),0 0 14px rgba(0,217,245,.6); transform:scale(0); transition:transform .18s cubic-bezier(.2,.8,.2,1); }
+.xos-deck-scrub:hover input::-webkit-slider-thumb, .xos-deck-scrub input:focus-visible::-webkit-slider-thumb { transform:scale(1); }
+.xos-deck-scrub input::-moz-range-thumb { width:14px; height:14px; border:2px solid #fff; border-radius:50%; background:var(--deck-cyan); }
+.xos-deck-scrub input:disabled { cursor:default; opacity:.5; }
+
+.xos-deck-row { display:grid; grid-template-columns:56px 1fr 56px; align-items:center; }
+.xos-deck-time { color:#c9d4e2; font:500 12.5px/1 'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
+.xos-deck-time.is-total { text-align:right; color:#93a1b5; }
+.xos-deck-controls { display:flex; align-items:center; justify-content:center; gap:18px; }
+.xos-deck-skip { position:relative; display:grid; place-items:center; width:40px; height:40px; border:1px solid rgba(255,255,255,.1); border-radius:50%;
+  background:rgba(255,255,255,.04); color:#d5deea; font:600 12px/1 'IBM Plex Mono',monospace; cursor:pointer; transition:transform .2s cubic-bezier(.2,.8,.2,1),background .2s,border-color .2s; }
+.xos-deck-skip:hover:not(:disabled) { transform:translateY(-2px); background:rgba(0,217,245,.1); border-color:rgba(0,217,245,.4); }
+.xos-deck-skip:disabled { opacity:.4; cursor:default; }
+
+/* Play: a gold-to-cyan disc with a conic glow ring that turns while the track plays. */
+.xos-deck-play { position:relative; display:grid; place-items:center; width:58px; height:58px; border:0; border-radius:50%; cursor:pointer;
+  background:radial-gradient(circle at 35% 30%,#ffe8a3,#d4af37 45%,#9b7a1c); color:#141005;
+  box-shadow:0 8px 24px -6px rgba(212,175,55,.55),inset 0 1px 0 rgba(255,255,255,.5); transition:transform .22s cubic-bezier(.2,.8,.2,1); }
+.xos-deck-play svg { position:relative; z-index:1; width:24px; height:24px; fill:currentColor; }
+.xos-deck-play:hover { transform:scale(1.06); }
+.xos-deck-play:active { transform:scale(.95); }
+.xos-deck-play:focus-visible { outline:2px solid #fff; outline-offset:4px; }
+.xos-deck-play-ring { position:absolute; inset:-7px; border-radius:50%; opacity:.35;
+  background:conic-gradient(from 0deg,transparent,rgba(0,217,245,.9),transparent 40%,rgba(212,175,55,.9),transparent 75%);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px)); mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 2px));
+  transition:opacity .3s; }
+.xos-deck.is-playing .xos-deck-play-ring { opacity:1; animation:xos-deck-spin 3.2s linear infinite; }
+.xos-deck.is-loading .xos-deck-play-ring { opacity:1; animation:xos-deck-spin .8s linear infinite; }
+
+.xos-deck-volume { display:flex; align-items:center; gap:8px; }
+.xos-deck-volume button { border:0; background:none; font-size:15px; cursor:pointer; padding:2px; }
+.xos-deck-volume input { width:110px; }
+.xos-deck-volume input::-webkit-slider-runnable-track { height:4px; border-radius:4px; background:linear-gradient(90deg,#cfd8e6,#cfd8e6) 0/var(--p,0%) 100% no-repeat,rgba(255,255,255,.12); }
+.xos-deck-volume input::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; margin-top:-4px; border-radius:50%; background:#fff; }
+.xos-deck-hint { margin-left:auto; color:#8190a4; font:11px 'IBM Plex Mono',monospace; letter-spacing:.04em; }
+.xos-deck-error { padding:9px 11px; border:1px solid rgba(255,143,163,.35); border-radius:9px; background:rgba(255,143,163,.08); color:#ffc2cc; font-size:12.5px; line-height:1.5; }
+
+@keyframes xos-deck-spin { to { transform:rotate(360deg); } }
+@media (max-width:640px) { .xos-deck-hint { display:none; } .xos-deck-controls { gap:12px; } }
+@media (prefers-reduced-motion:reduce) { .xos-deck *, .xos-deck { animation:none !important; transition:none !important; } }
