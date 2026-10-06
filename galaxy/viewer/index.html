@@ -158,6 +158,13 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
 .nav .ext { margin-left: auto; font-size: 11px; color: var(--text-muted); }
 .nav h4:first-child { margin-top: 0; padding-top: 4px; border-top: 0; }
 .nav h4 { flex: none; margin: 10px 0 4px; padding: 10px 12px 0; border-top: 1px solid var(--hairline); white-space: nowrap; }
+/* an embedded area (the Dashboard Pack): the web app inside the galaxy, one click from closing */
+.embed { position: fixed; z-index: 40; inset: var(--gap); display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-sm); animation: slide-r 400ms var(--ease) both; }
+.embed[hidden] { display: none; }
+.embed header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--hairline); font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); }
+.embed header a, .embed header button { margin-left: auto; border: 0; background: none; color: var(--text-body); font: inherit; text-decoration: none; cursor: pointer; }
+.embed header button { margin-left: 0; font-size: 15px; }
+.embed iframe { flex: 1; width: 100%; border: 0; background: #090d15; }
 .nav h4 .txt { font: 600 10.5px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); }
 .nav .dom { display: inline-block; vertical-align: middle; width: 12px; height: 12px; margin: 0 3px; border-radius: 50%; flex: none; border: 2px solid currentColor; box-shadow: 0 0 10px currentColor; }
 .nav button[aria-pressed="true"] { background: rgba(114, 214, 247, .11); color: var(--text-headline); box-shadow: inset 2px 0 0 var(--cyan); }
@@ -401,6 +408,11 @@ kbd { padding: 2px 6px; border: 1px solid var(--hairline); border-bottom-width: 
 </header>
 
 <nav class="nav glass" id="nav" aria-label="XYP3RN areas and domains"></nav>
+
+<section class="embed glass" id="embed" role="dialog" aria-label="Embedded area" hidden>
+  <header><span id="embed-title"></span><a id="embed-tab" target="_blank" rel="noopener noreferrer">Open in tab ↗</a><button type="button" id="embed-close" aria-label="Close">✕</button></header>
+  <iframe id="embed-frame" title="Embedded area" allow="microphone; autoplay"></iframe>
+</section>
 
 <aside class="side glass" aria-label="Runs and groups">
   <div class="tabs" id="tabs" role="tablist" data-tab="runs">
@@ -959,7 +971,7 @@ function toast(c) {
 const byPath = new Map(nodes.map(n => [n.path, n]));
 const nodeFor = r => r.node && r.node.node && byPath.get(r.node.node.path);
 const DOMAIN_COLOR = { CORE: '#9188df', KNOWLEDGE: '#53a2ce', RESEARCH_INTELLIGENCE: '#6fd3f5', RECORDS: '#b258a5', TECH: '#d2a44e', GOVERNANCE: '#59c48a', shared: '#8a88a0' };
-const AREA_ICON = { command: '◈', songs: '♪', studio: '◉', research: '⌕', vault: '▣', workflows: '⚙', analytics: '▤', system: '◎' };
+const AREA_ICON = { command: '◈', songs: '♪', studio: '◉', tasks: '☰', os: '◫', dashboard: '✳', research: '⌕', vault: '▣', workflows: '⚙', analytics: '▤', system: '◎' };
 let navBuilt = false;
 function renderNav() {
   const nav = $('nav');
@@ -979,6 +991,7 @@ function renderNav() {
   desk.web.areas.forEach(a => {
     const link = document.createElement('a');
     link.href = desk.web.url + a.path; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    if (a.embed) link.onclick = e => { e.preventDefault(); openEmbed(link.href, a.label); };
     link.setAttribute('aria-label', `${a.label} (opens the web app)`);
     const ext = document.createElement('span'); ext.className = 'ext txt'; ext.textContent = '↗';
     nav.append(item(link, AREA_ICON[a.key] || '•', a.label, ext));
@@ -1010,7 +1023,17 @@ function filterDomain(d) {
   if (graphView) Graph.filterDomain(d);
   Graph.zoomToFit(1400, 80, n => hiNodes.has(n));
 }
+function openEmbed(url, label) {
+  $('embed-title').textContent = label; $('embed-tab').href = url;
+  if ($('embed-frame').src !== url) $('embed-frame').src = url;
+  $('embed').hidden = false; $('embed-close').focus();
+}
+function closeEmbed() { $('embed').hidden = true; }
+$('embed-close').onclick = closeEmbed;
+addEventListener('keydown', e => { if (e.key === 'Escape' && !$('embed').hidden) closeEmbed(); });
 function openArea(url, label) {   // voice has no click, so a blocked pop-up becomes a link to press
+  const area = ((desk.web && desk.web.areas) || []).find(a => desk.web.url + a.path === url);
+  if (area && area.embed) return openEmbed(url, label);
   const w = window.open(url, '_blank', 'noopener');
   if (w) return;
   const a = document.createElement('a');

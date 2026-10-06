@@ -120,11 +120,16 @@ THINKING_PATHS = frozenset({"/chat", "/tool_chat", "/see"})
 voice = voice_status.VoiceBus()   # the one voice status; GET /voice/stream publishes it, POST /voice/status accepts the browser's
 KOKORO = {"url": "http://127.0.0.1:8880", "voice": "bm_george"}   # local, free; config "kokoro" overrides
 WEB_URL = "http://127.0.0.1:3100"   # the XYP3RN web app (apps/web); config "web_url" overrides
-# The web app's eight areas (apps/web/app/shell/nav.tsx): one table drives the nav dock, the palette and voice.
+# The web app's areas (apps/web/app/shell/nav.tsx): one table drives the nav dock, the palette and voice.
 AREAS = [
     {"key": "command", "label": "Command Center", "path": "/", "words": r"command\s+cent(?:er|re)|home|dashboard"},
     {"key": "songs", "label": "Songs & Releases", "path": "/songs", "words": r"songs?(?:\s*(?:&|and)\s*releases)?|releases|catalog(?:ue)?"},
     {"key": "studio", "label": "Studio", "path": "/studio", "words": r"studio"},
+    {"key": "tasks", "label": "Tasks & Agents", "path": "/tasks", "words": r"tasks?(?:\s*(?:&|and)\s*agents)?"},
+    {"key": "os", "label": "OS Dashboard", "path": "/os", "words": r"os\s+dashboard"},
+    # embed: the galaxy shows it in its own overlay instead of a new tab (the Dashboard Pack, apps/web/app/dashboard).
+    {"key": "dashboard", "label": "Research & Records", "path": "/dashboard", "embed": True,
+     "words": r"research\s*(?:&|and)\s*records|records\s+dashboard|dashboard\s+pack"},
     {"key": "research", "label": "Research", "path": "/research", "words": r"research(?:\s+page)?"},
     {"key": "vault", "label": "Creative Vault", "path": "/vault", "words": r"(?:creative\s+)?vault"},
     {"key": "workflows", "label": "Workflow Builder", "path": "/workflows", "words": r"workflow(?:s|\s+builder)"},
@@ -690,7 +695,7 @@ def desk_snapshot():
             "kokoro": kokoro_up(),
             "playbooks": [pb["name"] for pb in playbooks.load()],
             "web": {"url": web_url(), "up": web_up(),
-                    "areas": [{k: a[k] for k in ("key", "label", "path")} for a in AREAS]},
+                    "areas": [{"key": a["key"], "label": a["label"], "path": a["path"], "embed": a.get("embed", False)} for a in AREAS]},
             "domains": [{"id": d, "label": l} for d, l in DOMAIN_LABELS.items()],
             "links": {"google": google.connected(), "phone": phone.configured(), "pocket": pocket.paired()},
         }
