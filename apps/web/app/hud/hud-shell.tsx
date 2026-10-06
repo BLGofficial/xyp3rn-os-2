@@ -162,6 +162,9 @@ export function HudShell({ identity, owner, components, componentsError, status:
           <button type="submit" className="hud-label">Search</button>
           <button type="submit" formAction={askAction} className="hud-label" style={{ background: 'linear-gradient(180deg,#F7C948,#D4912A)', color: '#1a1200', borderColor: '#F7C948' }}>Ask</button>
           <a href="/tasks" className="hud-task-link">Task list <span aria-hidden="true">?</span></a>
+          {/* Jarvis (galaxy/server.py) opens straight into its knowledge graph view. */}
+          <a href="http://127.0.0.1:4700/?view=graph" target="_blank" rel="noopener noreferrer" className="hud-task-link hud-jarvis-link"
+            title="Open the Jarvis knowledge graph (Knowledge Galaxy, port 4700)">Jarvis graph <span aria-hidden="true">↗</span></a>
         </form>
         <a href="/" className="relative no-underline" aria-label={`${status?.counts.alerts ?? 0} catalog checks open (Command Center)`} title="Open catalog checks (blockers and warnings), from catalog_checks">
           <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 1 1 12 0v6l2 2H4zm4 3a2 2 0 0 0 4 0" fill="none" stroke="#C3D0E4" strokeWidth="1.5" /></svg>

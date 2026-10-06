@@ -22,6 +22,7 @@ export const PRIMARY: readonly Item[] = [
 ];
 export const SECONDARY: readonly Item[] = [
   { href: '/os', label: 'OS dashboard', icon: 'command' },
+  { href: '/dashboard', label: 'Research & Records', icon: 'research' },
   { href: '/hud', label: 'Mercury HUD', icon: 'graph' },
   { href: '/search', label: 'Search everything', icon: 'search' },
   { href: '/people', label: 'People', icon: 'people' },
