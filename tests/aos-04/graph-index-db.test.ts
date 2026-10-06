@@ -202,16 +202,19 @@ describe('the graph views', () => {
 
 describe('the rollback', () => {
   it('drops the index and the views, revokes the role, and comes back up (twice)', async () => {
-    const r = await createTestDb('aos04_graph_rt', { migrated: true });
+    const r = await createTestDb('aos04_graph_rt');
+    // Only the migrations through this one: a later migration (F54) is not this rollback's subject.
+    const through = plan().filter((m) => m.version <= MIGRATION);
+    await migrateUp(r.sql, through);
     try {
       for (let i = 0; i < 2; i++) {
-        expect(await migrateDown(r.sql, plan(), 1)).toEqual([MIGRATION]);
+        expect(await migrateDown(r.sql, through, 1)).toEqual([MIGRATION]);
         const [gone] = await r.sql<{ n: number }[]>`select count(*)::int as n from pg_class where relname in ('graph_nodes', 'indexed_files') and relnamespace = 'public'::regnamespace`;
         expect(gone!.n).toBe(0);
         // The role is cluster-wide and stays (as xyp_tasks does); it loses what the migration granted it.
         const [role] = await r.sql<{ reads: boolean }[]>`select has_column_privilege('xyp_indexer', 'public.sources', 'checksum_sha256', 'select') as reads`;
         expect(role!.reads).toBe(false);
-        expect(await migrateUp(r.sql, plan())).toEqual([MIGRATION]);
+        expect(await migrateUp(r.sql, through)).toEqual([MIGRATION]);
       }
       const [back] = await r.sql<{ n: number }[]>`select count(*)::int as n from graph_nodes`;
       expect(back!.n).toBe(DOMAINS.length);
