@@ -10,6 +10,7 @@ import { createWriteArtifactTool } from '../tool-registry/tools/write-artifact.t
 import { loadEmbedder } from '../../knowledge/vector-retrieval/embedder.ts';
 import { createLocalVaultStore, defaultVaultDir, type VaultStore } from '../../knowledge/source-registry/vault-store.ts';
 import { createReadVaultFileTool, createRegisterVaultFileTool } from '../../knowledge/source-registry/vault-tools.ts';
+import { createObsidianTools } from '../../knowledge/obsidian/tools.ts';
 import { createSongTools } from '../../records/vault/tools.ts';
 import { createCatalogMetadataTools } from '../../records/ops/metadata-tools.ts';
 import { createTaskTools } from '../../records/ops/tasks/tools.ts';
@@ -33,7 +34,7 @@ import { createWriteEvidenceTool } from '../../research-intelligence/tools/write
  *   write_rd_backlog; and the Creative Vault (AOS-01): register_vault_file, read_vault_file, write_song,
  *   link_song, unlink_song; the Command Center (AOS-02): add_person, add_alias, write_credit, retract_credit,
  *   write_platform_link, retract_platform_link, set_artwork, record_delivery, write_task, move_task; Studio
- *   (AOS-03): rate_take.
+ *   (AOS-03): rate_take; the Obsidian sync (F54): write_obsidian_note, record_obsidian_sync.
  *   `vault` is the byte store (default: the local store at defaultVaultDir(env)).
  */
 export const createRuntimeTools = (deps: {
@@ -68,5 +69,6 @@ export const createRuntimeTools = (deps: {
     ...createSongTools(deps),
     ...createCatalogMetadataTools(deps),
     ...createTaskTools(deps),
+    ...createObsidianTools(deps),
   ]);
 };

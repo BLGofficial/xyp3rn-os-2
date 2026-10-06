@@ -19,6 +19,8 @@ type AdminLoaders = typeof import('../server/admin-loaders.ts');
 type AskOps = typeof import('../server/ask-ops.ts');
 type TaskOps = typeof import('../server/task-ops.ts');
 type HudLoaders = typeof import('../server/hud-loaders.ts');
+type OsLoaders = typeof import('../server/os-loaders.ts');
+type OsOps = typeof import('../server/os-ops.ts');
 type Runtime = typeof import('../server/runtime.ts');
 type Store = typeof import('../../../knowledge/source-registry/vault-store.ts');
 
@@ -38,6 +40,8 @@ export const workflowsLoaders = () => osImport<WorkflowsLoaders>('apps/web/serve
 export const analyticsLoaders = () => osImport<AnalyticsLoaders>('apps/web/server/analytics-loaders.ts');
 export const adminLoaders = () => osImport<AdminLoaders>('apps/web/server/admin-loaders.ts');
 export const hudLoaders = () => osImport<HudLoaders>('apps/web/server/hud-loaders.ts');
+export const osLoaders = () => osImport<OsLoaders>('apps/web/server/os-loaders.ts');
+export const osOps = () => osImport<OsOps>('apps/web/server/os-ops.ts');
 export const askOps = () => osImport<AskOps>('apps/web/server/ask-ops.ts');
 export const taskOps = () => osImport<TaskOps>('apps/web/server/task-ops.ts');
 export const askJobs = () => osImport<typeof import('./ask-jobs.ts')>('apps/web/lib/ask-jobs.ts');
