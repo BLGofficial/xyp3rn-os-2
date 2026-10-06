@@ -17,6 +17,7 @@ import { rightsCheck, RIGHTS_AGENT } from '../../records/ops/rights-splits/check
 import { loadTechSystem, techStub } from '../../tech/tech-system.ts';
 import { AUDIO_TOOLS_AGENT, audioTools } from '../../tech/trace/intake.ts';
 import { VAULT_CURATOR_AGENT, vaultCurator } from '../../knowledge/ingestion/vault-curator.ts';
+import { OBSIDIAN_SYNC_AGENT, obsidianSync } from '../../knowledge/obsidian/agent.ts';
 import { LYRIC_EDITOR_AGENT, lyricEditor } from '../../records/vault/lyric-editor.ts';
 import { recordsSongs, SONGS_AGENT } from '../../records/vault/songs-agent.ts';
 import { recordsTasks, TASKS_AGENT } from '../../records/ops/tasks/tasks.ts';
@@ -63,6 +64,8 @@ export const HANDLERS: HandlerMap = {
   // prompt package built from them (in records/workflows/build-suno-package.workflow.yaml).
   [STUDIO_EDITOR_AGENT]: studioEditor,
   [PACKAGE_AGENT]: sunoPackage,
+  // F54: the two-way Obsidian sync (Execution, deterministic): one previewed plan step per run.
+  [OBSIDIAN_SYNC_AGENT]: obsidianSync,
   ...Object.fromEntries(loadTechSystem().components.filter((c) => c.builtIn === null).map((c) => [c.slug, techStub])),
   // Phase 7: one stub per X3LIUS sub-domain no phase has built yet (none since Phase 12): the
   // fallback for a sub-domain a future manifest adds. Built ones run as LLM agents (core/runtime/programs.ts).

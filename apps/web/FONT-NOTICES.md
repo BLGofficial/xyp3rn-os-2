@@ -23,6 +23,14 @@ Copyright 2018 The Orbitron Project Authors (https://github.com/theleagueof/orbi
 
 Copyright 2018 The Chakra Petch Project Authors (https://github.com/m4rc1e/Chakra-Petch.git)
 
-## @fontsource/jetbrains-mono 5.3.0 (the Mercury HUD only)
+## @fontsource/jetbrains-mono 5.3.0 (the Mercury HUD and the /os dashboard)
 
 Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
+
+## @fontsource/unbounded 5.3.0 (the /os dashboard only, Brand Kit 2026 display)
+
+Copyright 2022 The Unbounded Project Authors (https://github.com/googlefonts/unbounded)
+
+## @fontsource/ibm-plex-sans 5.3.0 (the /os dashboard only, Brand Kit 2026 body)
+
+Copyright 2019 IBM Corp. All rights reserved.

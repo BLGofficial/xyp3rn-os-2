@@ -593,3 +593,24 @@ A `research_sources` row may carry a nullable FK to `sources.id` when the cited 
 - **Command Center** does not link to `/hud` yet: that edits an existing page.
 - **Small targets:** some sub-component labels are under the 44 px hit target. `/favicon.ico` is a 404 app-wide.
 - **Time-zone bug in existing tests:** `apps/web/server/catalog.test.ts` computes today in UTC. It fails between 00:00 and 03:00 Sofia time, when the schedule guard's `current_date` is already the next day. `web:smoke` had the same bug and now reads the database's date.
+
+**F54. The unified OS dashboard (/os) and the two-way Obsidian sync.** DECIDED (operator, 2026-10-06: "3" = build it in one step now; no NotebookLM, since Google publishes no official API for it; Obsidian two-way, vault `C:\Users\blago\Desktop\XYP3RN Obsidian Directory`).
+- **Scope taken out of order.** The Ultimate Build Sequence puts the unified shell at L7.1, after DS-1/DS-2 and J-08; the operator chose to build the dashboard now. `/os` is added beside the existing screens; nothing is replaced, and L7.1 re-homes it.
+- **Brand Kit 2026 on /os only.** Its tokens, fonts (Unbounded, IBM Plex Sans, JetBrains Mono; pinned `@fontsource` 5.3.0, OFL) and shape rules are scoped under `.os` (`apps/web/app/os/os.css`), as the HUD's are under `.hud`. The rest of the app keeps Mercury until DS-1. The embedded graph sphere keeps its own palette (a radial gradient and the taxonomy hues) until DS-1/DS-2 restyle it everywhere.
+- **Obsidian sync (`knowledge/obsidian/`, owner KNOWLEDGE).**
+  - `XYP_OBSIDIAN_VAULT` names the vault; a path ending in `.obsidian` (the settings folder) resolves to its parent.
+  - Obsidian → OS: a new or changed `.md` note enters the Creative Vault as the owner's document through `addToVault` (vault-curator), with its frontmatter title and language, its tags and the tag `obsidian`. Content-addressed: a changed note is a new Vault file, the old one stays. A note never changes a song or any other record, and never becomes canonical without `pnpm ingest` and the gate.
+  - OS → Obsidian: every song (current revision) and every accepted finding is written as a note under `XYP3RN OS/` only, with `xyp3rn_id`/`xyp3rn_kind` frontmatter. The OS overwrites only a note it wrote that nobody changed since; an edited export, or a file the OS never wrote at that path, is a conflict, never written, and the owner's edit is imported instead. A deleted note is not re-created and nothing is deleted on either side.
+  - Approval: the preview is a plan with a sha256 hash; Apply sends that hash, the sync re-plans and refuses on any difference. `write_obsidian_note` also re-checks each file's sha just before its atomic rename, refuses any path outside `XYP3RN OS/`, `..`, absolute paths, and any symbolic link or junction below the root.
+  - The ledger `obsidian_sync_events` (migration `20261006100000_obsidian_sync`) is append-only (no UPDATE grant; `xyp_vault_immutable`), written as `xyp_vault` by `obsidian-sync` (Execution, `external.execute` + `vault.write`), read by `xyp_web`. Every row names its plan hash and agent run.
+  - Supersedes, for this one vault, the META H06 line "read-only mount; never write into it" (operator decision).
+- **Panels:** Research (open briefs, findings awaiting a decision, the library, latest runs), Knowledge/Obsidian (sync preview and wikilink graph: notes, resolved links, most-linked notes, links to nothing), Import (the existing upload action), Records audio library (Vault audio with songs, tracks, takes and ratings; playback from the guarded raw route), the existing graph sphere, and a context view (the Context Engine's vault corpus, ranked, bars by similarity). Each panel reads on its own; a failed read is shown as UNAVAILABLE in that panel, never as zero.
+
+**F55. Open after F54.**
+- **A renamed song leaves its old export** in the vault (a new path is written; the old note is the owner's to delete). Not reported in the plan yet.
+- **No receipt table.** The receipt is the redirect's counts plus the agent runs; J-14's `receipts`/`action_previews` will hold it.
+- **One sync per web process** (an in-process lock). Two processes syncing at once are kept safe only by the per-file sha check and the content-addressed Vault.
+- **Large vaults:** every preview hashes and reads every note (2 MiB cap per note, larger ones skipped and counted). Not measured beyond a few notes.
+- **Not run against the owner's real vault** or on Windows: proven on Linux temp folders. The symlink refusal is proven where the host allows symlinks.
+- **Imported notes are searchable** in the context view only after `pnpm embed`.
+- **The lockfile** carries unrelated churn from the pnpm version used here (`libc` fields dropped from `@img/sharp-*` entries); regenerate with the operator's pnpm if that matters.

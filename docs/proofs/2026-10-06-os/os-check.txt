@@ -1,0 +1,14 @@
+OBSIDIAN: KNOWLEDGE OBSIDIAN VAULT · TWO-WAY SYNC LAST SYNC NEVER <scratch>/obsidian-demo (the configured path was the .obsidian settings folder; this is its vault) NOTES 3 NOTE LINKS 4 UNRESOLVED LINKS 1 TO IMPORT 3 TO EXPORT 1 CONFLICTS 0 Notes you add or change come into the Creative Vault as your documents. Songs and accepted findings are written to XYP3RN OS/ in the vault. A note there that you edited is never overwritten: it is a conflict, and your edit is imported instead. Nothing is deleted on either side. PLAN · 0 UNCHANGED ↑ CREATE XYP3RN OS/Songs/[STUB] Night City (2c6d84cc).md ↓ IMPORT Home.md ↓ IMPORT Songs/Нова ер
+AUDIO: RECORDS AUDIO LIBRARY ALL AUDIO Showing 1 of 1, newest first. Playback streams the stored bytes; nothing is transcoded. STUB-tone-220hz.wav audio/wav · 15.7 KB [STUB] Night City
+RESEARCH: RESEARCH INTELLIGENCE RESEARCH OPEN RESEARCH 0 OPEN BRIEFS 0 FINDINGS AWAITING YOU 0 IN THE LIBRARY LATEST RUNS No research run yet. Start one from a brief on Research.
+AUDIO RAW: 200 audio/wav 16044 bytes
+BRAND SCAN (computed, outside the sphere): clean
+RECEIPT: ✓ SYNCED 3 imported, 1 exported, 0 failed. Each step is an agent run on System.
+AFTER PLAN: KNOWLEDGE OBSIDIAN VAULT · TWO-WAY SYNC LAST SYNC 2026-10-06 08:39:17 +03:00 <scratch>/obsidian-demo (the configured path was the .obsidian settings folder; this is its vault) NOTES 4 NOTE LINKS 4 UNRESOLVED LINKS 1 TO IMPORT 0 TO EXPORT 0 CONFLICTS 0 Notes you add or change come into the Creative Vault as your documents. S
+CONTEXT: CORE CONTEXT VIEW What the Context Engine retrieves for a question, ranked, from knowledge and the Vault. Bars are cosine similarity. QUESTION RETRIEVE 0.832 0.826 0.820 0.805 0.800 0.797 0.794 0.790 0.785 0.784 CANONICALPhase 10 — Vocal / Artist DNA · 0.832 You are a Staff Agent Engineer. PHASE 10 — Vocal / Artist DNA. CONTEXT {{PRIOR_PHASE_SUMMARY}} Stack note: RVC/Applio voice model already exi
+390px scrollWidth: 390
+CONSOLE ERRORS: [
+  'Failed to load resource: the server responded with a status of 401 (Unauthorized)',
+  'Failed to load resource: the server responded with a status of 401 (Unauthorized)',
+  'Failed to load resource: the server responded with a status of 401 (Unauthorized)'
+]
