@@ -1,5 +1,6 @@
-import { readdir, stat } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { extname, join, relative } from 'node:path';
 import { DOMAINS } from '../../../../../core/contracts/taxonomy.ts';
 import { graphLoaders, hudLoaders, osLoaders, runtime } from '../../../lib/server';
 
@@ -75,14 +76,40 @@ export const galaxyTopology = async () => {
   return { nodes, links };
 };
 
+/**
+ * Where imported lyrics and metadata keep a readable copy (the Vault itself is content-addressed). XYP_RECORDS_DIR
+ * overrides the default, Documents/XYP3RN Records.
+ */
+export const recordsDirs = () => {
+  const root = process.env.XYP_RECORDS_DIR?.trim() || join(homedir(), 'Documents', 'XYP3RN Records');
+  return { root, lyrics: join(root, 'lyrics'), metadata: join(root, 'metadata') };
+};
+
+/**
+ * Writes a copy under `dir` by the file's own (sanitised) name, never over another file: `name (2).ext` and on.
+ * @returns the path written
+ */
+export const saveCopy = async (dir: string, name: string, bytes: Uint8Array): Promise<string> => {
+  await mkdir(dir, { recursive: true });
+  const safe = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/^\.+/, '_') || 'file';
+  const ext = extname(safe); const stem = safe.slice(0, safe.length - ext.length);
+  for (let n = 1; n < 1000; n++) {
+    const path = join(dir, n === 1 ? safe : `${stem} (${n})${ext}`);
+    try { await writeFile(path, bytes, { flag: 'wx' }); return path; } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e; }
+  }
+  throw new Error(`no free file name for ${safe} in ${dir}`);
+};
+
 /** GET /api/v1/records/tracks: every Vault audio file, playable through /vault/files/{id}/raw. */
 export const recordsTracks = async () => {
   const lib = await (await osLoaders()).audioLibrary((await runtime()).sql, 200);
   return {
     total: lib.total,
+    storage: { audio: 'Creative Vault', ...recordsDirs() },
     tracks: lib.items.map((a) => ({
       id: a.id, title: a.title, audioUrl: `/vault/files/${a.id}/raw`, updatedAt: a.createdAt,
-      type: a.tracks.length ? 'release' : 'demo', releaseName: a.tracks[0]?.releaseTitle,
+      // A track on a release is a release; otherwise the type the owner chose at import (its tag).
+      type: a.tracks.length || a.tags.includes('release') ? 'release' : 'demo', releaseName: a.tracks[0]?.releaseTitle,
       artist: a.songs.map((s) => s.title).join(', ') || undefined,
     })),
   };

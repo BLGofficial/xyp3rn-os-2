@@ -21,7 +21,7 @@ const run = async <T>(deps: DispatchDeps, agent: string, input: unknown): Promis
 };
 
 export type Upload = { readonly name: string; readonly bytes: Uint8Array };
-export type UploadOptions = { readonly as?: string; readonly language?: string; readonly tags?: readonly string[]; readonly songId?: string };
+export type UploadOptions = { readonly as?: string; readonly language?: string; readonly tags?: readonly string[]; readonly songId?: string; readonly title?: string };
 
 /**
  * Adds uploaded files to the Vault. Each upload is written by this server to its own temp directory
@@ -42,7 +42,7 @@ export const uploadFiles = async (deps: DispatchDeps, files: readonly Upload[], 
       const path = join(dir, name);
       await writeFile(path, f.bytes, { flag: 'wx' });
       out.push(await addAndImport(deps, {
-        path, ...(o.as ? { as: o.as } : {}), ...(o.language ? { language: o.language } : {}),
+        path, ...(o.as ? { as: o.as } : {}), ...(o.language ? { language: o.language } : {}), ...(o.title ? { title: o.title } : {}),
         ...(o.tags && o.tags.length > 0 ? { tags: o.tags } : {}), ...(o.songId ? { songId: o.songId } : {}),
       }));
     } finally {
