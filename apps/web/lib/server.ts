@@ -45,6 +45,7 @@ export const hudLoaders = () => osImport<HudLoaders>('apps/web/server/hud-loader
 export const osLoaders = () => osImport<OsLoaders>('apps/web/server/os-loaders.ts');
 export const agentsLoaders = () => osImport<AgentsLoaders>('apps/web/server/agents-loaders.ts');
 export const jarvisLauncher = () => osImport<JarvisLauncher>('apps/web/server/jarvis-launcher.ts');
+export const jarvisCore = () => osImport<typeof import('../server/jarvis-core.ts')>('apps/web/server/jarvis-core.ts');
 export const osOps = () => osImport<OsOps>('apps/web/server/os-ops.ts');
 export const askOps = () => osImport<AskOps>('apps/web/server/ask-ops.ts');
 export const taskOps = () => osImport<TaskOps>('apps/web/server/task-ops.ts');

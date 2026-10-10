@@ -1,4 +1,5 @@
-import { runGate, type GateResult } from '../../../knowledge/promotion-gate/gate.ts';
+import { OPERATOR_ROLE, runGate, type GateResult } from '../../../knowledge/promotion-gate/gate.ts';
+import { asRole } from '../../../knowledge/source-registry/vault-tools.ts';
 import type { ContextEngine } from '../../context-engine/context-engine.ts';
 import { askFailed, formatReply, refsOf, runPlan } from '../../orchestrator/ask.ts';
 import { dispatch, type DispatchDeps } from '../../orchestrator/dispatch.ts';
@@ -17,7 +18,13 @@ export type JarvisRequest =
   | { readonly type: 'dispatch'; readonly agent: string; readonly input: unknown }
   | { readonly type: 'workflow'; readonly path: string; readonly input: Readonly<Record<string, unknown>> }
   /** A canonical write attempt: a knowledge candidate headed for canonical knowledge. */
-  | { readonly type: 'canonical-write'; readonly candidateId: string };
+  | { readonly type: 'canonical-write'; readonly candidateId: string }
+  /** A rights-split fix: only ever queued for the owner, never written by Jarvis. */
+  | { readonly type: 'propose-split'; readonly trackId: string; readonly splits: readonly SplitShare[]; readonly reason: string; readonly proposer?: string }
+  /** Writes an approved, still-current split proposal through the records-catalog agent. */
+  | { readonly type: 'apply-split'; readonly approvalId: string };
+
+export type SplitShare = { readonly payee: string | null; readonly percentage: number };
 
 export type JarvisStatus = 'OK' | 'ERROR' | 'HOLD' | 'CLARIFY' | 'BLOCKED' | 'PENDING_HUMAN_APPROVAL';
 
@@ -70,6 +77,8 @@ export class JarvisCore {
         case 'dispatch': return await this.dispatchAgent(source, req.agent, req.input);
         case 'workflow': return await this.workflow(source, req.path, req.input);
         case 'canonical-write': return await this.canonicalWrite(source, req.candidateId);
+        case 'propose-split': return await this.proposeSplit(source, req);
+        case 'apply-split': return await this.applySplit(source, req.approvalId);
       }
     } catch (e) {
       return { status: 'ERROR', source, summary: butler('ERROR', (e as Error).message.slice(0, 300)) };
@@ -137,5 +146,34 @@ export class JarvisCore {
       default:
         return { status: 'ERROR', source, data: r, summary: butler('ERROR', `The gate reported a promotion for ${candidateId} without a human decision. I will not relay it; please inspect run ${r.promotionRunId}.`) };
     }
+  }
+
+  // A split is append-only, so a "fix" is the next full version. Jarvis only queues it (the DB checks the set sums to
+  // 100 before it queues); the owner decides with `pnpm gate decide`, then apply-split writes it.
+  private async proposeSplit(source: JarvisSource, req: Extract<JarvisRequest, { type: 'propose-split' }>): Promise<JarvisResult> {
+    const approvalId = await asRole(this.deps.sql, OPERATOR_ROLE, async (tx) => {
+      const [r] = await tx<{ id: string }[]>`
+        select xyp_queue_split_proposal(${req.trackId}, ${tx.json(req.splits as never)}, ${req.proposer ?? 'jarvis'}, ${req.reason}) as id`;
+      return r!.id;
+    });
+    return { status: 'PENDING_HUMAN_APPROVAL', source, approvalIds: [approvalId], data: { trackId: req.trackId, splits: req.splits },
+      summary: butler('PENDING_HUMAN_APPROVAL', `A new split set for track ${req.trackId} is queued as approval ${approvalId}. Nothing is written until you decide.`) };
+  }
+
+  private async applySplit(source: JarvisSource, approvalId: string): Promise<JarvisResult> {
+    const rows = await asRole(this.deps.sql, OPERATOR_ROLE, (tx) => tx<{ item_type: string; status: string; request: { trackId: string; splits: SplitShare[]; currentVersion: number } }[]>`
+      select item_type::text, status::text, request from approval_queue where id = ${approvalId}`);
+    const a = rows[0];
+    if (!a || a.item_type !== 'split_proposal') return { status: 'BLOCKED', source, summary: butler('BLOCKED', `Approval ${approvalId} is not a split proposal.`) };
+    if (a.status === 'pending') return { status: 'PENDING_HUMAN_APPROVAL', source, approvalIds: [approvalId], summary: butler('PENDING_HUMAN_APPROVAL', `Approval ${approvalId} is still waiting for your decision.`) };
+    if (a.status !== 'approved') return { status: 'BLOCKED', source, summary: butler('BLOCKED', `Approval ${approvalId} was ${a.status}, so nothing was written.`) };
+    const { trackId, splits, currentVersion } = a.request;
+    const [now] = await asRole(this.deps.sql, OPERATOR_ROLE, (tx) => tx<{ v: number }[]>`select coalesce(max(version), 0)::int v from rights_splits where track_id = ${trackId}`);
+    if (now!.v !== currentVersion) {
+      return { status: 'BLOCKED', source, summary: butler('BLOCKED', `The splits for track ${trackId} moved from version ${currentVersion} to ${now!.v} since this was proposed (or it was already applied). Propose it again.`) };
+    }
+    const r = await dispatch(this.deps, 'records-catalog', { splits: { trackId, splits } });
+    const status = r.status === 'success' ? 'OK' : 'ERROR';
+    return { status, source, data: r, summary: butler(status, status === 'OK' ? `The approved split set is written as version ${currentVersion + 1} (run ${r.runId}).` : `The approved set was refused (${(r.error ?? 'see run ' + r.runId).slice(0, 200)}); nothing changed.`) };
   }
 }

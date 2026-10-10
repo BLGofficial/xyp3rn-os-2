@@ -15,7 +15,9 @@ import { JarvisCore, type JarvisRequest } from '../jarvis/JarvisOrchestrator.ts'
 const USAGE = `usage: jarvis "<request>" [--domain <DOMAIN> | --workflow <id>] [--project <slug>]
        jarvis dispatch <agent> '<json>'
        jarvis workflow <path.workflow.yaml> '<json>'
-       jarvis promote <candidateId>      send a canonical-write candidate to the Promotion Gate (a human approves)`;
+       jarvis promote <candidateId>      send a canonical-write candidate to the Promotion Gate (a human approves)
+       jarvis propose-split <trackId> '<[{"payee":"X3LIUS","percentage":100}]>' "<reason>"   queue the next split set (a human approves)
+       jarvis apply-split <approvalId>   write an approved, still-current split proposal`;
 const bad = (why: string): never => { console.error(`${why}\n${USAGE}`); process.exit(2); };
 
 const args = process.argv.slice(2);
@@ -30,11 +32,19 @@ const json = (text: string | undefined, what: string): Record<string, unknown> =
 };
 
 const parse = (): JarvisRequest => {
-  const [cmd, a, b] = args;
+  const [cmd, a, b, c] = args;
   if (!cmd) return bad('missing command');
   if (cmd === 'dispatch') return a ? { type: 'dispatch', agent: a, input: json(b, 'input') } : bad('dispatch needs an agent');
   if (cmd === 'workflow') return a ? { type: 'workflow', path: a, input: json(b, 'input') } : bad('workflow needs a path');
   if (cmd === 'promote') return a ? { type: 'canonical-write', candidateId: a } : bad('promote needs a candidate id');
+  if (cmd === 'propose-split') {
+    if (!a || !b || !c) return bad('propose-split needs a track id, a JSON array of splits and a reason');
+    let splits: unknown;
+    try { splits = JSON.parse(b); } catch { return bad('splits must be a JSON array'); }
+    if (!Array.isArray(splits)) return bad('splits must be a JSON array');
+    return { type: 'propose-split', trackId: a, splits, reason: c };
+  }
+  if (cmd === 'apply-split') return a ? { type: 'apply-split', approvalId: a } : bad('apply-split needs an approval id');
   const request = cmd === 'ask' ? a : cmd;
   if (!request || request.startsWith('--')) return bad('missing request');
   const domain = flag('--domain');
