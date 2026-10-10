@@ -154,7 +154,7 @@ export function JarvisCommandBar() {
         <form onSubmit={submit} role="search" aria-label="Jarvis command bar" className="flex items-center gap-2">
           <button type="button" onClick={toggleMic} disabled={!mic.ok || (busy && !recording)} aria-pressed={recording}
             aria-label={recording ? 'Stop recording' : 'Record a spoken command'}
-            title={mic.ok ? (recording ? 'Stop and transcribe' : 'Speak a command') : 'Microphone transcription is not configured (see Studio)'}
+            title={mic.ok ? (recording ? 'Stop and transcribe' : 'Speak a command') : 'No Whisper server is configured. To dictate, click the box (or press Ctrl/⌘ K) and use your Wispr Flow hotkey'}
             className={`btn-quiet shrink-0 ${recording ? 'text-[#72d6f7]' : ''}`}>{recording ? '■' : '🎤'}</button>
           <label className="min-w-0 flex-1">
             <span className="sr-only">Jarvis command</span>
