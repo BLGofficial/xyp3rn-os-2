@@ -93,6 +93,11 @@ The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md))
 - [x] AOS-04 Plan C1: the graph and file index ([plan](docs/artist-os/AOS-04-plan-C1.md), [proof](docs/proofs/AOS-04-graph-index.txt)): a scanned index of this checkout and the Vault (`pnpm index scan | status`, a boot scan, Rescan on /system), agents, workflows, decisions, imports and links as source-backed entities and edges, the live records beside them, search everything, a Graph list with domain filters and the Creative lens, an inspector whose every connection says why it exists, and a safe viewer for repository files.
 - [x] Jarvis Prompt 01: the Mercury sphere and the eight areas ([map](docs/artist-os/JARVIS-00-map.md), [plan](docs/artist-os/JARVIS-01-plan.md), [proof](docs/proofs/JARVIS-01.txt), [handoff](docs/handoffs/JARVIS-01.md)): the graph sphere on Command over a bounded, authenticated overview (groups name their query and members; nothing moves on its own; keyboard, reduced motion, loading/empty/error states), a command input that searches the whole index, and the eight areas (Songs & Releases with tabs; Workflow Builder, Analytics and System Admin as honest pages).
 - [ ] Jarvis Prompt 03: answers that focus their sources, clusters, richer filters (supersedes the rest of AOS-04 Plan C2).
+- [x] Jarvis Core: one front door (`pnpm jarvis`) over ask, dispatch and workflow, with the approval rule enforced (`PENDING_HUMAN_APPROVAL`); the `monday-review` sweep (by voice, the command bar or the CLI); approval-gated rights-split fixes (`/approvals`). What is built, next and deliberately not done: [docs/JARVIS-ROADMAP.md](docs/JARVIS-ROADMAP.md).
+- [ ] AOS-05: Whisper and Kokoro. Partly built: the speech adapters (`apps/web/server/speech.ts`, [voice spec](docs/artist-os/JARVIS-VOICE.md)) and the local Kokoro read-back run; no Whisper server is configured, so the owner dictates with Wispr Flow into the command bar.
+- [ ] AOS-06: Platform connectors and analytics (deliveries and links are recorded by hand until then).
+- [ ] AOS-07: Evaluation and the improvement loop. Also takes RBAC, the approval API and the audit log from Phase 15 (F35 D3); `audit_log` does not exist yet.
+- [ ] AOS-08: Harden and expand: release history, workflow resume and pause, owner identity. Also takes the rest of Phase 15 (F35 D3).
 
 ## Build status (Agentic OS build guide)
 
@@ -118,6 +123,6 @@ The operator's Artist OS plan ([docs/artist-os/PLAN.md](docs/artist-os/PLAN.md))
   - The TECH components via a gate-admitted manifest.
   - The R&D backlog agent, whose verified proposals are each queued for a human.
   - Proven with the live service on a throwaway DB. The R&D model call has not run live, for lack of a key ([handoff](docs/handoffs/PHASE-14.md)).
-- [ ] Phase 15: Legal / Governance
-- [ ] Phase 16: UI / Observability / Graph View / Command Center (16A–16D)
-- [ ] Phase 17: End-to-End Validation
+- [ ] Phase 15: Legal / Governance (absorbed by F35 D3: RBAC, the approval API and the audit log are AOS-07/08; the rights-split rule and the approval queue already exist)
+- [ ] Phase 16: UI / Observability / Graph View / Command Center (16A–16D) (absorbed by F35 D3: the UI is the Command Center in `apps/web`, built from AOS-01 on; the radial Graph View is dropped unless the operator asks)
+- [ ] Phase 17: End-to-End Validation (absorbed by F35 D3: each AOS gate is its own end-to-end validation)
