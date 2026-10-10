@@ -14,6 +14,7 @@ export const PRIMARY: readonly Item[] = [
   { href: '/songs', label: 'Songs & Releases', icon: 'songs', also: ['/releases'] },
   { href: '/studio', label: 'Studio', icon: 'studio' },
   { href: '/tasks', label: 'Tasks & agents', icon: 'tasks' },
+  { href: '/approvals', label: 'Approvals', icon: 'tasks' },
   { href: '/research', label: 'Research', icon: 'research' },
   { href: '/vault', label: 'Creative Vault', icon: 'vault' },
   { href: '/workflows', label: 'Workflow Builder', icon: 'workflow' },

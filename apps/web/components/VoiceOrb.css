@@ -1,0 +1,17 @@
+.voice-orb { display: inline-flex; flex: none; --orb: #6b7280; }
+.voice-orb[data-state='listening'] { --orb: #72d6f7; }
+.voice-orb[data-state='thinking'] { --orb: #f5a623; }
+.voice-orb[data-state='speaking'] { --orb: #8be28b; }
+.voice-orb .vo-core { fill: var(--orb); opacity: 0.9; transform-origin: center; }
+.voice-orb .vo-ring, .voice-orb .vo-ripple { fill: none; stroke: var(--orb); stroke-width: 1.5; opacity: 0.55; transform-origin: center; }
+.voice-orb .vo-bar { fill: var(--orb); transform-origin: center; transform: scaleY(0.25); }
+.voice-orb:not([data-state='idle']) .vo-core { animation: vo-breathe 1.4s ease-in-out infinite; }
+.voice-orb[data-state='thinking'] .vo-ring { stroke-dasharray: 6 8; animation: vo-spin 2.4s linear infinite; }
+.voice-orb:not([data-state='idle']) .vo-ripple { animation: vo-ripple 1.8s ease-out infinite; }
+.voice-orb:not([data-state='idle']) .vo-ripple-2 { animation-delay: 0.9s; }
+.voice-orb[data-state='speaking'] .vo-bar, .voice-orb[data-state='listening'] .vo-bar { animation: vo-bar 0.9s ease-in-out infinite; }
+@keyframes vo-breathe { 0%, 100% { transform: scale(0.9); } 50% { transform: scale(1.1); } }
+@keyframes vo-spin { to { transform: rotate(360deg); } }
+@keyframes vo-ripple { from { transform: scale(0.8); opacity: 0.6; } to { transform: scale(2.6); opacity: 0; } }
+@keyframes vo-bar { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .voice-orb * { animation: none !important; } }

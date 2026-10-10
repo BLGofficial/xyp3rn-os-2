@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { askAction } from '../app/ask-actions';
 import { parseVoiceStatus, type VoiceStatus } from '../lib/voice-status';
+import { orbModeOf, orbStateOf } from '../lib/voice-orb-state';
+import { VoiceOrb } from './VoiceOrb';
 
 // One Jarvis state for the whole shell. The header pill and the footer bar are separate client islands in a server
 // layout, so they share this module-level store instead of props or a provider.
@@ -67,7 +69,8 @@ export function JarvisCommandBar() {
   const fallbackQ = useRef<HTMLInputElement>(null);
   const rec = useRef<MediaRecorder>(undefined);
   const stream = useRef<MediaStream>(undefined);
-  const { recording, busy } = useSyncExternalStore(subscribe, () => shared, () => SERVER);
+  const now = useSyncExternalStore(subscribe, () => shared, () => SERVER);
+  const { recording, busy } = now;
 
   // Cmd/Ctrl+K focuses the bar from anywhere.
   useEffect(() => {
@@ -152,6 +155,7 @@ export function JarvisCommandBar() {
       <div className="pointer-events-auto mx-auto flex max-w-3xl flex-col gap-1.5 rounded-control border border-line bg-canvas/90 p-2 shadow-lg backdrop-blur-md">
         {note && <p role="status" aria-live="polite" className="max-h-28 overflow-y-auto whitespace-pre-wrap px-2 text-[13px] text-ink-2">{note}</p>}
         <form onSubmit={submit} role="search" aria-label="Jarvis command bar" className="flex items-center gap-2">
+          <VoiceOrb mode={orbModeOf(orbStateOf(now))} state={orbStateOf(now)} size={40} />
           <button type="button" onClick={toggleMic} disabled={!mic.ok || (busy && !recording)} aria-pressed={recording}
             aria-label={recording ? 'Stop recording' : 'Record a spoken command'}
             title={mic.ok ? (recording ? 'Stop and transcribe' : 'Speak a command') : 'No Whisper server is configured. To dictate, click the box (or press Ctrl/⌘ K) and use your Wispr Flow hotkey'}
