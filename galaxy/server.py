@@ -37,6 +37,7 @@ import approvals
 import build
 import desk
 import google
+import jarvis_brain
 import playbooks
 import songs
 import voice_status
@@ -450,6 +451,7 @@ COMMANDS = [  # (name, matcher): first match wins. Order matters: standing order
     ("stop run", lambda t: STOP_RUN.match(t)),
     ("follow up", lambda t: FOLLOW_UP.match(t)),
     ("what changed", lambda t: whatchanged.ASK.search(t)),
+    ("jarvis core", lambda t: jarvis_brain.MONDAY.search(t)),
     ("playbook", lambda t: playbooks.ASK.search(t)),
     ("approval", lambda t: approvals.VOICE.match(t)),
     ("confirm", lambda t: CONFIRM.match(t)),
@@ -543,6 +545,8 @@ def desk_command(text):
         return runs.follow_up(text.strip())
     if kind == "what changed":
         return whatchanged.compose(text)
+    if kind == "jarvis core":
+        return jarvis_brain.dispatch(text)
     if kind == "playbook":
         return playbooks.voice(text)
     if kind == "approval":

@@ -1,3 +1,4 @@
+import UnifiedGraphExplorer from '../../components/UnifiedGraphExplorer';
 import { loaders, runtime } from '../../lib/server';
 import { ErrorBanner, first, ScrollTable, SongLinks, Tags, Time } from '../ui';
 
@@ -19,6 +20,7 @@ export default async function Vault({ searchParams: pendingSearchParams }: { sea
   return (
     <section>
       <h1>Creative Vault</h1>
+      <div className="mt-4"><UnifiedGraphExplorer /></div>
       <ErrorBanner error={searchParams.error} />
       <form className="mt-4 flex flex-wrap items-end gap-3" method="get">
         <label className="field grow">Search (vault corpus)<input name="q" defaultValue={q ?? ''} placeholder="a lyric line, a note, a finding…" /></label>
