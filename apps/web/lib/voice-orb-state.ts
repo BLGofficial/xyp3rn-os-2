@@ -11,3 +11,7 @@ export const orbStateOf = (s: { readonly recording: boolean; readonly busy: bool
     : s.busy || s.remote === 'thinking' ? 'thinking'
     : s.recording || s.remote === 'listening' ? 'listening'
     : 'idle';
+
+/** Which look fits a state: bars while Jarvis speaks, the core while the owner is heard, ripples otherwise. */
+export const orbModeOf = (state: OrbState): 'voice' | 'signal' | 'speaking' =>
+  state === 'speaking' ? 'speaking' : state === 'listening' ? 'voice' : 'signal';

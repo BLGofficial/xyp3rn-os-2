@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orbStateOf } from './voice-orb-state.ts';
+import { orbModeOf, orbStateOf } from './voice-orb-state.ts';
 
 describe('orbStateOf', () => {
   const idle = { recording: false, busy: false, remote: 'idle' } as const;
@@ -13,4 +13,13 @@ describe('orbStateOf', () => {
     expect(orbStateOf({ ...idle, remote: 'thinking' })).toBe('thinking');
   });
   it('speaking outranks everything else', () => expect(orbStateOf({ recording: true, busy: true, remote: 'speaking' })).toBe('speaking'));
+});
+
+describe('orbModeOf', () => {
+  it('picks the look from the state', () => {
+    expect(orbModeOf('speaking')).toBe('speaking');
+    expect(orbModeOf('listening')).toBe('voice');
+    expect(orbModeOf('thinking')).toBe('signal');
+    expect(orbModeOf('idle')).toBe('signal');
+  });
 });
