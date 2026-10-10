@@ -7,6 +7,7 @@ import logo from './brand/xyp3rn-logo.png';
 import { NavLinks } from './shell/nav';
 import { NavDrawer } from './shell/nav-drawer';
 import { SofiaClock } from './shell/sofia-clock';
+import { JarvisCommandBar, JarvisStatusPill } from '../components/JarvisCommandBar';
 
 export const metadata = {
   title: 'XYP3RN Mercury · Artist OS',
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </label>
             </form>
             <div className="ml-auto flex items-center gap-4">
+              <JarvisStatusPill />
               <SofiaClock initialEpochMs={Date.now()} />
               <div className="hidden items-center gap-2 text-sm text-ink-2 md:flex" title="Signed in (single owner, XYP_OWNER)">
                 <Icon name="owner" className="h-5 w-5 text-ink-3" />
@@ -52,12 +54,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </header>
-        <div className="grid gap-4 px-4 pb-10 pt-5 lg:grid-cols-[216px_minmax(0,1fr)] xl:grid-cols-[232px_minmax(0,1fr)] xl:gap-5 xl:px-5">
+        <div className="grid gap-4 px-4 pb-28 pt-5 lg:grid-cols-[216px_minmax(0,1fr)] xl:grid-cols-[232px_minmax(0,1fr)] xl:gap-5 xl:px-5">
           <nav aria-label="Primary" className="lg:sticky lg:top-[92px] lg:self-start max-lg:[.js_&]:hidden">
             <NavLinks />
           </nav>
           <main id="main" className="min-w-0">{children}</main>
         </div>
+        <JarvisCommandBar />
       </body>
     </html>
   );

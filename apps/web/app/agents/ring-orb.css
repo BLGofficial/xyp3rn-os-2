@@ -1,0 +1,41 @@
+/* The ring's golden orb and status bar animations. Adapted from APEX-UI's apex-orb.css (MIT, R. Mouradian):
+   the frame-only subset, scoped under .ring-stage so no class leaks into the rest of the app. */
+
+@keyframes roBreathe { 0%, 100% { opacity: 0.9; } 50% { opacity: 1; } }
+@keyframes roRotateCW { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes roRotateCCW { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+@keyframes roAmbient { 0%, 100% { opacity: 0.15; transform: scale(1); } 50% { opacity: 0.25; transform: scale(1.05); } }
+@keyframes roSoundWave { 0% { r: 155; opacity: 0.18; stroke-width: 0.8; } 60% { opacity: 0.06; } 100% { r: 230; opacity: 0; stroke-width: 0.3; } }
+@keyframes roSoundWaveActive { 0% { r: 155; opacity: 0.55; stroke-width: 1.5; } 60% { opacity: 0.2; } 100% { r: 245; opacity: 0; stroke-width: 0.5; } }
+@keyframes roListenRing { 0% { r: 155; opacity: 0.7; stroke-width: 2; } 60% { opacity: 0.25; } 100% { r: 280; opacity: 0; stroke-width: 0.5; } }
+@keyframes roDotBlink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+@keyframes roCenterPulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes roBar { from { transform: scaleY(0.35); } to { transform: scaleY(1.15); } }
+
+.ring-stage .ro-ring-breathe { animation: roBreathe 3s ease-in-out infinite; }
+.ring-stage .ro-ring-glow { animation: roBreathe 3s ease-in-out infinite; }
+.ring-stage .ro-ring-bright { animation: roBreathe 2s ease-in-out infinite; }
+.ring-stage .ro-orbit-cw { animation: roRotateCW 5s linear infinite; }
+.ring-stage .ro-orbit-ccw { animation: roRotateCCW 3s linear infinite; }
+.ring-stage .ro-ambient { transform-origin: 450px 260px; animation: roAmbient 4s ease-in-out infinite; }
+.ring-stage .ro-sound-wave { animation: roSoundWave 3.5s ease-out infinite; }
+.ring-stage .ro-wave-1 { animation-delay: 0.9s; }
+.ring-stage .ro-wave-2 { animation-delay: 1.8s; }
+.ring-stage .ro-wave-3 { animation-delay: 2.7s; }
+
+.ring-stage [data-state="processing"] .ro-sound-wave,
+.ring-stage [data-state="speaking"] .ro-sound-wave { animation-name: roSoundWaveActive; animation-duration: 2s; }
+.ring-stage [data-state="listening"] .ro-sound-wave { animation-name: roListenRing; animation-duration: 1.6s; }
+.ring-stage [data-state="listening"] .ro-ring-breathe { animation-duration: 1s; }
+.ring-stage [data-state="listening"] .ro-ring-glow { animation-duration: 0.8s; }
+.ring-stage [data-state="speaking"] .ro-ambient { animation-duration: 1s; opacity: 0.35; }
+
+.ring-stage .ro-dot-blink { animation: roDotBlink 1.2s ease-in-out infinite; }
+.ring-stage .ro-blink-1 { animation-delay: 0.4s; }
+.ring-stage .ro-blink-2 { animation-delay: 0.8s; }
+.ring-stage .ro-center-ring { animation: roCenterPulse 2.5s ease-in-out infinite; }
+.ring-stage .ro-center { animation: roBreathe 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-stage * { animation: none !important; }
+}

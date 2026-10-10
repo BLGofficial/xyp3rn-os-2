@@ -1,0 +1,76 @@
+name: CI
+
+# Quality and audit invariants on every pull request and every push. The same checks run locally with `pnpm audit:system`.
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+# A newer push to the same ref makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The DB tests build throwaway databases from supabase/migrations, so they need Postgres 16 with pgvector.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm tsc --noEmit
+
+      # Named steps for the two invariants that must never break silently; `pnpm test` below runs them again.
+      - name: Logo SHA-256 checksum
+        run: pnpm vitest run apps/web/tests/brand.test.ts
+
+      - name: Obsidian parser unit tests
+        run: pnpm vitest run knowledge/obsidian/parser.test.ts
+
+      - name: Agent registry validation
+        run: pnpm agents:validate
+
+      # Same roles and default privileges a Supabase project ships with (supabase/local/setup.sh does this on a dev box).
+      # template1 carries them into every test database created later.
+      - name: Prepare Postgres roles
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 -q -f supabase/local/supabase-roles.sql
+          psql -h 127.0.0.1 -U postgres -d template1 -v ON_ERROR_STOP=1 -q -f supabase/local/supabase-roles.sql
+
+      # Some tests load the local embedding model; it downloads on first use.
+      - uses: actions/cache@v4
+        with:
+          path: .local-models
+          key: local-models-v1
+
+      - name: Test suite
+        run: pnpm test

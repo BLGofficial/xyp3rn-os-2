@@ -17,3 +17,9 @@ coverage/
 .claude/*
 !.claude/settings.json
 !.claude/skills/
+# Obsidian per-user state (vault notes + templates stay tracked)
+obsidian/.obsidian/workspace.json
+obsidian/.obsidian/workspace-mobile.json
+obsidian/.obsidian/cache
+obsidian/.trash/
+.logs/
