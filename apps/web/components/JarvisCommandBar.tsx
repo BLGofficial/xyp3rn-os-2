@@ -155,7 +155,7 @@ export function JarvisCommandBar() {
       <div className="pointer-events-auto mx-auto flex max-w-3xl flex-col gap-1.5 rounded-control border border-line bg-canvas/90 p-2 shadow-lg backdrop-blur-md">
         {note && <p role="status" aria-live="polite" className="max-h-28 overflow-y-auto whitespace-pre-wrap px-2 text-[13px] text-ink-2">{note}</p>}
         <form onSubmit={submit} role="search" aria-label="Jarvis command bar" className="flex items-center gap-2">
-          <VoiceOrb mode={orbModeOf(orbStateOf(now))} state={orbStateOf(now)} />
+          <VoiceOrb mode={orbModeOf(orbStateOf(now))} state={orbStateOf(now)} size={40} />
           <button type="button" onClick={toggleMic} disabled={!mic.ok || (busy && !recording)} aria-pressed={recording}
             aria-label={recording ? 'Stop recording' : 'Record a spoken command'}
             title={mic.ok ? (recording ? 'Stop and transcribe' : 'Speak a command') : 'No Whisper server is configured. To dictate, click the box (or press Ctrl/⌘ K) and use your Wispr Flow hotkey'}
