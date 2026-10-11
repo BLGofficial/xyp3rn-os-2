@@ -72,5 +72,9 @@ jobs:
           path: .local-models
           key: local-models-v1
 
+      # galaxy/viewer/graph-data.js is generated (gitignored); galaxy/graph-model.test.ts reads it. Standard-library Python.
+      - name: Build the Galaxy graph data
+        run: python3 galaxy/build.py
+
       - name: Test suite
         run: pnpm test
