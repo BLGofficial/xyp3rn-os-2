@@ -21,15 +21,14 @@ step() {
 }
 
 [ -d node_modules ] || step install pnpm install --frozen-lockfile
-step db:setup ./supabase/local/setup.sh
-step db:up pnpm -s db:up
-step ingest:guide pnpm -s ingest --file XYP3RN_Agentic_OS_Build_Sequence.pdf --origin first_party
-step ingest:x3lius pnpm -s ingest --file records/x3lius/music-system.manifest.yaml --origin first_party
-step ingest:tech pnpm -s ingest --file tech/tech.manifest.yaml --origin first_party
-step embed pnpm -s embed
+# OS 3.0 local-first bootstrap (Obsidian Vault + SQLite runtime; zero Postgres/Supabase required).
+# Legacy OS 2.0 rollback: uncomment below to re-enable Supabase/Postgres startup:
+# step db:setup ./supabase/local/setup.sh
+# step db:up pnpm -s db:up
+step vault:os3 pnpm -s vault:os3 scan
 
 if [ ${#failed[@]} -eq 0 ]; then
-  echo "session-start: local DB ready (migrations applied, build guide + X3LIUS manifest admitted, embeddings current); log: $LOG"
+  echo "session-start: XYP3RN OS 3.0 Vault & SQLite runtime ready (Postgres/Supabase retired); log: $LOG"
 else
   echo "session-start: FAILED steps: ${failed[*]} — see $LOG"
 fi
