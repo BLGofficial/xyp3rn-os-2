@@ -387,7 +387,14 @@ export const buildResearchOverview = (runtime: Os3JarvisRuntime) => {
 };
 
 export const buildRecordsOverview = (runtime: Os3JarvisRuntime) => {
-  const entries = runtime.db.listIndexEntries('05_XYP3RN_RECORDS', 400);
+  const recordsEntries = runtime.db.listIndexEntries('05_XYP3RN_RECORDS', 400);
+  const x3liusEntries = runtime.db.listIndexEntries('09_X3LIUS_MUSIC', 400);
+  const seenPaths = new Set<string>();
+  const entries = [...recordsEntries, ...x3liusEntries].filter((entry) => {
+    if (seenPaths.has(entry.vaultPath)) return false;
+    seenPaths.add(entry.vaultPath);
+    return true;
+  });
   const recordAgents = runtime.agents
     .list()
     .filter((a) => a.domain === 'RECORDS' || a.name.startsWith('x3lius-') || a.name.startsWith('records-'));
@@ -398,11 +405,11 @@ export const buildRecordsOverview = (runtime: Os3JarvisRuntime) => {
   const pickBy = (matcher: (e: IndexEntryRecord) => boolean) =>
     entries.filter(matcher).map(summarizeEntry);
 
-  const songs = pickBy((e) => e.docType === 'song' || e.vaultPath.includes('/00_Songs/'));
-  const lyrics = pickBy((e) => e.docType === 'lyric_version' || e.vaultPath.includes('/01_Lyrics/'));
-  const vocalDna = pickBy((e) => e.docType === 'vocal_dna' || e.vaultPath.includes('/02_Vocal_DNA/'));
-  const sunoPrompts = pickBy((e) => e.docType === 'suno_package' || e.vaultPath.includes('/07_Suno_Prompts/'));
-  const audioTakes = pickBy((e) => e.docType === 'take' || e.vaultPath.includes('/06_Audio/'));
+  const songs = pickBy((e) => e.docType === 'song' || e.vaultPath.includes('/00_Songs/') || e.vaultPath.includes('/SONGS/'));
+  const lyrics = pickBy((e) => e.docType === 'lyric_version' || e.vaultPath.includes('/01_Lyrics/') || e.vaultPath.includes('/LYRICS/'));
+  const vocalDna = pickBy((e) => e.docType === 'vocal_dna' || e.vaultPath.includes('/02_Vocal_DNA/') || e.vaultPath.includes('/VOCAL_DNA/'));
+  const sunoPrompts = pickBy((e) => e.docType === 'suno_package' || e.docType === 'audio-extracted-prompt' || e.vaultPath.includes('/07_Suno_Prompts/') || e.vaultPath.includes('/AUDIO_EXTRACTED_PROMPTS/') || e.vaultPath.includes('/SUNO_PACKAGES/'));
+  const audioTakes = pickBy((e) => e.docType === 'take' || e.vaultPath.includes('/06_Audio/') || e.vaultPath.includes('/TAKES/'));
   const releases = pickBy((e) => e.docType === 'release' || e.vaultPath.includes('/05_Releases/'));
   const rightsSplits = pickBy((e) => e.docType === 'rights_split_set' || e.vaultPath.includes('Rights') || e.vaultPath.includes('Split'));
   const catalogAssignments = pickBy((e) => e.docType === 'isrc_assignment' || e.docType === 'upc_assignment' || e.vaultPath.includes('/Catalog/'));
