@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { VaultNotFoundError } from './errors.ts';
+import { VaultConflictError, VaultNotFoundError } from './errors.ts';
 import { VaultRevisionStore, sha256Hex, writeFileAtomic, type RevisionMetadata } from './revision.ts';
 
 export type VaultVersionEntry = {
@@ -117,7 +117,8 @@ export class VaultVersionManager {
   }
 
   async readRevisionContent(sha256: string, vaultPath?: string): Promise<string> {
-    const text = await this.#revisions.readRevisionText(sha256);
+    const normalizedSha = sha256.trim().toLowerCase();
+    const text = await this.#revisions.readRevisionText(normalizedSha);
     if (text === null) {
       throw new VaultNotFoundError(
         'REVISION_NOT_FOUND',
@@ -125,7 +126,74 @@ export class VaultVersionManager {
         { vaultPath, details: { sha256 } },
       );
     }
+    const actualSha256 = sha256Hex(text);
+    if (actualSha256 !== normalizedSha) {
+      throw new VaultConflictError(
+        'CHECKSUM_MISMATCH',
+        `Corrupted revision blob "${normalizedSha}" in .vault-revisions/: actual SHA-256 ${actualSha256}`,
+        { vaultPath, details: { expectedSha256: normalizedSha, actualSha256 } },
+      );
+    }
     return text;
+  }
+
+  /**
+   * Verifies every JSONL history line and SHA-256 content blob for `vaultPath`,
+   * surfacing corrupted history records, missing blobs, or hash mismatches.
+   */
+  async verifyRevisionHistory(vaultPath: string): Promise<{
+    readonly ok: boolean;
+    readonly vaultPath: string;
+    readonly totalEntries: number;
+    readonly corruptedHistoryLines: number;
+    readonly missingBlobs: readonly string[];
+    readonly corruptedBlobs: readonly string[];
+  }> {
+    const logPath = this.#historyLogPath(vaultPath);
+    const raw = await readFile(logPath, 'utf8').catch(() => null);
+    if (!raw) {
+      return {
+        ok: true,
+        vaultPath,
+        totalEntries: 0,
+        corruptedHistoryLines: 0,
+        missingBlobs: [],
+        corruptedBlobs: [],
+      };
+    }
+
+    let totalEntries = 0;
+    let corruptedHistoryLines = 0;
+    const missingBlobs: string[] = [];
+    const corruptedBlobs: string[] = [];
+
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let parsedEntry: VaultVersionEntry;
+      try {
+        parsedEntry = JSON.parse(trimmed) as VaultVersionEntry;
+      } catch {
+        corruptedHistoryLines += 1;
+        continue;
+      }
+      totalEntries += 1;
+      const blobText = await this.#revisions.readRevisionText(parsedEntry.sha256);
+      if (blobText === null) {
+        missingBlobs.push(parsedEntry.sha256);
+      } else if (sha256Hex(blobText) !== parsedEntry.sha256.toLowerCase()) {
+        corruptedBlobs.push(parsedEntry.sha256);
+      }
+    }
+
+    return {
+      ok: corruptedHistoryLines === 0 && missingBlobs.length === 0 && corruptedBlobs.length === 0,
+      vaultPath,
+      totalEntries,
+      corruptedHistoryLines,
+      missingBlobs,
+      corruptedBlobs,
+    };
   }
 
   async createSnapshot(input: {

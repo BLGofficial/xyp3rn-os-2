@@ -1,8 +1,8 @@
 import { posix, resolve, sep } from 'node:path';
 
 /**
- * Canonical OS 3.0 Vault top-level directories (00_SYSTEM..11_ARCHIVE, _attachments)
- * plus the 6 UI-xyp3rn Constellation sectors for backward-compatible path resolution.
+ * Canonical OS 3.0 Vault top-level directories (14 folders: 00_SYSTEM..12_ARCHIVE, _attachments)
+ * plus the 6 UI-xyp3rn Constellation sectors & preserved legacy directories for non-destructive resolution.
  */
 export const OS3_VAULT_DIRS = [
   '00_SYSTEM',
@@ -15,8 +15,9 @@ export const OS3_VAULT_DIRS = [
   '07_TECH',
   '08_GOVERNANCE',
   '09_X3LIUS_MUSIC',
-  '10_INBOX',
-  '11_ARCHIVE',
+  '10_DAW_BRAIN',
+  '11_INBOX',
+  '12_ARCHIVE',
   '_attachments',
 ] as const;
 
@@ -28,6 +29,68 @@ export const LEGACY_UI_SECTORS = [
   '05_XYP3RN_RECORDS',
   '06_GOVERNANCE',
 ] as const;
+
+export type UiSectorId = (typeof LEGACY_UI_SECTORS)[number];
+
+/**
+ * Explicit reconciliation between the 6-sector Constellation UI (`UI-xyp3rn`) and
+ * the 14 physical OS 3.0 + DAW Brain Vault directories without altering sector semantics.
+ */
+export const UI_SECTOR_RECONCILIATION: Readonly<
+  Record<
+    UiSectorId,
+    {
+      readonly uiSector: UiSectorId;
+      readonly displayName: string;
+      readonly functionalDomains: readonly string[];
+      readonly mappedVaultDirs: readonly string[];
+      readonly note: string;
+    }
+  >
+> = {
+  '01_CORE': {
+    uiSector: '01_CORE',
+    displayName: 'CORE ENGINE',
+    functionalDomains: ['CORE', 'TECH'],
+    mappedVaultDirs: ['00_SYSTEM', '01_CORE', '04_AGENTS', '05_WORKFLOWS', '07_TECH', '11_INBOX'],
+    note: 'Maps OS architecture, agents, workflows, active intake (`11_INBOX`), and tech tooling telemetry without absorbing raw research sources.',
+  },
+  '02_KNOWLEDGE_LAYER': {
+    uiSector: '02_KNOWLEDGE_LAYER',
+    displayName: 'KNOWLEDGE LAYER',
+    functionalDomains: ['KNOWLEDGE'],
+    mappedVaultDirs: ['02_KNOWLEDGE', '02_KNOWLEDGE_LAYER', 'ROOT_KB'],
+    note: 'Holds promotion-gated canonical knowledge (`CANONICAL`, `FRAMEWORKS`, `PROMPT_LIBRARY`, `GLOSSARY`) distinct from raw source staging.',
+  },
+  '03_RESEARCH_INTELLIGENCE': {
+    uiSector: '03_RESEARCH_INTELLIGENCE',
+    displayName: 'RESEARCH INTELLIGENCE',
+    functionalDomains: ['RESEARCH_INTELLIGENCE'],
+    mappedVaultDirs: ['03_RESEARCH_INTELLIGENCE'],
+    note: 'Projects, questions, verbatim evidence, findings, contradictions, experiments, and research specialists.',
+  },
+  '04_RESEARCH_MATERIAL': {
+    uiSector: '04_RESEARCH_MATERIAL',
+    displayName: 'RESEARCH MATERIAL',
+    functionalDomains: ['KNOWLEDGE', 'RESEARCH_INTELLIGENCE'],
+    mappedVaultDirs: ['04_RESEARCH_MATERIAL', '02_KNOWLEDGE/SOURCES'],
+    note: 'Raw source material library; explicitly separated from `07_TECH` and DAW tooling (`10_DAW_BRAIN`).',
+  },
+  '05_XYP3RN_RECORDS': {
+    uiSector: '05_XYP3RN_RECORDS',
+    displayName: 'XYP3RN RECORDS',
+    functionalDomains: ['RECORDS'],
+    mappedVaultDirs: ['06_RECORDS', '05_XYP3RN_RECORDS', '09_X3LIUS_MUSIC', '10_DAW_BRAIN', '_attachments'],
+    note: 'Label catalog, X3LIUS songs/lyrics/prompts, and studio production/DAW Brain studio sessions & mix references.',
+  },
+  '06_GOVERNANCE': {
+    uiSector: '06_GOVERNANCE',
+    displayName: 'GOVERNANCE',
+    functionalDomains: ['GOVERNANCE'],
+    mappedVaultDirs: ['08_GOVERNANCE', '06_GOVERNANCE', '12_ARCHIVE'],
+    note: 'Policies, access control, human approval records, immutable audit ledgers, and archived/superseded history.',
+  },
+};
 
 export const VAULT_SECTORS = [
   '00_SYSTEM',
@@ -44,8 +107,11 @@ export const VAULT_SECTORS = [
   '07_TECH',
   '08_GOVERNANCE',
   '09_X3LIUS_MUSIC',
+  '10_DAW_BRAIN',
   '10_INBOX',
+  '11_INBOX',
   '11_ARCHIVE',
+  '12_ARCHIVE',
   '_attachments',
 ] as const;
 
@@ -87,6 +153,9 @@ export const CANONICAL_PATH_PREFIXES = [
   '08_GOVERNANCE/POLICIES/',
   '08_GOVERNANCE/STANDARDS/',
   '08_GOVERNANCE/ACCESS_CONTROL/',
+  '10_DAW_BRAIN/CAPABILITIES/',
+  '10_DAW_BRAIN/ADAPTERS/',
+  '10_DAW_BRAIN/MIX_MASTER_REFS/',
   'canonical/',
 ] as const;
 

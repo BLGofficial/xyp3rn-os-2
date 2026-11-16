@@ -25,6 +25,22 @@ export const parseFrontmatterDocument = (
   rawContent: string,
   options: { readonly strict?: boolean | undefined; readonly vaultPath?: string | undefined } = {},
 ): ParsedFrontmatterDocument => {
+  if (rawContent.includes('\0')) {
+    const msg = 'Corrupted document: contains binary NUL (\\0) bytes';
+    if (options.strict) {
+      throw new VaultValidationError('INVALID_YAML', msg, { vaultPath: options.vaultPath });
+    }
+    return {
+      frontmatter: { title: undefined, tags: [] },
+      rawFrontmatter: {},
+      body: rawContent,
+      wikilinks: [],
+      sha256: sha256Hex(rawContent),
+      bodySha256: sha256Hex(rawContent.trim()),
+      hasFrontmatterBlock: false,
+      frontmatterError: msg,
+    };
+  }
   const normalized = rawContent.startsWith('\uFEFF') ? rawContent.slice(1) : rawContent;
   const match = FM_BLOCK_RE.exec(normalized);
   const hasFrontmatterBlock = match !== null;

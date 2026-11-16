@@ -28,6 +28,7 @@ export const ALLOWED_OS3_AGENT_FRONTMATTER_FIELDS = [
   'write_permissions',
   'refusals',
   'tags',
+  'provenance',
   'source_sha256',
   'created_at',
   'updated_at',

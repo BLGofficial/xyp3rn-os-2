@@ -1,12 +1,21 @@
+import { DOMAINS } from '../contracts/taxonomy.ts';
 import { VaultValidationError } from './errors.ts';
 import { parseFrontmatterDocument } from './frontmatter.ts';
-import { RECOGNIZED_OS3_SCHEMAS, type Os3SchemaId } from './vault-foundation.ts';
+import { VAULT_SECTORS } from './path-guard.ts';
+import {
+  RECOGNIZED_OS3_SCHEMAS,
+  STRICT_PROVENANCE_SCHEMAS,
+  VALID_ENTITY_STATUSES,
+  type Os3SchemaId,
+} from './vault-schemas.ts';
 
 export type ValidationIssue = {
   readonly code:
     | 'INVALID_YAML'
     | 'INVALID_SCHEMA'
     | 'MISSING_ENTITY_ID'
+    | 'INVALID_METADATA'
+    | 'INVALID_ARCHIVE_OR_SUPERSESSION'
     | 'BROKEN_REFERENCE'
     | 'SECRET_DETECTED';
   readonly message: string;
@@ -23,6 +32,12 @@ export type EntityValidationResult = {
 };
 
 const RECOGNIZED_SCHEMA_SET = new Set<string>(RECOGNIZED_OS3_SCHEMAS);
+const VALID_DOMAIN_SET = new Set<string>(DOMAINS);
+const VALID_SECTOR_SET = new Set<string>([...VAULT_SECTORS, 'ROOT_KB']);
+const STABLE_ID_RE = /^[a-z0-9][a-z0-9._-]{2,127}$/i;
+const VALID_DAW_PERMISSIONS = new Set<string>(['observe', 'analyze', 'propose', 'prepare', 'execute', 'approve', 'rollback']);
+const VALID_SESSION_TIERS = new Set<string>(['liveObserved', 'cached', 'savedProject', 'proposedModifications', 'appliedModifications']);
+const VALID_HOST_SUPPORT = new Set<string>(['SUPPORTED', 'TEMPLATE_SCOPED', 'READ_ONLY', 'UNSUPPORTED']);
 
 const SECRET_PATTERNS: ReadonlyArray<{ readonly label: string; readonly re: RegExp }> = [
   { label: 'OpenRouter API key (sk-or-v1-...)', re: /\bsk-or-v1-[a-f0-9]{32,}\b/i },
@@ -35,9 +50,12 @@ const SECRET_PATTERNS: ReadonlyArray<{ readonly label: string; readonly re: RegE
 const SCHEMA_REQUIRED_FIELDS: Readonly<Record<Os3SchemaId, readonly string[]>> = {
   'xyp3rn.entity/v3': ['title', 'domain'],
   'xyp3rn.agent/v3': ['name', 'class', 'domain', 'model', 'capabilities', 'tools'],
-  'xyp3rn.workflow/v3': ['name', 'domain', 'steps'],
+  'xyp3rn.tool/v3': ['name', 'title', 'domain', 'capability', 'allowed_classes'],
   'xyp3rn.skill/v3': ['name', 'domain', 'capability'],
+  'xyp3rn.workflow/v3': ['name', 'domain', 'steps'],
   'xyp3rn.knowledge/v3': ['title', 'domain', 'status'],
+  'xyp3rn.canonical-prompt/v3': ['title', 'domain', 'prompt_text', 'model_scope', 'promoted_via'],
+  'xyp3rn.prompt-variant/v3': ['title', 'domain', 'parent_prompt_id', 'variant_label', 'model_scope', 'prompt_text'],
   'xyp3rn.source/v3': ['title', 'domain', 'origin'],
   'xyp3rn.research-project/v3': ['slug', 'title', 'domain'],
   'xyp3rn.research-question/v3': ['project_slug', 'title', 'domain'],
@@ -51,9 +69,24 @@ const SCHEMA_REQUIRED_FIELDS: Readonly<Record<Os3SchemaId, readonly string[]>> =
   'xyp3rn.track/v3': ['title', 'position'],
   'xyp3rn.release/v3': ['title', 'artist', 'kind'],
   'xyp3rn.rights-split/v3': ['title', 'total_percentage', 'has_unassigned_share', 'shares'],
+  'xyp3rn.production-session/v3': ['title', 'daw_host', 'daw_edition', 'project_path', 'state_tier'],
+  'xyp3rn.daw-capability/v3': ['title', 'capability_id', 'permission_tier', 'host_support'],
+  'xyp3rn.daw-adapter/v3': ['title', 'adapter_id', 'host_name', 'transport_protocol', 'supported_capabilities'],
+  'xyp3rn.daw-plugin/v3': ['title', 'plugin_format', 'vendor', 'category', 'edition_requirement'],
+  'xyp3rn.daw-plugin-chain/v3': ['title', 'stage', 'plugins'],
+  'xyp3rn.audio-analysis/v3': ['title', 'analysis_schema', 'source_sha256', 'integrated_lufs', 'true_peak_dbtp'],
+  'xyp3rn.dsp-concept/v3': ['title', 'domain', 'category', 'acoustic_principle'],
+  'xyp3rn.mix-reference/v3': ['title', 'stage', 'target_lufs_min', 'target_lufs_max', 'max_true_peak_dbtp'],
+  'xyp3rn.production-workflow/v3': ['title', 'target_daw', 'stage', 'workflow_steps'],
   'xyp3rn.policy/v3': ['title', 'domain', 'enforcement'],
   'xyp3rn.approval/v3': ['title', 'item_type', 'item_id', 'proposer'],
 };
+
+const isNonEmptyString = (val: unknown): val is string =>
+  typeof val === 'string' && val.trim().length > 0;
+
+const isValidIsoTimestamp = (val: unknown): boolean =>
+  typeof val === 'string' && !Number.isNaN(Date.parse(val));
 
 export type ValidateEntityOptions = {
   readonly requireSchema?: boolean | undefined;
@@ -63,8 +96,8 @@ export type ValidateEntityOptions = {
 
 /**
  * Validates a Markdown/YAML entity document for YAML syntax, secret leakage,
- * recognized `xyp3rn.<type>/v3` schema, required schema fields, stable `id`,
- * and optional reference integrity (`[[wikilinks]]` and `source_ref`).
+ * stable ID, complete OS3 metadata, document-specific schema invariants,
+ * explicit archive/supersession fields, and optional reference integrity.
  */
 export const validateEntityContent = (
   vaultPath: string,
@@ -72,6 +105,21 @@ export const validateEntityContent = (
   options: ValidateEntityOptions = {},
 ): EntityValidationResult => {
   const issues: ValidationIssue[] = [];
+
+  if (rawContent.includes('\0')) {
+    issues.push({
+      code: 'INVALID_YAML',
+      message: `Corrupted document "${vaultPath}": binary NUL bytes detected in text note`,
+    });
+    return {
+      ok: false,
+      vaultPath,
+      entityId: null,
+      schema: null,
+      sha256: parseFrontmatterDocument(rawContent, { strict: false, vaultPath }).sha256,
+      issues,
+    };
+  }
 
   for (const pat of SECRET_PATTERNS) {
     if (pat.re.test(rawContent)) {
@@ -117,6 +165,12 @@ export const validateEntityContent = (
         message: `Missing required stable entity "id" in frontmatter of "${vaultPath}"`,
         field: 'id',
       });
+    } else if (!STABLE_ID_RE.test(entityId)) {
+      issues.push({
+        code: 'INVALID_METADATA',
+        message: `Entity id "${entityId}" in "${vaultPath}" must be stable kebab/dot/underscore format (>=3 chars, no spaces)`,
+        field: 'id',
+      });
     }
 
     if (!rawSchema || !RECOGNIZED_SCHEMA_SET.has(rawSchema)) {
@@ -139,6 +193,104 @@ export const validateEntityContent = (
         }
       }
 
+      // Common OS3 metadata checks
+      if (fm.domain !== undefined && (!isNonEmptyString(fm.domain) || !VALID_DOMAIN_SET.has(fm.domain.trim()))) {
+        issues.push({
+          code: 'INVALID_METADATA',
+          message: `Invalid domain "${String(fm.domain)}" in "${vaultPath}"`,
+          field: 'domain',
+        });
+      }
+      if (fm.sector !== undefined && (!isNonEmptyString(fm.sector) || !VALID_SECTOR_SET.has(fm.sector.trim()))) {
+        issues.push({
+          code: 'INVALID_METADATA',
+          message: `Invalid sector "${String(fm.sector)}" in "${vaultPath}"`,
+          field: 'sector',
+        });
+      }
+      if (fm.status !== undefined && (!isNonEmptyString(fm.status) || !VALID_ENTITY_STATUSES.has(fm.status.trim()))) {
+        issues.push({
+          code: 'INVALID_METADATA',
+          message: `Invalid status "${String(fm.status)}" in "${vaultPath}"`,
+          field: 'status',
+        });
+      }
+      if (fm.version !== undefined) {
+        const ver = Number(fm.version);
+        if (!Number.isInteger(ver) || ver < 1) {
+          issues.push({
+            code: 'INVALID_METADATA',
+            message: `Entity version must be an integer >= 1 in "${vaultPath}" (got ${String(fm.version)})`,
+            field: 'version',
+          });
+        }
+      }
+      if (fm.created_at !== undefined && !isValidIsoTimestamp(fm.created_at)) {
+        issues.push({
+          code: 'INVALID_METADATA',
+          message: `Invalid created_at ISO timestamp in "${vaultPath}"`,
+          field: 'created_at',
+        });
+      }
+      if (fm.updated_at !== undefined && !isValidIsoTimestamp(fm.updated_at)) {
+        issues.push({
+          code: 'INVALID_METADATA',
+          message: `Invalid updated_at ISO timestamp in "${vaultPath}"`,
+          field: 'updated_at',
+        });
+      }
+      if (fm.tags !== undefined && (!Array.isArray(fm.tags) || fm.tags.some((t) => typeof t !== 'string'))) {
+        issues.push({
+          code: 'INVALID_METADATA',
+          message: `tags must be an array of strings in "${vaultPath}"`,
+          field: 'tags',
+        });
+      }
+
+      // Enforce explicit provenance + timestamps on new Phase 03 document schemas
+      if (STRICT_PROVENANCE_SCHEMAS.has(schemaId)) {
+        const prov = fm.provenance;
+        const hasValidProv =
+          isNonEmptyString(prov) ||
+          (typeof prov === 'object' && prov !== null && !Array.isArray(prov) && Object.keys(prov).length > 0);
+        if (!hasValidProv) {
+          issues.push({
+            code: 'INVALID_METADATA',
+            message: `Schema "${schemaId}" requires non-empty provenance metadata in "${vaultPath}"`,
+            field: 'provenance',
+          });
+        }
+        if (!isValidIsoTimestamp(fm.created_at) || !isValidIsoTimestamp(fm.updated_at)) {
+          issues.push({
+            code: 'INVALID_METADATA',
+            message: `Schema "${schemaId}" requires valid created_at and updated_at ISO timestamps in "${vaultPath}"`,
+            field: 'created_at',
+          });
+        }
+      }
+
+      // Explicit supersession & archive metadata enforcement
+      const statusStr = typeof fm.status === 'string' ? fm.status.trim() : '';
+      if (statusStr === 'superseded') {
+        if (!isNonEmptyString(fm.superseded_by) || !isValidIsoTimestamp(fm.superseded_at)) {
+          issues.push({
+            code: 'INVALID_ARCHIVE_OR_SUPERSESSION',
+            message: `Superseded document "${vaultPath}" must specify non-empty "superseded_by" and valid ISO "superseded_at"`,
+            field: 'superseded_by',
+          });
+        }
+      }
+      if (statusStr === 'archived' && entityId !== 'arch-0001-archive-index') {
+        if (!isNonEmptyString(fm.archive_reason) || !isValidIsoTimestamp(fm.archived_at)) {
+          issues.push({
+            code: 'INVALID_ARCHIVE_OR_SUPERSESSION',
+            message: `Archived document "${vaultPath}" must specify "archive_reason" and valid ISO "archived_at"`,
+            field: 'archive_reason',
+          });
+        }
+      }
+
+      // Document-specific invariants
       if (schemaId === 'xyp3rn.rights-split/v3') {
         const total = Number(fm.total_percentage);
         if (!Number.isFinite(total) || Math.abs(total - 100) > 0.001) {
@@ -168,6 +320,103 @@ export const validateEntityContent = (
             code: 'INVALID_SCHEMA',
             message: `Schema "${schemaId}" requires confidence in [0, 1] (got ${String(fm.confidence)})`,
             field: 'confidence',
+          });
+        }
+      }
+
+      if (schemaId === 'xyp3rn.production-session/v3') {
+        if (!isNonEmptyString(fm.state_tier) || !VALID_SESSION_TIERS.has(fm.state_tier.trim())) {
+          issues.push({
+            code: 'INVALID_SCHEMA',
+            message: `Schema "xyp3rn.production-session/v3" requires state_tier in liveObserved|cached|savedProject|proposedModifications|appliedModifications (got ${String(fm.state_tier)})`,
+            field: 'state_tier',
+          });
+        }
+      }
+
+      if (schemaId === 'xyp3rn.daw-capability/v3') {
+        if (!isNonEmptyString(fm.permission_tier) || !VALID_DAW_PERMISSIONS.has(fm.permission_tier.trim())) {
+          issues.push({
+            code: 'INVALID_SCHEMA',
+            message: `Invalid DAW permission_tier "${String(fm.permission_tier)}" in "${vaultPath}"`,
+            field: 'permission_tier',
+          });
+        }
+        if (fm.host_support && typeof fm.host_support === 'object' && !Array.isArray(fm.host_support)) {
+          for (const [host, sup] of Object.entries(fm.host_support as Record<string, unknown>)) {
+            if (!isNonEmptyString(sup) || !VALID_HOST_SUPPORT.has(sup.trim())) {
+              issues.push({
+                code: 'INVALID_SCHEMA',
+                message: `Invalid host_support "${String(sup)}" for host "${host}" in "${vaultPath}"`,
+                field: 'host_support',
+              });
+            }
+          }
+        }
+      }
+
+      if (schemaId === 'xyp3rn.daw-plugin-chain/v3') {
+        if (!Array.isArray(fm.plugins) || fm.plugins.length === 0) {
+          issues.push({
+            code: 'INVALID_SCHEMA',
+            message: `Schema "xyp3rn.daw-plugin-chain/v3" requires a non-empty plugins array in "${vaultPath}"`,
+            field: 'plugins',
+          });
+        }
+      }
+
+      if (schemaId === 'xyp3rn.mix-reference/v3') {
+        if (!isNonEmptyString(fm.stage) || !['mix', 'master'].includes(fm.stage.trim())) {
+          issues.push({
+            code: 'INVALID_SCHEMA',
+            message: `Schema "xyp3rn.mix-reference/v3" stage must be "mix" or "master" in "${vaultPath}"`,
+            field: 'stage',
+          });
+        }
+        const minLufs = Number(fm.target_lufs_min);
+        const maxLufs = Number(fm.target_lufs_max);
+        const peak = Number(fm.max_true_peak_dbtp);
+        if (!Number.isFinite(minLufs) || !Number.isFinite(maxLufs) || minLufs > maxLufs) {
+          issues.push({
+            code: 'INVALID_SCHEMA',
+            message: `Schema "xyp3rn.mix-reference/v3" requires finite target_lufs_min <= target_lufs_max in "${vaultPath}"`,
+            field: 'target_lufs_min',
+          });
+        }
+        if (!Number.isFinite(peak) || peak > 0) {
+          issues.push({
+            code: 'INVALID_SCHEMA',
+            message: `Schema "xyp3rn.mix-reference/v3" requires max_true_peak_dbtp <= 0 dBTP in "${vaultPath}"`,
+            field: 'max_true_peak_dbtp',
+          });
+        }
+      }
+
+      if (schemaId === 'xyp3rn.audio-analysis/v3') {
+        const lufs = Number(fm.integrated_lufs);
+        const peak = Number(fm.true_peak_dbtp);
+        if (!Number.isFinite(lufs) || lufs > 3 || lufs < -120) {
+          issues.push({
+            code: 'INVALID_SCHEMA',
+            message: `Schema "xyp3rn.audio-analysis/v3" integrated_lufs out of physical range in "${vaultPath}"`,
+            field: 'integrated_lufs',
+          });
+        }
+        if (!Number.isFinite(peak) || peak > 24 || peak < -120) {
+          issues.push({
+            code: 'INVALID_SCHEMA',
+            message: `Schema "xyp3rn.audio-analysis/v3" true_peak_dbtp out of range in "${vaultPath}"`,
+            field: 'true_peak_dbtp',
+          });
+        }
+      }
+
+      if (schemaId === 'xyp3rn.production-workflow/v3') {
+        if (!Array.isArray(fm.workflow_steps) || fm.workflow_steps.length === 0) {
+          issues.push({
+            code: 'INVALID_SCHEMA',
+            message: `Schema "xyp3rn.production-workflow/v3" requires non-empty workflow_steps array in "${vaultPath}"`,
+            field: 'workflow_steps',
           });
         }
       }

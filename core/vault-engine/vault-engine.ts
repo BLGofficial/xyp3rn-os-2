@@ -4,6 +4,15 @@ import { parseObsidianNote } from '../../knowledge/obsidian/parser.ts';
 import type { IndexEntryRecord, SqliteRuntimeDb } from '../sqlite/client.ts';
 import { VaultAuditLogger, type VaultAuditRecord } from './audit.ts';
 import {
+  inspectVaultConflict,
+  resolveVaultConflict,
+  type ConflictResolutionStrategy,
+  type ResolveConflictRequest,
+  type ResolveConflictResult,
+  type VaultConflictKind,
+  type VaultConflictReport,
+} from './conflict-resolver.ts';
+import {
   VaultConflictError,
   VaultEngineError,
   VaultNotFoundError,
@@ -11,6 +20,7 @@ import {
   VaultPermissionError,
   VaultValidationError,
 } from './errors.ts';
+import { parseFrontmatterDocument } from './frontmatter.ts';
 import {
   appendWikilinkToContent,
   resolveNoteLinks,
@@ -22,7 +32,7 @@ import {
   validateVaultPath,
   type VaultSector,
 } from './path-guard.ts';
-import { resolveVaultPath } from './path-resolver.ts';
+import { resolveVaultPath, resolveVaultPathSync } from './path-resolver.ts';
 import { VaultPromotionGate, type PromoteToCanonicalRequest } from './promotion-gate.ts';
 import {
   listVaultEntries,
@@ -32,7 +42,7 @@ import {
   type VaultNoteDocument,
   type VaultNoteMetadata,
 } from './reader.ts';
-import { VaultRevisionStore, sha256Hex, writeFileAtomic } from './revision.ts';
+import { VaultRevisionStore, sha256Hex } from './revision.ts';
 import {
   validateEntityContent,
   type EntityValidationResult,
@@ -41,9 +51,14 @@ import {
 import { searchVaultIndex, type VaultSearchOptions } from './search.ts';
 import { VaultTransactionManager } from './transaction-manager.ts';
 import {
+  assertVaultPermission,
   createVaultConfig,
   type VaultEngineConfig,
   type VaultEngineConfigInput,
+  type VaultOperationKind,
+  type VaultPermissionChecker,
+  type VaultPermissionContext,
+  type VaultPermissionDecision,
 } from './vault-config.ts';
 import {
   VaultVersionManager,
@@ -52,6 +67,7 @@ import {
 } from './version-manager.ts';
 import { VaultWatcher, type ExternalVaultChange } from './watcher.ts';
 import {
+  commitValidatedNote,
   executeControlledAppend,
   executeControlledUpdate,
   executeControlledWrite,
@@ -188,6 +204,14 @@ export class VaultEngine {
   // ─── 1. read() & readNote() ─────────────────────────────────────────────────
 
   async read(relPath: string, actor = 'system'): Promise<VaultNoteDocument> {
+    const resolved = await resolveVaultPath(this.#config, relPath, { requireSectorPrefix: false });
+    assertVaultPermission(this.#config, this.#audit, {
+      actor,
+      operation: 'read',
+      vaultPath: resolved.normalizedPath,
+      sector: resolved.sector,
+      isCanonical: resolved.isCanonical,
+    });
     return readVaultNote(this.#config, relPath, { audit: this.#audit, actor });
   }
 
@@ -198,19 +222,55 @@ export class VaultEngine {
   // ─── 2. readMetadata() ──────────────────────────────────────────────────────
 
   async readMetadata(relPath: string, actor = 'system'): Promise<VaultNoteMetadata> {
+    const resolved = await resolveVaultPath(this.#config, relPath, { requireSectorPrefix: false });
+    assertVaultPermission(this.#config, this.#audit, {
+      actor,
+      operation: 'readMetadata',
+      vaultPath: resolved.normalizedPath,
+      sector: resolved.sector,
+      isCanonical: resolved.isCanonical,
+    });
     return readVaultMetadata(this.#config, relPath, { audit: this.#audit, actor });
   }
 
   // ─── 3. list() ──────────────────────────────────────────────────────────────
 
-  list(options: ListVaultOptions = {}): readonly IndexEntryRecord[] {
-    return listVaultEntries(this.#db, options);
+  list(options: ListVaultOptions = {}, actor = 'system'): readonly IndexEntryRecord[] {
+    assertVaultPermission(this.#config, this.#audit, {
+      actor,
+      operation: 'list',
+      vaultPath: options.prefix ?? '(index)',
+      sector: options.sector,
+    });
+    const entries = listVaultEntries(this.#db, options);
+    this.#audit.record({
+      actor,
+      operation: 'list',
+      filePath: options.prefix ?? options.sector ?? '(vault)',
+      reason: `Listed ${entries.length} Vault index entries`,
+      result: 'success',
+    });
+    return entries;
   }
 
   // ─── 4. search() ────────────────────────────────────────────────────────────
 
-  search(query: string, options: VaultSearchOptions = {}): readonly IndexEntryRecord[] {
-    return searchVaultIndex(this.#db, query, options);
+  search(query: string, options: VaultSearchOptions = {}, actor = 'system'): readonly IndexEntryRecord[] {
+    assertVaultPermission(this.#config, this.#audit, {
+      actor,
+      operation: 'search',
+      vaultPath: '(index-search)',
+      sector: options.sector,
+    });
+    const hits = searchVaultIndex(this.#db, query, options);
+    this.#audit.record({
+      actor,
+      operation: 'search',
+      filePath: options.sector ?? '(vault)',
+      reason: `Searched Vault (${hits.length} results)`,
+      result: 'success',
+    });
+    return hits;
   }
 
   // ─── 5. write() & writeNote() ───────────────────────────────────────────────
@@ -245,7 +305,15 @@ export class VaultEngine {
     vaultPath: string,
     options: ValidateEntityOptions & { readonly content?: string | undefined; readonly actor?: string | undefined } = {},
   ): Promise<EntityValidationResult> {
+    const actor = options.actor ?? 'system';
     const resolved = await resolveVaultPath(this.#config, vaultPath, { requireSectorPrefix: false });
+    assertVaultPermission(this.#config, this.#audit, {
+      actor,
+      operation: 'validate',
+      vaultPath: resolved.normalizedPath,
+      sector: resolved.sector,
+      isCanonical: resolved.isCanonical,
+    });
     const rawContent =
       options.content !== undefined ? options.content : await readFile(resolved.absPath, 'utf8');
 
@@ -256,7 +324,7 @@ export class VaultEngine {
     });
 
     this.#audit.record({
-      actor: options.actor ?? 'system',
+      actor,
       operation: 'validate',
       entityId: res.entityId,
       filePath: resolved.normalizedPath,
@@ -275,6 +343,21 @@ export class VaultEngine {
       requireSectorPrefix: true,
       requireWritableSector: true,
     });
+    if (srcResolved.isCanonical) {
+      throw new VaultPermissionError(
+        'CANONICAL_WRITE_FORBIDDEN',
+        `Direct link mutation on canonical path "${srcResolved.normalizedPath}" is forbidden; use promote().`,
+        { vaultPath: srcResolved.normalizedPath },
+      );
+    }
+    assertVaultPermission(this.#config, this.#audit, {
+      actor: req.actor,
+      operation: 'link',
+      vaultPath: srcResolved.normalizedPath,
+      sector: srcResolved.sector,
+      isCanonical: false,
+    });
+
     const dstResolved = await resolveVaultPath(this.#config, req.targetVaultPath, {
       requireSectorPrefix: false,
     });
@@ -308,7 +391,7 @@ export class VaultEngine {
         wikilinkSyntax,
         alreadyLinked: true,
         sha256: srcDoc.sha256,
-        revisionNumber: (await this.history(srcResolved.normalizedPath)).length,
+        revisionNumber: (await this.history(srcResolved.normalizedPath, req.actor)).length,
       };
     }
 
@@ -343,8 +426,21 @@ export class VaultEngine {
 
   // ─── 10. backlinks() & resolveLinks() ───────────────────────────────────────
 
-  backlinks(vaultPath: string): readonly string[] {
-    return resolveNoteLinks(this.#db, vaultPath).backlinks;
+  backlinks(vaultPath: string, actor = 'system'): readonly string[] {
+    assertVaultPermission(this.#config, this.#audit, {
+      actor,
+      operation: 'backlinks',
+      vaultPath,
+    });
+    const list = resolveNoteLinks(this.#db, vaultPath).backlinks;
+    this.#audit.record({
+      actor,
+      operation: 'backlinks',
+      filePath: vaultPath,
+      reason: `Resolved ${list.length} backlinks`,
+      result: 'success',
+    });
+    return list;
   }
 
   resolveLinks(vaultPath: string): {
@@ -358,11 +454,31 @@ export class VaultEngine {
     };
   }
 
-  // ─── 11. history() & restore() ──────────────────────────────────────────────
+  // ─── 11. history(), verifyHistory() & restore() ─────────────────────────────
 
-  async history(vaultPath: string): Promise<readonly VaultVersionEntry[]> {
+  async history(vaultPath: string, actor = 'system'): Promise<readonly VaultVersionEntry[]> {
     const resolved = await resolveVaultPath(this.#config, vaultPath, { requireSectorPrefix: false });
-    return this.#versions.getHistory(resolved.normalizedPath);
+    assertVaultPermission(this.#config, this.#audit, {
+      actor,
+      operation: 'history',
+      vaultPath: resolved.normalizedPath,
+      sector: resolved.sector,
+      isCanonical: resolved.isCanonical,
+    });
+    const entries = await this.#versions.getHistory(resolved.normalizedPath);
+    this.#audit.record({
+      actor,
+      operation: 'history',
+      filePath: resolved.normalizedPath,
+      reason: `Read ${entries.length} revision entries`,
+      result: 'success',
+    });
+    return entries;
+  }
+
+  async verifyHistory(vaultPath: string) {
+    const resolved = await resolveVaultPath(this.#config, vaultPath, { requireSectorPrefix: false });
+    return this.#versions.verifyRevisionHistory(resolved.normalizedPath);
   }
 
   async restore(req: RestoreRevisionRequest): Promise<WriteNoteResult> {
@@ -371,6 +487,14 @@ export class VaultEngine {
       requireWritableSector: true,
     });
     if (check.isCanonical) {
+      this.#audit.record({
+        actor: req.actor,
+        operation: 'restore',
+        filePath: check.normalizedPath,
+        reason: 'Direct restore into canonical path forbidden',
+        result: 'denied',
+        domain: 'GOVERNANCE',
+      });
       throw new VaultPermissionError(
         'CANONICAL_WRITE_FORBIDDEN',
         `Direct restore into canonical path "${check.normalizedPath}" is forbidden without Promotion Gate`,
@@ -378,7 +502,22 @@ export class VaultEngine {
       );
     }
 
+    assertVaultPermission(this.#config, this.#audit, {
+      actor: req.actor,
+      operation: 'restore',
+      vaultPath: check.normalizedPath,
+      sector: check.sector,
+      isCanonical: false,
+    });
+
     const targetContent = await this.#versions.readRevisionContent(req.targetSha256, check.normalizedPath);
+    const parsedTarget = parseFrontmatterDocument(targetContent, { strict: true, vaultPath: check.normalizedPath });
+    const entityId =
+      typeof parsedTarget.rawFrontmatter.id === 'string'
+        ? parsedTarget.rawFrontmatter.id
+        : typeof parsedTarget.rawFrontmatter.id === 'number'
+          ? String(parsedTarget.rawFrontmatter.id)
+          : null;
 
     return this.#transactions.withPathLock(
       check.normalizedPath,
@@ -390,46 +529,16 @@ export class VaultEngine {
           absPath: check.absPath,
         });
 
-        await writeFileAtomic(check.absPath, targetContent);
-        const parsed = parseObsidianNote(targetContent);
-        const entityId =
-          typeof parsed.frontmatter.id === 'string'
-            ? parsed.frontmatter.id
-            : typeof parsed.frontmatter.id === 'number'
-              ? String(parsed.frontmatter.id)
-              : null;
-
-        const versionEntry = await this.#versions.recordVersion({
-          vaultPath: check.normalizedPath,
-          entityId,
+        return commitValidatedNote(this.#writerContext(), {
+          check,
           content: targetContent,
-          previousSha256: diskState.diskSha256,
           actor: req.actor,
-          operation: 'restore',
-          reason: req.reason ?? `Restored to revision ${req.targetSha256.slice(0, 12)}`,
-        });
-
-        await this.#indexSingleFile(check.normalizedPath, check.absPath, check.sector, check.ext);
-
-        this.#audit.record({
-          actor: req.actor,
-          operation: 'restore',
           entityId,
-          filePath: check.normalizedPath,
-          previousChecksum: diskState.diskSha256,
-          newChecksum: versionEntry.sha256,
-          reason: req.reason ?? `Restored to revision ${req.targetSha256.slice(0, 12)}`,
-          result: 'success',
-        });
-
-        return {
-          vaultPath: check.normalizedPath,
-          sha256: versionEntry.sha256,
           previousSha256: diskState.diskSha256,
           createdCopy: false,
-          byteSize: versionEntry.byteSize,
-          revisionNumber: versionEntry.revisionNumber,
-        };
+          operation: 'restore',
+          reason: req.reason ?? `Restored to revision ${req.targetSha256.slice(0, 12)}`,
+        });
       },
     );
   }
@@ -447,16 +556,25 @@ export class VaultEngine {
   // ─── 13. snapshot() ─────────────────────────────────────────────────────────
 
   async snapshot(label = 'manual', actor = 'system'): Promise<VaultSnapshotManifest> {
-    const entries = this.#db.listIndexEntries(undefined, 50_000);
+    assertVaultPermission(this.#config, this.#audit, {
+      actor,
+      operation: 'snapshot',
+      vaultPath: '.vault-revisions/snapshots',
+    });
+
+    const files = this.#db.isOpen
+      ? this.#db.listIndexEntries(undefined, 50_000).map((e) => ({
+          vaultPath: e.vaultPath,
+          sha256: e.sha256,
+          byteSize: e.byteSize,
+          sector: e.sector,
+        }))
+      : await this.#collectSnapshotFilesFromDisk();
+
     const snap = await this.#versions.createSnapshot({
       label,
       actor,
-      files: entries.map((e) => ({
-        vaultPath: e.vaultPath,
-        sha256: e.sha256,
-        byteSize: e.byteSize,
-        sector: e.sector,
-      })),
+      files,
     });
 
     this.#audit.record({
@@ -469,6 +587,51 @@ export class VaultEngine {
     });
 
     return snap;
+  }
+
+  // ─── Conflict Detection & Safe Resolution ───────────────────────────────────
+
+  async inspectConflict(
+    vaultPath: string,
+    expectedSha256?: string | null,
+    actor = 'system',
+  ): Promise<VaultConflictReport> {
+    return inspectVaultConflict(this.#writerContext(), vaultPath, expectedSha256, actor);
+  }
+
+  async resolveConflict(req: ResolveConflictRequest): Promise<ResolveConflictResult> {
+    return resolveVaultConflict(this.#writerContext(), req);
+  }
+
+  async #collectSnapshotFilesFromDisk(): Promise<
+    ReadonlyArray<{ readonly vaultPath: string; readonly sha256: string; readonly byteSize: number; readonly sector: string }>
+  > {
+    const out: { readonly vaultPath: string; readonly sha256: string; readonly byteSize: number; readonly sector: string }[] = [];
+    const walk = async (dirAbs: string): Promise<void> => {
+      const entries = await readdir(dirAbs, { withFileTypes: true }).catch(() => []);
+      for (const d of entries) {
+        if (d.name.startsWith('.') || IGNORED_VAULT_DIRS.has(d.name)) continue;
+        const abs = join(dirAbs, d.name);
+        if (d.isDirectory()) {
+          await walk(abs);
+          continue;
+        }
+        if (!d.isFile()) continue;
+        const rel = relative(this.#config.vaultRoot, abs).split(sep).join('/');
+        const check = validateVaultPath(this.#config.vaultRoot, rel, { requireSectorPrefix: false });
+        if (!check.ok) continue;
+        const st = await stat(abs);
+        const bytes = await readFile(abs);
+        out.push({
+          vaultPath: check.normalizedPath,
+          sha256: sha256Hex(bytes),
+          byteSize: st.size,
+          sector: check.sector,
+        });
+      }
+    };
+    await walk(this.#config.vaultRoot);
+    return out;
   }
 
   // ─── External Edit Reconciliation & Structural Scanner ──────────────────────
@@ -679,6 +842,10 @@ export class VaultEngine {
 }
 
 export {
+  inspectVaultConflict,
+  resolveVaultConflict,
+  resolveVaultPath,
+  resolveVaultPathSync,
   VaultAuditLogger,
   VaultConflictError,
   VaultEngineError,
@@ -691,15 +858,24 @@ export {
   VaultVersionManager,
   VaultWatcher,
   type AppendNoteRequest,
+  type ConflictResolutionStrategy,
   type EntityValidationResult,
   type ExternalVaultChange,
   type ListVaultOptions,
   type PromoteToCanonicalRequest,
+  type ResolveConflictRequest,
+  type ResolveConflictResult,
   type UpdateNoteRequest,
   type VaultAuditRecord,
+  type VaultConflictKind,
+  type VaultConflictReport,
   type VaultEngineConfig,
   type VaultNoteDocument,
   type VaultNoteMetadata,
+  type VaultOperationKind,
+  type VaultPermissionChecker,
+  type VaultPermissionContext,
+  type VaultPermissionDecision,
   type VaultSearchOptions,
   type VaultSnapshotManifest,
   type VaultVersionEntry,

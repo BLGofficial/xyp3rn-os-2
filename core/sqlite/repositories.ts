@@ -3,6 +3,14 @@ import type {
   ApprovalItemType,
   ApprovalStatus,
   CompleteAgentRunInput,
+  DawAudioAnalysisRecord,
+  DawAudioSourceKind,
+  DawCommandJournalRecord,
+  DawCommandStatus,
+  DawLeasePermission,
+  DawSessionLeaseRecord,
+  DawSessionRecord,
+  DawSessionStatus,
   FailAgentRunInput,
   IndexEntryRecord,
   JobKind,
@@ -12,6 +20,10 @@ import type {
   RuntimeEventRecord,
   SessionRecord,
   SessionSource,
+  SqliteBackupReport,
+  SqliteIntegrityReport,
+  SqliteRetentionPolicy,
+  SqliteRetentionReport,
   SqliteRuntimeDb,
   StartAgentRunInput,
   UpsertIndexEntryInput,
@@ -123,6 +135,74 @@ export interface IndexStateRepository {
   getMeta<T = unknown>(key: string): T | null;
 }
 
+export interface DawSessionsRepository {
+  upsert(input: {
+    readonly id?: string | undefined;
+    readonly adapterId: string;
+    readonly hostVersion: string;
+    readonly projectPath?: string | null | undefined;
+    readonly savedSha256?: string | null | undefined;
+    readonly cachedSnapshot?: Record<string, unknown> | null | undefined;
+    readonly cachedAt?: string | null | undefined;
+    readonly status: DawSessionStatus;
+  }): DawSessionRecord;
+  getById(id: string): DawSessionRecord | null;
+  list(status?: DawSessionStatus, limit?: number): readonly DawSessionRecord[];
+  markStatus(id: string, status: DawSessionStatus): DawSessionRecord;
+}
+
+export interface DawLeasesRepository {
+  grant(input: {
+    readonly id?: string | undefined;
+    readonly sessionId: string;
+    readonly maxPermission: DawLeasePermission;
+    readonly grantedBy: string;
+    readonly allowedTargets?: readonly string[] | undefined;
+    readonly ttlMs?: number | undefined;
+  }): DawSessionLeaseRecord;
+  getById(id: string): DawSessionLeaseRecord | null;
+  getActiveForSession(sessionId: string, referenceIso?: string): DawSessionLeaseRecord | null;
+  revoke(id: string): boolean;
+  listBySession(sessionId: string): readonly DawSessionLeaseRecord[];
+}
+
+export interface DawCommandJournalRepository {
+  append(input: {
+    readonly id?: string | undefined;
+    readonly sessionId: string;
+    readonly approvalId?: string | null | undefined;
+    readonly capabilityId: string;
+    readonly targetRef: string;
+    readonly command: Record<string, unknown>;
+    readonly beforeState?: Record<string, unknown> | null | undefined;
+    readonly afterState?: Record<string, unknown> | null | undefined;
+    readonly status: DawCommandStatus;
+    readonly errorDetail?: string | null | undefined;
+  }): DawCommandJournalRecord;
+  getById(id: string): DawCommandJournalRecord | null;
+  listBySession(sessionId: string, limit?: number): readonly DawCommandJournalRecord[];
+}
+
+export interface DawAudioAnalysesRepository {
+  record(input: {
+    readonly id?: string | undefined;
+    readonly sessionId?: string | null | undefined;
+    readonly sourceKind: DawAudioSourceKind;
+    readonly sourceSha256: string;
+    readonly traceAnalysis: Record<string, unknown>;
+    readonly traceReport: Record<string, unknown>;
+  }): DawAudioAnalysisRecord;
+  getById(id: string): DawAudioAnalysisRecord | null;
+  list(options?: { readonly sessionId?: string | undefined; readonly limit?: number | undefined }): readonly DawAudioAnalysisRecord[];
+}
+
+export interface RuntimeMaintenanceRepository {
+  prune(policy?: SqliteRetentionPolicy): SqliteRetentionReport;
+  checkIntegrity(): SqliteIntegrityReport;
+  backup(destPath: string): SqliteBackupReport;
+  transaction<T>(fn: () => T): T;
+}
+
 export type RuntimeRepositories = {
   readonly runs: RunsRepository;
   readonly jobs: JobsRepository;
@@ -131,6 +211,11 @@ export type RuntimeRepositories = {
   readonly events: EventsRepository;
   readonly sessions: SessionsRepository;
   readonly indexState: IndexStateRepository;
+  readonly dawSessions: DawSessionsRepository;
+  readonly dawLeases: DawLeasesRepository;
+  readonly dawCommandJournal: DawCommandJournalRepository;
+  readonly dawAudioAnalyses: DawAudioAnalysesRepository;
+  readonly maintenance: RuntimeMaintenanceRepository;
 };
 
 export const createRuntimeRepositories = (db: SqliteRuntimeDb): RuntimeRepositories => ({
@@ -186,5 +271,34 @@ export const createRuntimeRepositories = (db: SqliteRuntimeDb): RuntimeRepositor
     stats: () => db.getIndexStats(),
     setMeta: (key, value) => db.setIndexMeta(key, value),
     getMeta: <T = unknown>(key: string) => db.getIndexMeta<T>(key),
+  },
+  dawSessions: {
+    upsert: (input) => db.upsertDawSession(input),
+    getById: (id) => db.getDawSession(id),
+    list: (status, limit) => db.listDawSessions(status, limit),
+    markStatus: (id, status) => db.markDawSessionStatus(id, status),
+  },
+  dawLeases: {
+    grant: (input) => db.grantDawLease(input),
+    getById: (id) => db.getDawLease(id),
+    getActiveForSession: (sessionId, referenceIso) => db.getActiveDawLease(sessionId, referenceIso),
+    revoke: (id) => db.revokeDawLease(id),
+    listBySession: (sessionId) => db.listDawLeases(sessionId),
+  },
+  dawCommandJournal: {
+    append: (input) => db.appendDawCommand(input),
+    getById: (id) => db.getDawCommand(id),
+    listBySession: (sessionId, limit) => db.listDawCommandsBySession(sessionId, limit),
+  },
+  dawAudioAnalyses: {
+    record: (input) => db.recordDawAudioAnalysis(input),
+    getById: (id) => db.getDawAudioAnalysis(id),
+    list: (options) => db.listDawAudioAnalyses(options),
+  },
+  maintenance: {
+    prune: (policy) => db.pruneRuntimeState(policy),
+    checkIntegrity: () => db.checkIntegrity(),
+    backup: (destPath) => db.backupDatabase(destPath),
+    transaction: (fn) => db.transaction(fn),
   },
 });

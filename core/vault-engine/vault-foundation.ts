@@ -4,8 +4,12 @@ import { parse as parseYaml, stringify as toYaml } from 'yaml';
 import { parseObsidianNote } from '../../knowledge/obsidian/parser.ts';
 import { extractContractBullets } from '../agent-registry/os3-agent-registry.ts';
 import { OS3_CANONICAL_TOOL_DEFINITIONS } from '../tool-registry/os3-tool-registry.ts';
-import { OS3_VAULT_DIRS } from './path-guard.ts';
+import { OS3_VAULT_DIRS, UI_SECTOR_RECONCILIATION } from './path-guard.ts';
 import { sha256Hex, writeFileAtomic } from './revision.ts';
+import { validateEntityContent } from './schema-validator.ts';
+import { RECOGNIZED_OS3_SCHEMAS, type Os3SchemaId } from './vault-schemas.ts';
+
+export { RECOGNIZED_OS3_SCHEMAS, type Os3SchemaId } from './vault-schemas.ts';
 
 /**
  * Resolves the external Obsidian Vault path from environment variables without
@@ -19,34 +23,6 @@ export const resolveConfiguredVaultPath = (overridePath?: string): string => {
   if (raw) return resolve(raw);
   return resolve(process.cwd(), '..', 'XYP3RN-OS3-Vault');
 };
-
-/**
- * All 20 recognized versioned schemas for XYP3RN OS 3.0 Vault entities.
- */
-export const RECOGNIZED_OS3_SCHEMAS = [
-  'xyp3rn.entity/v3',
-  'xyp3rn.agent/v3',
-  'xyp3rn.workflow/v3',
-  'xyp3rn.skill/v3',
-  'xyp3rn.knowledge/v3',
-  'xyp3rn.source/v3',
-  'xyp3rn.research-project/v3',
-  'xyp3rn.research-question/v3',
-  'xyp3rn.evidence/v3',
-  'xyp3rn.finding/v3',
-  'xyp3rn.contradiction/v3',
-  'xyp3rn.experiment/v3',
-  'xyp3rn.decision-record/v3',
-  'xyp3rn.song/v3',
-  'xyp3rn.lyric/v3',
-  'xyp3rn.track/v3',
-  'xyp3rn.release/v3',
-  'xyp3rn.rights-split/v3',
-  'xyp3rn.policy/v3',
-  'xyp3rn.approval/v3',
-] as const;
-
-export type Os3SchemaId = (typeof RECOGNIZED_OS3_SCHEMAS)[number];
 
 /**
  * Required OS 3.0 directory hierarchy (top-level + domain subtrees).
@@ -101,6 +77,18 @@ export const REQUIRED_OS3_VAULT_SUBDIRS = [
   '09_X3LIUS_MUSIC/TAKES',
   '09_X3LIUS_MUSIC/EVALUATION',
   '09_X3LIUS_MUSIC/AUDIO_EXTRACTED_PROMPTS',
+  '10_DAW_BRAIN/SESSIONS',
+  '10_DAW_BRAIN/CAPABILITIES',
+  '10_DAW_BRAIN/ADAPTERS',
+  '10_DAW_BRAIN/PLUGINS',
+  '10_DAW_BRAIN/PLUGIN_CHAINS',
+  '10_DAW_BRAIN/AUDIO_ANALYSES',
+  '10_DAW_BRAIN/DSP_CONCEPTS',
+  '10_DAW_BRAIN/MIX_MASTER_REFS',
+  '10_DAW_BRAIN/WORKFLOWS',
+  '11_INBOX',
+  '12_ARCHIVE/SUPERSEDED',
+  '12_ARCHIVE/RETIRED',
 ] as const;
 
 export type Os3VaultProvisionReport = {
@@ -120,6 +108,7 @@ export type Os3VaultValidationReport = {
   readonly missingIdFiles: readonly string[];
   readonly duplicateIds: readonly { readonly id: string; readonly paths: readonly string[] }[];
   readonly unrecognizedSchemaFiles: readonly { readonly path: string; readonly schema: string }[];
+  readonly invalidMetadataFiles: readonly { readonly path: string; readonly issues: readonly string[] }[];
   readonly secretViolations: readonly { readonly path: string; readonly match: string }[];
   readonly obsidianConfigValid: boolean;
 };
@@ -132,10 +121,20 @@ const writeNoteWithFrontmatter = async (
   frontmatter: Record<string, unknown>,
   body: string,
 ): Promise<'written' | 'unchanged'> => {
+  // Phase 03 Safety: Preserve existing files cleanly; never silently overwrite files on disk.
+  if (await exists(absPath)) {
+    return 'unchanged';
+  }
   const cleanBody = body.trim();
   const bodySha = sha256Hex(cleanBody);
   const fullFm = {
     ...frontmatter,
+    version: frontmatter.version ?? 1,
+    provenance: frontmatter.provenance ?? {
+      origin: 'os3-vault-foundation',
+      actor: 'system-provisioner',
+      method: 'provisionOs3Vault',
+    },
     source_sha256: frontmatter.source_sha256 ?? bodySha,
     updated_at: frontmatter.updated_at ?? '2026-11-16T00:00:00.000Z',
     created_at: frontmatter.created_at ?? '2026-11-16T00:00:00.000Z',
@@ -143,10 +142,6 @@ const writeNoteWithFrontmatter = async (
   const yamlBlock = toYaml(fullFm, { lineWidth: 0 }).trimEnd();
   const content = `---\n${yamlBlock}\n---\n\n${cleanBody}\n`;
 
-  const existing = await readFile(absPath, 'utf8').catch(() => null);
-  if (existing !== null && sha256Hex(existing) === sha256Hex(content)) {
-    return 'unchanged';
-  }
   await writeFileAtomic(absPath, content);
   return 'written';
 };
@@ -264,6 +259,7 @@ const TEMPLATE_SPECS: ReadonlyArray<{
     domain: 'RESEARCH_INTELLIGENCE',
     title: 'Template: Research Question Brief',
     extraFm: {
+      project_slug: 'template-research-project',
       intended_use: 'Ground creative agent rules',
       allowed_urls: [],
       specialists: ['suno-researcher'],
@@ -279,6 +275,7 @@ const TEMPLATE_SPECS: ReadonlyArray<{
     title: 'Template: Verified Research Evidence',
     extraFm: {
       specialist: 'suno-researcher',
+      source_ref: '02_KNOWLEDGE/SOURCES/SRC-0001-Suno-v6-Signal-Fieldnotes.md',
       verbatim_quote: 'Exact verbatim passage from source text.',
       claim_topic: 'suno.example-topic',
       claim_value: 'example-value',
@@ -366,6 +363,7 @@ const TEMPLATE_SPECS: ReadonlyArray<{
     domain: 'RECORDS',
     title: 'Template: X3LIUS Lyric Sheet',
     extraFm: {
+      lineage_id: 'lin-template-song',
       author: 'X3LIUS',
       language: 'en',
       mixed_script_checked: true,
@@ -437,11 +435,185 @@ const TEMPLATE_SPECS: ReadonlyArray<{
     title: 'Template: Human Approval Record',
     extraFm: {
       item_type: 'vault_promotion',
+      item_id: 'know-0001-example',
       proposer: 'research-orchestrator',
       approver: 'owner',
       reason: 'Approved after verification.',
     },
     body: '# Human Approval Decision\n\n## Audit Trail',
+  },
+  {
+    file: 'tool.template.md',
+    id: 'tpl-tool-v3',
+    schema: 'xyp3rn.tool/v3',
+    type: 'tool',
+    domain: 'CORE',
+    title: 'Template: Registered Tool Contract',
+    extraFm: {
+      name: 'example_tool',
+      capability: 'context.read',
+      allowed_classes: ['Research', 'Knowledge', 'Execution'],
+      inputSchema: { type: 'object', required: ['query'] },
+    },
+    body: '# Tool Contract\n\n## Capability & Schema Guards\nSpecify authorization tier and schema constraints.',
+  },
+  {
+    file: 'canonical-prompt.template.md',
+    id: 'tpl-canonical-prompt-v3',
+    schema: 'xyp3rn.canonical-prompt/v3',
+    type: 'canonical_prompt',
+    domain: 'KNOWLEDGE',
+    title: 'Template: Canonical Prompt',
+    extraFm: {
+      model_scope: 'suno-v6',
+      promoted_via: 'gate',
+      prompt_text: 'UK drill hybrid, 140 BPM, sliding portamento 808 sub-bass, clean baritone vocal',
+    },
+    body: '# Canonical Prompt\n\n## Prompt Formula\nDocument verified components and linked findings.',
+  },
+  {
+    file: 'prompt-variant.template.md',
+    id: 'tpl-prompt-variant-v3',
+    schema: 'xyp3rn.prompt-variant/v3',
+    type: 'prompt_variant',
+    domain: 'KNOWLEDGE',
+    title: 'Template: Prompt Variant',
+    extraFm: {
+      parent_prompt_id: 'canp-0001-example',
+      variant_label: 'variant-a-dark-reverb',
+      model_scope: 'suno-v6',
+      prompt_text: 'Dark UK drill hybrid, 142 BPM, atmospheric plate reverb tail',
+    },
+    body: '# Prompt Variant\n\n## Delta vs Canonical Parent\nDescribe variant hypothesis and evaluation outcomes.',
+  },
+  {
+    file: 'production-session.template.md',
+    id: 'tpl-production-session-v3',
+    schema: 'xyp3rn.production-session/v3',
+    type: 'production_session',
+    domain: 'RECORDS',
+    title: 'Template: DAW Production Session',
+    extraFm: {
+      daw_host: 'fl-studio-2025',
+      daw_edition: 'producer',
+      project_path: 'projects/example-session.flp',
+      state_tier: 'savedProject',
+    },
+    body: '# Production Session\n\n## Live Observed vs Saved Project State\nTrack routing, plugin slots, and render verification.',
+  },
+  {
+    file: 'daw-capability.template.md',
+    id: 'tpl-daw-capability-v3',
+    schema: 'xyp3rn.daw-capability/v3',
+    type: 'daw_capability',
+    domain: 'TECH',
+    title: 'Template: DAW Capability Definition',
+    extraFm: {
+      capability_id: 'daw.mixer.fader_pan_mute',
+      permission_tier: 'execute',
+      host_support: { 'fl-studio-2025': 'SUPPORTED', reaper: 'SUPPORTED' },
+    },
+    body: '# DAW Capability Contract\n\n## Host Bounds & Safety Clamps\nDocument delta clamps and rollback guarantees.',
+  },
+  {
+    file: 'daw-adapter.template.md',
+    id: 'tpl-daw-adapter-v3',
+    schema: 'xyp3rn.daw-adapter/v3',
+    type: 'daw_adapter',
+    domain: 'TECH',
+    title: 'Template: DAW Adapter Manifest',
+    extraFm: {
+      adapter_id: 'fl-studio-2025',
+      host_name: 'FL Studio 2025 Producer Edition',
+      transport_protocol: 'loopMIDI-sysex-crc16',
+      supported_capabilities: ['daw.observe', 'daw.mixer.read', 'daw.plugin.param_write'],
+    },
+    body: '# DAW Adapter Specification\n\n## Supported APIs vs Unsupported Features\nExplicitly list unsupported operations.',
+  },
+  {
+    file: 'daw-plugin.template.md',
+    id: 'tpl-daw-plugin-v3',
+    schema: 'xyp3rn.daw-plugin/v3',
+    type: 'daw_plugin',
+    domain: 'RECORDS',
+    title: 'Template: Plugin Brain Profile',
+    extraFm: {
+      plugin_format: 'vst3',
+      vendor: 'Example Vendor',
+      category: 'eq',
+      edition_requirement: 'third-party-licensed',
+    },
+    body: '# Plugin Profile\n\n## Semantic Parameter Mapping\nMap canonical parameter keys to vendor indices.',
+  },
+  {
+    file: 'daw-plugin-chain.template.md',
+    id: 'tpl-daw-plugin-chain-v3',
+    schema: 'xyp3rn.daw-plugin-chain/v3',
+    type: 'daw_plugin_chain',
+    domain: 'RECORDS',
+    title: 'Template: DAW Plugin Chain Recipe',
+    extraFm: {
+      stage: 'mix',
+      plugins: ['plug-0001-fruity-parametric-eq-2', 'plug-0002-fruity-limiter'],
+    },
+    body: '# Plugin Chain Recipe\n\n## Signal Flow Order\nDocument ordered processors, gain staging, and Producer Edition notes.',
+  },
+  {
+    file: 'audio-analysis.template.md',
+    id: 'tpl-audio-analysis-v3',
+    schema: 'xyp3rn.audio-analysis/v3',
+    type: 'audio_analysis',
+    domain: 'TECH',
+    title: 'Template: Audio Brain TRACE Analysis',
+    extraFm: {
+      analysis_schema: 'trace.analysis/v1',
+      source_sha256: '0000000000000000000000000000000000000000000000000000000000000000',
+      integrated_lufs: -9.2,
+      true_peak_dbtp: -1.1,
+    },
+    body: '# Audio Brain Analysis\n\n## Loudness, Crest, Tonal Balance & Stereo Metrics\nSummary of TRACE rubric findings.',
+  },
+  {
+    file: 'dsp-concept.template.md',
+    id: 'tpl-dsp-concept-v3',
+    schema: 'xyp3rn.dsp-concept/v3',
+    type: 'dsp_concept',
+    domain: 'KNOWLEDGE',
+    title: 'Template: DSP & Acoustic Concept',
+    extraFm: {
+      category: 'dynamics-and-limiting',
+      acoustic_principle: 'True-peak inter-sample overshoot prevention via oversampled brickwall ceiling',
+    },
+    body: '# DSP Concept\n\n## Physical & Mathematical Principle\nExplain acoustic behavior and mix decision application.',
+  },
+  {
+    file: 'mix-reference.template.md',
+    id: 'tpl-mix-reference-v3',
+    schema: 'xyp3rn.mix-reference/v3',
+    type: 'mix_reference',
+    domain: 'RECORDS',
+    title: 'Template: Mix / Mastering Reference Target',
+    extraFm: {
+      stage: 'master',
+      target_lufs_min: -9.5,
+      target_lufs_max: -7.5,
+      max_true_peak_dbtp: -1.0,
+    },
+    body: '# Mix / Mastering Reference\n\n## Bound Targets\nList target LUFS window, crest floor, stereo width, and sub bounds.',
+  },
+  {
+    file: 'production-workflow.template.md',
+    id: 'tpl-production-workflow-v3',
+    schema: 'xyp3rn.production-workflow/v3',
+    type: 'production_workflow',
+    domain: 'RECORDS',
+    title: 'Template: DAW Production Workflow',
+    extraFm: {
+      target_daw: 'daw-agnostic',
+      stage: 'mix',
+      workflow_steps: ['observe-session', 'analyze-master-wav', 'propose-bounded-patch', 'human-approve', 'execute'],
+    },
+    body: '# Production Workflow\n\n## Governed Step Sequence\nDocument capability permissions per workflow step.',
   },
 ];
 
@@ -480,7 +652,7 @@ export const provisionOs3Vault = async (options: {
       json: {
         alwaysUpdateLinks: true,
         newFileLocation: 'folder',
-        newFileFolderPath: '10_INBOX',
+        newFileFolderPath: '11_INBOX',
         attachmentFolderPath: '_attachments',
         showUnsupportedFiles: true,
       },
@@ -511,6 +683,9 @@ export const provisionOs3Vault = async (options: {
           { query: 'path:"07_TECH"', color: { a: 1, rgb: 1096065 } },
           { query: 'path:"08_GOVERNANCE"', color: { a: 1, rgb: 15026253 } },
           { query: 'path:"09_X3LIUS_MUSIC"', color: { a: 1, rgb: 16727538 } },
+          { query: 'path:"10_DAW_BRAIN"', color: { a: 1, rgb: 14763263 } },
+          { query: 'path:"11_INBOX"', color: { a: 1, rgb: 16496452 } },
+          { query: 'path:"12_ARCHIVE"', color: { a: 1, rgb: 7829367 } },
         ],
       },
     },
@@ -544,22 +719,25 @@ export const provisionOs3Vault = async (options: {
       [
         '# XYP3RN OS 3.0 — Canonical Obsidian Vault',
         '',
-        'This Obsidian Vault is the **canonical source of truth** for XYP3RN OS 3.0.',
+        'This Obsidian Vault is the **canonical source of truth** for XYP3RN OS 3.0 and XYP3RN DAW Brain.',
         '',
-        '## Directory Structure',
+        '## Directory Structure (14 Canonical Vault Sectors)',
         '- `00_SYSTEM/` — System Manifest ([[00_SYSTEM/SYSTEM_MANIFEST|SYSTEM_MANIFEST]]), [[00_SYSTEM/TAXONOMY|TAXONOMY]], `SCHEMAS/`, and `TEMPLATES/`',
         '- `01_CORE/` — Identity, System Prompts, [[01_CORE/AGENT_REGISTRY/AGENT_REGISTRY|AGENT_REGISTRY]], [[01_CORE/TOOL_REGISTRY/TOOL_REGISTRY|TOOL_REGISTRY]], Dashboards, Tasks',
         '- `02_KNOWLEDGE/` — `CANONICAL/`, `SOURCES/`, `PROMPT_LIBRARY/`, `FRAMEWORKS/`, `GLOSSARY/`',
         '- `03_RESEARCH_INTELLIGENCE/` — `PROJECTS/`, `QUESTIONS/`, `EVIDENCE/`, `FINDINGS/`, `CONTRADICTIONS/`, `EXPERIMENTS/`, `SPECIALISTS/`',
-        '- `04_AGENTS/` — 52 validated Markdown/YAML Agent definitions',
+        '- `04_AGENTS/` — Validated Markdown/YAML Agent definitions',
         '- `05_WORKFLOWS/` — Validated YAML/Markdown Workflow definitions',
         '- `06_RECORDS/` — `DECISIONS/`, `ADR/`, `RELEASES/`, `TRACKS/`, `RIGHTS/`, `TASKS/`',
         '- `07_TECH/` — `PRODUCTS/`, `AUDIO_TOOLS/`, `AI_SYSTEMS/`, `R_AND_D/`, `TRACE/`',
         '- `08_GOVERNANCE/` — `POLICIES/`, `STANDARDS/`, `ACCESS_CONTROL/`, `APPROVALS/`, `AUDIT_LOGS/`',
-        '- `09_X3LIUS_MUSIC/` — `SONGS/`, `LYRICS/`, `VOCAL_DNA/`, `COMPOSITIONS/`, `ARRANGEMENTS/`, `GENRES_STYLES/`, `SUNO_PACKAGES/`, `TAKES/`, `EVALUATION/`',
-        '- `10_INBOX/` — Unprocessed operator notes & incoming staging',
-        '- `11_ARCHIVE/` — Historical & retired records',
+        '- `09_X3LIUS_MUSIC/` — `SONGS/`, `LYRICS/`, `VOCAL_DNA/`, `COMPOSITIONS/`, `ARRANGEMENTS/`, `GENRES_STYLES/`, `SUNO_PACKAGES/`, `TAKES/`, `EVALUATION/`, `AUDIO_EXTRACTED_PROMPTS/`',
+        '- `10_DAW_BRAIN/` — `SESSIONS/`, `CAPABILITIES/`, `ADAPTERS/`, `PLUGINS/`, `PLUGIN_CHAINS/`, `AUDIO_ANALYSES/`, `DSP_CONCEPTS/`, `MIX_MASTER_REFS/`, `WORKFLOWS/`',
+        '- `11_INBOX/` — Unprocessed operator notes & incoming staging',
+        '- `12_ARCHIVE/` — Historical & retired records (`SUPERSEDED/`, `RETIRED/`)',
         '- `_attachments/` — Linked binary attachments',
+        '',
+        'See [[00_SYSTEM/TAXONOMY|TAXONOMY]] for reconciliation with the 6-sector `UI-xyp3rn` Constellation taxonomy and non-destructive preservation of legacy notes.',
       ].join('\n'),
     ),
   );
@@ -583,13 +761,19 @@ export const provisionOs3Vault = async (options: {
         '# XYP3RN OS 3.0 — System Manifest',
         '',
         '## Architectural Invariants',
-        '1. **Local-First & Obsidian-First:** All canonical knowledge, agents, workflows, research, and creative records reside as Markdown/YAML files inside this Vault.',
+        '1. **Local-First & Obsidian-First:** All canonical knowledge, agents, workflows, research, DAW production knowledge, and creative records reside as Markdown/YAML files inside this Vault.',
         '2. **Minimal Local SQLite Runtime:** Operational state (`agent_runs`, `jobs`, `locks`, `sessions`, `runtime_events`, `pending_approvals`, `index_state`) lives in local SQLite (`node:sqlite`).',
-        '3. **Single File Authority (`VaultEngine`):** No agent may bypass `VaultEngine` or overwrite existing files silently.',
+        '3. **Single File Authority (`VaultEngine`):** No agent may bypass `VaultEngine`, silently overwrite existing files, or auto-migrate legacy files.',
         '4. **Human Promotion Gate (`F35 D2`):** Nothing auto-approves. Canonical writes require an explicit `approved` human decision.',
-        '5. **Zero Secrets in Vault:** API keys and tokens never enter this Vault.',
+        '5. **Explicit Archive & Supersession:** Historical documents are archived via explicit copy/metadata transitions, never silent deletion.',
+        '6. **Zero Secrets in Vault:** API keys and tokens never enter this Vault.',
       ].join('\n'),
     ),
+  );
+
+  const reconciliationRows = Object.values(UI_SECTOR_RECONCILIATION).map(
+    (entry) =>
+      `| \`${entry.uiSector}\` | ${entry.displayName} | ${entry.functionalDomains.map((d) => `\`${d}\``).join(', ')} | ${entry.mappedVaultDirs.map((d) => `\`${d}\``).join(', ')} | ${entry.note} |`,
   );
 
   trackWrite(
@@ -614,17 +798,25 @@ export const provisionOs3Vault = async (options: {
         '- `CORE` — Orchestrator, Agent Registry, Tool Registry, Workflow Engine, Context Engine, Memory, Runtime',
         '- `KNOWLEDGE` — Canonical Knowledge, Source Registry, Prompt Library, Vector/Structural Index, Promotion Gate',
         '- `RESEARCH_INTELLIGENCE` — Research Orchestrator, 20 Specialists, Evidence, Verbatim Quote Verifier, Contradictions, Experiments',
-        '- `RECORDS` — X3LIUS Music System (10 creative sub-domains) + Records Ops (Songs, Releases, Tracks, Rights Splits)',
+        '- `RECORDS` — X3LIUS Music System (10 creative sub-domains) + Records Ops + `10_DAW_BRAIN` Production Intelligence',
         '- `TECH` — Products, Audio Tools (`TRACE`), AI Systems, R&D Backlog',
-        '- `GOVERNANCE` — Policies, Access Control, Human Approvals, Audit Trail',
+        '- `GOVERNANCE` — Policies, Access Control, Human Approvals, Audit Trail, Archive & Supersession',
         '',
-        '## Separation Rule',
-        'Research source material (`02_KNOWLEDGE/SOURCES/` & `04_RESEARCH_MATERIAL/`) is never merged with `07_TECH/`.',
+        '## Reconciliation With 6-Sector `UI-xyp3rn` Constellation Taxonomy',
+        'The Constellation UI organizes nodes into six semantic sectors (`UI_SECTOR_RECONCILIATION`). Physical OS3 Vault folders map to those UI sectors without altering any UI sector meaning:',
+        '',
+        '| UI Sector | Display Name | Domains | Mapped Vault Directories | Semantic Guarantee |',
+        '| --- | --- | --- | --- | --- |',
+        ...reconciliationRows,
+        '',
+        '## Separation & Preservation Rules',
+        '- Research source material (`02_KNOWLEDGE/SOURCES/` & `04_RESEARCH_MATERIAL/`) is never merged with `07_TECH/` or `10_DAW_BRAIN/`.',
+        '- Existing legacy directories (`10_INBOX/`, `11_ARCHIVE/` when present from prior runs) remain readable and untouched; no automatic file migration occurs.',
       ].join('\n'),
     ),
   );
 
-  // 4. Write all 20 Schema Reference Documents in 00_SYSTEM/SCHEMAS/
+  // 4. Write all Schema Reference Documents in 00_SYSTEM/SCHEMAS/
   for (const schemaId of RECOGNIZED_OS3_SCHEMAS) {
     const shortName = schemaId.replace(/^xyp3rn\./, '').replace(/\/v3$/, '');
     trackWrite(
@@ -639,16 +831,17 @@ export const provisionOs3Vault = async (options: {
           sector: '00_SYSTEM',
           status: 'canonical',
           version: 1,
+          enforcement: 'mandatory',
           target_schema: schemaId,
           tags: ['xyp3rn', 'os3', 'schema', 'canonical'],
         },
         `# Schema Definition: \`${schemaId}\`\n\nDefines required YAML frontmatter fields (` +
-          `\`schema: "${schemaId}"\`, \`id\`, \`type\`, \`title\`, \`domain\`, \`status\`, \`version\`, \`source_sha256\`, \`tags\`) for \`${shortName}\` entities.`,
+          `\`schema: "${schemaId}"\`, \`id\`, \`type\`, \`title\`, \`domain\`, \`sector\`, \`status\`, \`version\`, \`provenance\`, \`created_at\`, \`updated_at\`, \`source_sha256\`, \`tags\`) for \`${shortName}\` entities.`,
       ),
     );
   }
 
-  // 5. Write all 20 Entity/Agent/Workflow/Knowledge/Research/Records Templates in 00_SYSTEM/TEMPLATES/
+  // 5. Write all Document Templates in 00_SYSTEM/TEMPLATES/
   for (const tpl of TEMPLATE_SPECS) {
     trackWrite(
       await writeNoteWithFrontmatter(
@@ -854,8 +1047,7 @@ export const provisionOs3Vault = async (options: {
     );
 
     const yamlDefPath = join(vaultRoot, '05_WORKFLOWS', 'DEFINITIONS', `${wfName}.workflow.yaml`);
-    const existingYaml = await readFile(yamlDefPath, 'utf8').catch(() => null);
-    if (existingYaml !== null && sha256Hex(existingYaml) === sha256Hex(rawYaml)) {
+    if (await exists(yamlDefPath)) {
       unchangedFiles += 1;
     } else {
       await writeFileAtomic(yamlDefPath, rawYaml);
@@ -1451,34 +1643,282 @@ export const provisionOs3Vault = async (options: {
       body: '# Neon Static\n\n## [VERSE 1]\n mercury rain on the overpass glass\n sub-bass glide when the patrol cars pass\n\n## [CHORUS]\n neon static in the midnight wire\n cold baritone over 808 fire',
     },
     {
-      relPath: '10_INBOX/INBX-0001-Welcome-Inbox-Note.md',
+      relPath: '01_CORE/TOOL_REGISTRY/TOOL-0001-Vault-Read.md',
+      fm: {
+        schema: 'xyp3rn.tool/v3',
+        id: 'tool-0001-vault-read',
+        type: 'tool',
+        name: 'vault_read',
+        title: 'Tool Contract: vault_read',
+        domain: 'CORE',
+        sector: '01_CORE',
+        status: 'canonical',
+        version: 1,
+        capability: 'vault.read',
+        allowed_classes: ['Coordination', 'Execution', 'Knowledge', 'Research', 'Creative', 'Governance', 'Tech'],
+        tags: ['xyp3rn', 'os3', 'tool', 'canonical'],
+      },
+      body: '# Tool Contract: `vault_read`\n\nReads validated Obsidian Vault Markdown notes via `VaultEngine` with symlink & path traversal protection.',
+    },
+    {
+      relPath: '02_KNOWLEDGE/PROMPT_LIBRARY/PRM-0002-X3LIUS-Vocal-Air-Canonical-Prompt.md',
+      fm: {
+        schema: 'xyp3rn.canonical-prompt/v3',
+        id: 'prm-0002-x3lius-vocal-air-canonical',
+        type: 'canonical_prompt',
+        title: 'Canonical Prompt: X3LIUS Cryogenic Vocal Air & 808 Pocket',
+        domain: 'KNOWLEDGE',
+        sector: '02_KNOWLEDGE',
+        status: 'canonical',
+        version: 1,
+        model_scope: 'suno-v6',
+        promoted_via: 'gate',
+        approval_id: 'appr-0001-example-promotion',
+        prompt_text:
+          'dark cinematic uk drill, 140 BPM, sliding portamento 808 sub-bass, dry forward cold baritone lead vocal with tight air shelf and stereo room delay',
+        tags: ['xyp3rn', 'os3', 'canonical-prompt', 'model/suno-v6'],
+      },
+      body: '# Canonical Prompt: X3LIUS Cryogenic Vocal Air & 808 Pocket\n\nApproved canonical prompt promoted via [[08_GOVERNANCE/APPROVALS/APPR-0001-Example-Approved-Promotion|APPR-0001]].',
+    },
+    {
+      relPath: '02_KNOWLEDGE/PROMPT_LIBRARY/PRMV-0001-X3LIUS-Vocal-Air-Halftime.md',
+      fm: {
+        schema: 'xyp3rn.prompt-variant/v3',
+        id: 'prmv-0001-x3lius-vocal-air-halftime',
+        type: 'prompt_variant',
+        title: 'Prompt Variant: X3LIUS Cryogenic Vocal Air (70 BPM Halftime)',
+        domain: 'KNOWLEDGE',
+        sector: '02_KNOWLEDGE',
+        status: 'live',
+        version: 1,
+        parent_prompt_id: 'prm-0002-x3lius-vocal-air-canonical',
+        variant_label: 'halftime-70bpm',
+        model_scope: 'suno-v6',
+        prompt_text:
+          'sparse dark trap ballad, 70 BPM halftime, deep sustained 808 sub, close-mic baritone vocal, muted nylon guitar harmonics',
+        tags: ['xyp3rn', 'os3', 'prompt-variant', 'model/suno-v6'],
+      },
+      body: '# Prompt Variant: Halftime 70 BPM\n\nDerived from [[02_KNOWLEDGE/PROMPT_LIBRARY/PRM-0002-X3LIUS-Vocal-Air-Canonical-Prompt|PRM-0002]].',
+    },
+    {
+      relPath: '08_GOVERNANCE/POLICIES/POL-0002-Archive-and-Supersession.md',
+      fm: {
+        schema: 'xyp3rn.policy/v3',
+        id: 'pol-0002-archive-and-supersession',
+        type: 'policy',
+        title: 'Archive & Supersession Governance Policy',
+        domain: 'GOVERNANCE',
+        sector: '08_GOVERNANCE',
+        status: 'canonical',
+        version: 1,
+        enforcement: 'mandatory',
+        tags: ['xyp3rn', 'os3', 'governance', 'archive', 'supersession'],
+      },
+      body: '# Archive & Supersession Policy\n\n1. Never silently overwrite or delete historical notes.\n2. Archiving requires `archive_reason` + `archived_at` and non-destructive backup under `12_ARCHIVE/`.\n3. Superseding requires `superseded_by` + `superseded_at` linking to the successor entity ID.',
+    },
+    {
+      relPath: '10_DAW_BRAIN/SESSIONS/SESS-0001-FL-Studio-2025-Observation-Baseline.md',
+      fm: {
+        schema: 'xyp3rn.production-session/v3',
+        id: 'sess-0001-fl-studio-2025-observation',
+        type: 'production_session',
+        title: 'Production Session: FL Studio 2025 Live Observation Baseline',
+        domain: 'RECORDS',
+        sector: '10_DAW_BRAIN',
+        status: 'live',
+        version: 1,
+        daw_host: 'FL Studio 2025',
+        daw_edition: 'Producer Edition',
+        project_path: 'vault://_attachments/sessions/baseline.flp',
+        state_tier: 'liveObserved',
+        bpm: 140,
+        tags: ['xyp3rn', 'os3', 'daw-brain', 'fl-studio-2025'],
+      },
+      body: '# FL Studio 2025 Observation Baseline\n\nRead-only `liveObserved` state capture; never mutated directly without explicit operator approval.',
+    },
+    {
+      relPath: '10_DAW_BRAIN/CAPABILITIES/CAP-0001-Transport-Play-Stop.md',
+      fm: {
+        schema: 'xyp3rn.daw-capability/v3',
+        id: 'cap-0001-transport-play-stop',
+        type: 'daw_capability',
+        title: 'DAW Capability: Transport Play/Stop',
+        domain: 'TECH',
+        sector: '10_DAW_BRAIN',
+        status: 'canonical',
+        version: 1,
+        capability_id: 'transport.play_stop',
+        permission_tier: 'execute',
+        host_support: {
+          fl_studio_2025: 'SUPPORTED',
+          reaper_7: 'SUPPORTED',
+        },
+        tags: ['xyp3rn', 'os3', 'daw-brain', 'capability', 'canonical'],
+      },
+      body: '# DAW Capability: `transport.play_stop`\n\nExecutes transport start/stop commands across declared adapters; unsupported hosts fail closed.',
+    },
+    {
+      relPath: '10_DAW_BRAIN/ADAPTERS/ADP-0001-FL-Studio-2025-Controller.md',
+      fm: {
+        schema: 'xyp3rn.daw-adapter/v3',
+        id: 'adp-0001-fl-studio-2025-controller',
+        type: 'daw_adapter',
+        title: 'DAW Adapter: FL Studio 2025 Producer Edition',
+        domain: 'TECH',
+        sector: '10_DAW_BRAIN',
+        status: 'canonical',
+        version: 1,
+        adapter_id: 'adapter.fl-studio-2025',
+        host_name: 'FL Studio 2025',
+        host_edition: 'Producer Edition',
+        transport_protocol: 'fl_midi_controller_python_ipc',
+        supported_capabilities: ['transport.play_stop', 'mixer.observe_levels', 'project.observe_tempo'],
+        tags: ['xyp3rn', 'os3', 'daw-brain', 'adapter', 'fl-studio-2025'],
+      },
+      body: '# FL Studio 2025 Adapter\n\nImplements verified FL Studio 2025 Producer Edition MIDI Scripting & SysEx/IPC contracts without relying on undocumented internals.',
+    },
+    {
+      relPath: '10_DAW_BRAIN/PLUGINS/PLG-0001-Fruity-Parametric-EQ-2.md',
+      fm: {
+        schema: 'xyp3rn.daw-plugin/v3',
+        id: 'plg-0001-fruity-parametric-eq-2',
+        type: 'plugin',
+        title: 'Plugin Profile: Fruity Parametric EQ 2',
+        domain: 'RECORDS',
+        sector: '10_DAW_BRAIN',
+        status: 'canonical',
+        version: 1,
+        plugin_format: 'FL Native',
+        vendor: 'Image-Line',
+        category: 'equalizer',
+        edition_requirement: 'Producer Edition+',
+        tags: ['xyp3rn', 'os3', 'daw-brain', 'plugin'],
+      },
+      body: '# Fruity Parametric EQ 2\n\nStock linear-phase-capable 7-band parametric EQ verified in FL Studio 2025 Producer Edition.',
+    },
+    {
+      relPath: '10_DAW_BRAIN/PLUGIN_CHAINS/CHN-0001-X3LIUS-Baritone-Vocal-Chain.md',
+      fm: {
+        schema: 'xyp3rn.daw-plugin-chain/v3',
+        id: 'chn-0001-x3lius-baritone-vocal',
+        type: 'plugin_chain',
+        title: 'Plugin Chain: X3LIUS Baritone Lead Vocal',
+        domain: 'RECORDS',
+        sector: '10_DAW_BRAIN',
+        status: 'approved',
+        version: 1,
+        stage: 'mix',
+        plugins: ['plg-0001-fruity-parametric-eq-2'],
+        tags: ['xyp3rn', 'os3', 'daw-brain', 'plugin-chain', 'x3lius'],
+      },
+      body: '# X3LIUS Baritone Vocal Chain\n\nHigh-pass at 85 Hz, gentle 250 Hz boxiness notch, presence air lift at 10.5 kHz.',
+    },
+    {
+      relPath: '10_DAW_BRAIN/AUDIO_ANALYSES/ANL-0001-Neon-Static-Master-TRACE.md',
+      fm: {
+        schema: 'xyp3rn.audio-analysis/v3',
+        id: 'anl-0001-neon-static-master-trace',
+        type: 'audio_analysis',
+        title: 'Audio Analysis: Neon Static Master (`trace.analysis/v1`)',
+        domain: 'RECORDS',
+        sector: '10_DAW_BRAIN',
+        status: 'approved',
+        version: 1,
+        analysis_schema: 'trace.analysis/v1',
+        integrated_lufs: -11.2,
+        true_peak_dbtp: -1.0,
+        bpm_estimate: 128,
+        tags: ['xyp3rn', 'os3', 'daw-brain', 'audio-analysis', 'trace'],
+      },
+      body: '# TRACE Audio Analysis: Neon Static\n\nIntegrated loudness `-11.2 LUFS`, True Peak `-1.0 dBTP`.',
+    },
+    {
+      relPath: '10_DAW_BRAIN/DSP_CONCEPTS/DSP-0001-Linear-Phase-Sub-Bass-Filtering.md',
+      fm: {
+        schema: 'xyp3rn.dsp-concept/v3',
+        id: 'dsp-0001-linear-phase-sub-bass',
+        type: 'dsp_concept',
+        title: 'DSP Concept: Phase Coherency in Sub-Bass Filtering',
+        domain: 'TECH',
+        sector: '10_DAW_BRAIN',
+        status: 'canonical',
+        version: 1,
+        category: 'equalization',
+        acoustic_principle: 'minimum-phase steep high-pass filters induce group-delay spikes that shift 808 fundamental peak levels',
+        tags: ['xyp3rn', 'os3', 'daw-brain', 'dsp'],
+      },
+      body: '# Phase Coherency in Sub-Bass Filtering\n\nUse gentle 12 dB/oct minimum-phase slopes on parallel sub paths unless transient pre-ringing is budgeted.',
+    },
+    {
+      relPath: '10_DAW_BRAIN/MIX_MASTER_REFS/MIX-0001-UK-Drill-Streaming-Master-Ref.md',
+      fm: {
+        schema: 'xyp3rn.mix-reference/v3',
+        id: 'mix-0001-uk-drill-streaming-ref',
+        type: 'mix_reference',
+        title: 'Mix/Mastering Reference: UK Drill Streaming Loudness',
+        domain: 'RECORDS',
+        sector: '10_DAW_BRAIN',
+        status: 'canonical',
+        version: 1,
+        stage: 'master',
+        target_lufs_min: -12.0,
+        target_lufs_max: -9.5,
+        max_true_peak_dbtp: -1.0,
+        tags: ['xyp3rn', 'os3', 'daw-brain', 'mix-reference', 'canonical'],
+      },
+      body: '# UK Drill Streaming Master Reference\n\nTargets `-12.0` to `-9.5 LUFS` integrated with `-1.0 dBTP` ceiling for lossy streaming transcoders.',
+    },
+    {
+      relPath: '10_DAW_BRAIN/WORKFLOWS/PWF-0001-Vocal-Stem-Print-and-TRACE-Audit.md',
+      fm: {
+        schema: 'xyp3rn.production-workflow/v3',
+        id: 'pwf-0001-vocal-stem-print-trace',
+        type: 'production_workflow',
+        title: 'Production Workflow: Vocal Stem Print & TRACE Audit',
+        domain: 'RECORDS',
+        sector: '10_DAW_BRAIN',
+        status: 'live',
+        version: 1,
+        target_daw: 'FL Studio 2025',
+        stage: 'mix',
+        workflow_steps: [
+          'Observe mixer routing & headroom in liveObserved state',
+          'Prepare stem bounce bus without master limiter',
+          'Run TRACE BS.1770/R128 audit & log xyp3rn.audio-analysis/v3 note',
+        ],
+        tags: ['xyp3rn', 'os3', 'daw-brain', 'production-workflow'],
+      },
+      body: '# Vocal Stem Print & TRACE Audit\n\nBridges FL Studio 2025 observation with TRACE audio evaluation cleanly.',
+    },
+    {
+      relPath: '11_INBOX/INBX-0002-OS3-Inbox-Staging.md',
       fm: {
         schema: 'xyp3rn.entity/v3',
-        id: 'inbx-0001-welcome-inbox',
+        id: 'inbx-0002-os3-inbox-staging',
         type: 'entity',
-        title: 'Inbox Staging Area',
+        title: 'OS3 Inbox Staging Area',
         domain: 'CORE',
-        sector: '10_INBOX',
+        sector: '11_INBOX',
         status: 'draft',
         version: 1,
         tags: ['xyp3rn', 'os3', 'inbox'],
       },
-      body: '# 10_INBOX\n\nDrop uncategorized notes, voice transcripts, or rough lyric ideas here for staging.',
+      body: '# 11_INBOX\n\nDrop uncategorized notes, voice transcripts, or rough lyric ideas here for staging.\nPre-existing `10_INBOX/` legacy notes remain untouched.',
     },
     {
-      relPath: '11_ARCHIVE/ARCH-0001-Archive-Index.md',
+      relPath: '12_ARCHIVE/ARCH-0002-Archive-and-Supersession-Ledger.md',
       fm: {
         schema: 'xyp3rn.entity/v3',
-        id: 'arch-0001-archive-index',
+        id: 'arch-0002-os3-archive-ledger',
         type: 'entity',
-        title: 'Archive Index',
-        domain: 'CORE',
-        sector: '11_ARCHIVE',
-        status: 'archived',
+        title: 'OS3 Archive & Supersession Ledger',
+        domain: 'GOVERNANCE',
+        sector: '12_ARCHIVE',
+        status: 'live',
         version: 1,
-        tags: ['xyp3rn', 'os3', 'archive'],
+        tags: ['xyp3rn', 'os3', 'archive', 'governance'],
       },
-      body: '# 11_ARCHIVE\n\nSuperseded and historical records are preserved here and never deleted.',
+      body: '# 12_ARCHIVE\n\nSuperseded (`12_ARCHIVE/SUPERSEDED/`) and retired (`12_ARCHIVE/RETIRED/`) records are preserved here and never deleted.\nPre-existing `11_ARCHIVE/` files remain untouched without automatic migration.',
     },
   ];
 
@@ -1503,12 +1943,133 @@ const SECRET_REGEXES: ReadonlyArray<{ readonly label: string; readonly re: RegEx
   { label: 'PEM Private Key', re: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
 ];
 
+const OS3_MANAGED_TOP_DIRS = [
+  '00_SYSTEM',
+  '01_CORE',
+  '02_KNOWLEDGE',
+  '03_RESEARCH_INTELLIGENCE',
+  '04_AGENTS',
+  '05_WORKFLOWS',
+  '06_RECORDS',
+  '07_TECH',
+  '08_GOVERNANCE',
+  '09_X3LIUS_MUSIC',
+  '10_DAW_BRAIN',
+  '11_INBOX',
+  '12_ARCHIVE',
+  '10_INBOX',
+  '11_ARCHIVE',
+] as const;
+
+const OS3_FULL_SUBTREE_SET = new Set<string>([
+  '00_SYSTEM',
+  '02_KNOWLEDGE',
+  '04_AGENTS',
+  '05_WORKFLOWS',
+  '06_RECORDS',
+  '07_TECH',
+  '08_GOVERNANCE',
+  '09_X3LIUS_MUSIC',
+  '10_DAW_BRAIN',
+  '11_INBOX',
+  '12_ARCHIVE',
+  '10_INBOX',
+  '11_ARCHIVE',
+]);
+
+const OS3_NESTED_SUBTREE_PREFIXES = [
+  '01_CORE/IDENTITY/',
+  '01_CORE/SYSTEM_PROMPTS/',
+  '01_CORE/AGENT_REGISTRY/',
+  '01_CORE/TOOL_REGISTRY/',
+  '01_CORE/DASHBOARDS/',
+  '01_CORE/TASKS/',
+  '03_RESEARCH_INTELLIGENCE/PROJECTS/',
+  '03_RESEARCH_INTELLIGENCE/QUESTIONS/',
+  '03_RESEARCH_INTELLIGENCE/EVIDENCE/',
+  '03_RESEARCH_INTELLIGENCE/FINDINGS/',
+  '03_RESEARCH_INTELLIGENCE/CONTRADICTIONS/',
+  '03_RESEARCH_INTELLIGENCE/EXPERIMENTS/',
+  '03_RESEARCH_INTELLIGENCE/RUNS/',
+  '03_RESEARCH_INTELLIGENCE/SPECIALISTS/',
+] as const;
+
+export type Os3TemplateValidationReport = {
+  readonly ok: boolean;
+  readonly vaultRoot: string;
+  readonly expectedTemplateCount: number;
+  readonly checkedTemplates: number;
+  readonly missingTemplates: readonly string[];
+  readonly failures: readonly { readonly path: string; readonly errors: readonly string[] }[];
+};
+
+/**
+ * Validates every document template in `00_SYSTEM/TEMPLATES/` against
+ * full OS3 schema, required metadata, provenance, and security rules.
+ */
+export const validateAllTemplates = async (
+  vaultRootInput?: string,
+): Promise<Os3TemplateValidationReport> => {
+  const vaultRoot = resolveConfiguredVaultPath(vaultRootInput);
+  const templatesDir = join(vaultRoot, '00_SYSTEM', 'TEMPLATES');
+  const missingTemplates: string[] = [];
+  const failures: { readonly path: string; readonly errors: readonly string[] }[] = [];
+  let checkedTemplates = 0;
+
+  if (!(await exists(templatesDir))) {
+    return {
+      ok: false,
+      vaultRoot,
+      expectedTemplateCount: TEMPLATE_SPECS.length,
+      checkedTemplates: 0,
+      missingTemplates: TEMPLATE_SPECS.map((t) => t.file),
+      failures: [{ path: '00_SYSTEM/TEMPLATES', errors: ['Templates directory does not exist'] }],
+    };
+  }
+
+  const entries = (await readdir(templatesDir, { withFileTypes: true }))
+    .filter((d) => d.isFile() && d.name.endsWith('.md'))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const presentSet = new Set(entries.map((d) => d.name));
+
+  for (const spec of TEMPLATE_SPECS) {
+    if (!presentSet.has(spec.file)) {
+      missingTemplates.push(spec.file);
+    }
+  }
+
+  for (const entry of entries) {
+    const rel = `00_SYSTEM/TEMPLATES/${entry.name}`;
+    const raw = await readFile(join(templatesDir, entry.name), 'utf8');
+    checkedTemplates += 1;
+    const res = validateEntityContent(rel, raw, { requireSchema: true });
+    if (!res.ok) {
+      failures.push({
+        path: rel,
+        errors: res.issues.map((i) => (i.field ? `[${i.code}:${i.field}] ${i.message}` : `[${i.code}] ${i.message}`)),
+      });
+    }
+  }
+
+  return {
+    ok:
+      missingTemplates.length === 0 &&
+      failures.length === 0 &&
+      checkedTemplates >= TEMPLATE_SPECS.length,
+    vaultRoot,
+    expectedTemplateCount: TEMPLATE_SPECS.length,
+    checkedTemplates,
+    missingTemplates,
+    failures,
+  };
+};
+
 /**
  * Validates the OS 3.0 Obsidian Vault foundation:
- * 1. Every required directory exists.
- * 2. Every template has valid YAML.
- * 3. Every OS 3.0 entity has a unique ID.
- * 4. Every OS 3.0 document has a recognized schema.
+ * 1. Every required directory exists (14 top-level folders + domain subtrees).
+ * 2. Every template has valid YAML and satisfies its schema contract.
+ * 3. Every OS 3.0 entity has a unique stable ID.
+ * 4. Every OS 3.0 document has a recognized schema, complete metadata, and passes archive/supersession & domain invariants.
  * 5. No secrets are stored in the Vault.
  * 6. .obsidian/ configuration files are valid JSON so the Vault opens as a normal Obsidian Vault.
  */
@@ -1540,12 +2101,77 @@ export const validateOs3Vault = async (vaultRootInput?: string): Promise<Os3Vaul
   const invalidYamlFiles: { readonly path: string; readonly error: string }[] = [];
   const missingIdFiles: string[] = [];
   const unrecognizedSchemaFiles: { readonly path: string; readonly schema: string }[] = [];
+  const invalidMetadataFiles: { readonly path: string; readonly issues: readonly string[] }[] = [];
   const secretViolations: { readonly path: string; readonly match: string }[] = [];
   const idToPaths = new Map<string, string[]>();
   const recognizedSet = new Set<string>(RECOGNIZED_OS3_SCHEMAS);
+  const managedTopDirSet = new Set<string>(OS3_MANAGED_TOP_DIRS);
 
   let checkedTemplates = 0;
   let checkedEntities = 0;
+
+  const inspectMarkdown = (rel: string, raw: string, forceManaged: boolean): void => {
+    for (const pat of SECRET_REGEXES) {
+      if (pat.re.test(raw)) {
+        secretViolations.push({ path: rel, match: pat.label });
+      }
+    }
+
+    const parsed = parseObsidianNote(raw);
+    if (rel.startsWith('00_SYSTEM/TEMPLATES/')) {
+      checkedTemplates += 1;
+    }
+    if (parsed.frontmatterError) {
+      invalidYamlFiles.push({ path: rel, error: parsed.frontmatterError });
+      return;
+    }
+
+    const topFolder = rel.split('/')[0] ?? '';
+    const isOs3ManagedDir = rel === 'README.md' || managedTopDirSet.has(topFolder);
+    const fmSchema = typeof parsed.frontmatter.schema === 'string' ? parsed.frontmatter.schema.trim() : '';
+    const fmId =
+      typeof parsed.frontmatter.id === 'string' || typeof parsed.frontmatter.id === 'number'
+        ? String(parsed.frontmatter.id).trim()
+        : '';
+
+    const isOs3Subtree =
+      forceManaged ||
+      rel === 'README.md' ||
+      OS3_FULL_SUBTREE_SET.has(topFolder) ||
+      OS3_NESTED_SUBTREE_PREFIXES.some((prefix) => rel.startsWith(prefix));
+
+    if (!fmSchema && !isOs3Subtree) return;
+    if (!isOs3ManagedDir) return;
+
+    checkedEntities += 1;
+
+    if (!fmId) {
+      missingIdFiles.push(rel);
+    } else {
+      const list = idToPaths.get(fmId) ?? [];
+      list.push(rel);
+      idToPaths.set(fmId, list);
+    }
+
+    if (!recognizedSet.has(fmSchema)) {
+      unrecognizedSchemaFiles.push({ path: rel, schema: fmSchema || '(missing)' });
+      return;
+    }
+
+    const validation = validateEntityContent(rel, raw, { requireSchema: true });
+    const extraIssues = validation.issues
+      .filter(
+        (i) =>
+          i.code === 'INVALID_METADATA' ||
+          i.code === 'INVALID_ARCHIVE_OR_SUPERSESSION' ||
+          (i.code === 'INVALID_SCHEMA' && !i.message.startsWith('Unrecognized or missing schema')),
+      )
+      .map((i) => (i.field ? `[${i.code}:${i.field}] ${i.message}` : `[${i.code}] ${i.message}`));
+
+    if (extraIssues.length > 0) {
+      invalidMetadataFiles.push({ path: rel, issues: extraIssues });
+    }
+  };
 
   const scanDir = async (dirAbs: string): Promise<void> => {
     const entries = await readdir(dirAbs, { withFileTypes: true });
@@ -1560,108 +2186,11 @@ export const validateOs3Vault = async (vaultRootInput?: string): Promise<Os3Vaul
 
       const rel = relative(vaultRoot, abs).split(sep).join('/');
       const raw = await readFile(abs, 'utf8');
-
-      // Check for secrets across all scanned Markdown files
-      for (const pat of SECRET_REGEXES) {
-        if (pat.re.test(raw)) {
-          secretViolations.push({ path: rel, match: pat.label });
-        }
-      }
-
-      const parsed = parseObsidianNote(raw);
-      if (rel.startsWith('00_SYSTEM/TEMPLATES/')) {
-        checkedTemplates += 1;
-      }
-      if (parsed.frontmatterError) {
-        invalidYamlFiles.push({ path: rel, error: parsed.frontmatterError });
-        continue;
-      }
-
-      const topFolder = rel.split('/')[0] ?? '';
-      const isOs3ManagedDir =
-        rel === 'README.md' ||
-        [
-          '00_SYSTEM',
-          '01_CORE',
-          '02_KNOWLEDGE',
-          '03_RESEARCH_INTELLIGENCE',
-          '04_AGENTS',
-          '05_WORKFLOWS',
-          '06_RECORDS',
-          '07_TECH',
-          '08_GOVERNANCE',
-          '09_X3LIUS_MUSIC',
-          '10_INBOX',
-          '11_ARCHIVE',
-        ].includes(topFolder);
-
-      // Validate OS 3.0 managed documents that carry a `schema` or sit in any OS 3.0 subtree
-      const fmSchema = typeof parsed.frontmatter.schema === 'string' ? parsed.frontmatter.schema.trim() : '';
-      const fmId =
-        typeof parsed.frontmatter.id === 'string' || typeof parsed.frontmatter.id === 'number'
-          ? String(parsed.frontmatter.id).trim()
-          : '';
-
-      const isOs3Subtree =
-        topFolder === '00_SYSTEM' ||
-        topFolder === '02_KNOWLEDGE' ||
-        topFolder === '04_AGENTS' ||
-        topFolder === '05_WORKFLOWS' ||
-        topFolder === '06_RECORDS' ||
-        topFolder === '07_TECH' ||
-        topFolder === '08_GOVERNANCE' ||
-        topFolder === '09_X3LIUS_MUSIC' ||
-        topFolder === '10_INBOX' ||
-        topFolder === '11_ARCHIVE' ||
-        rel.startsWith('01_CORE/IDENTITY/') ||
-        rel.startsWith('01_CORE/SYSTEM_PROMPTS/') ||
-        rel.startsWith('01_CORE/AGENT_REGISTRY/') ||
-        rel.startsWith('01_CORE/TOOL_REGISTRY/') ||
-        rel.startsWith('01_CORE/DASHBOARDS/') ||
-        rel.startsWith('01_CORE/TASKS/') ||
-        rel.startsWith('03_RESEARCH_INTELLIGENCE/PROJECTS/') ||
-        rel.startsWith('03_RESEARCH_INTELLIGENCE/QUESTIONS/') ||
-        rel.startsWith('03_RESEARCH_INTELLIGENCE/EVIDENCE/') ||
-        rel.startsWith('03_RESEARCH_INTELLIGENCE/FINDINGS/') ||
-        rel.startsWith('03_RESEARCH_INTELLIGENCE/CONTRADICTIONS/') ||
-        rel.startsWith('03_RESEARCH_INTELLIGENCE/EXPERIMENTS/') ||
-        rel.startsWith('03_RESEARCH_INTELLIGENCE/RUNS/') ||
-        rel.startsWith('03_RESEARCH_INTELLIGENCE/SPECIALISTS/') ||
-        rel === 'README.md';
-
-      if (fmSchema || isOs3Subtree) {
-        if (!isOs3ManagedDir) continue;
-        checkedEntities += 1;
-
-        if (!fmId) {
-          missingIdFiles.push(rel);
-        } else {
-          const list = idToPaths.get(fmId) ?? [];
-          list.push(rel);
-          idToPaths.set(fmId, list);
-        }
-
-        if (!recognizedSet.has(fmSchema)) {
-          unrecognizedSchemaFiles.push({ path: rel, schema: fmSchema || '(missing)' });
-        }
-      }
+      inspectMarkdown(rel, raw, false);
     }
   };
 
-  for (const topDir of [
-    '00_SYSTEM',
-    '01_CORE',
-    '02_KNOWLEDGE',
-    '03_RESEARCH_INTELLIGENCE',
-    '04_AGENTS',
-    '05_WORKFLOWS',
-    '06_RECORDS',
-    '07_TECH',
-    '08_GOVERNANCE',
-    '09_X3LIUS_MUSIC',
-    '10_INBOX',
-    '11_ARCHIVE',
-  ]) {
+  for (const topDir of OS3_MANAGED_TOP_DIRS) {
     const abs = join(vaultRoot, topDir);
     if (await exists(abs)) {
       await scanDir(abs);
@@ -1670,20 +2199,7 @@ export const validateOs3Vault = async (vaultRootInput?: string): Promise<Os3Vaul
 
   const readmeAbs = join(vaultRoot, 'README.md');
   if (await exists(readmeAbs)) {
-    const raw = await readFile(readmeAbs, 'utf8');
-    const parsed = parseObsidianNote(raw);
-    checkedEntities += 1;
-    const fmId = typeof parsed.frontmatter.id === 'string' ? parsed.frontmatter.id.trim() : '';
-    const fmSchema = typeof parsed.frontmatter.schema === 'string' ? parsed.frontmatter.schema.trim() : '';
-    if (!fmId) missingIdFiles.push('README.md');
-    else {
-      const list = idToPaths.get(fmId) ?? [];
-      list.push('README.md');
-      idToPaths.set(fmId, list);
-    }
-    if (!recognizedSet.has(fmSchema)) {
-      unrecognizedSchemaFiles.push({ path: 'README.md', schema: fmSchema || '(missing)' });
-    }
+    inspectMarkdown('README.md', await readFile(readmeAbs, 'utf8'), true);
   }
 
   const duplicateIds: { readonly id: string; readonly paths: readonly string[] }[] = [];
@@ -1700,6 +2216,7 @@ export const validateOs3Vault = async (vaultRootInput?: string): Promise<Os3Vaul
     missingIdFiles.length === 0 &&
     duplicateIds.length === 0 &&
     unrecognizedSchemaFiles.length === 0 &&
+    invalidMetadataFiles.length === 0 &&
     secretViolations.length === 0 &&
     obsidianConfigValid;
 
@@ -1713,6 +2230,7 @@ export const validateOs3Vault = async (vaultRootInput?: string): Promise<Os3Vaul
     missingIdFiles,
     duplicateIds,
     unrecognizedSchemaFiles,
+    invalidMetadataFiles,
     secretViolations,
     obsidianConfigValid,
   };

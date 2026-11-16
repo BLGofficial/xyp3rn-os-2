@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openRuntimeDb, type SqliteRuntimeDb } from '../../core/sqlite/client.ts';
+import { writeFileAtomic } from '../../core/vault-engine/revision.ts';
 import {
   VaultConflictError,
   VaultEngine,
@@ -638,5 +639,404 @@ describe('Phase 4 — Production XYP3RN Vault Engine (All 13 Operations & 13 Sec
     const reconciled = await engine.reconcileExternalEdit('10_INBOX/ObsidianLive.md');
     expect(reconciled?.changeType).toBe('modified');
     expect(reconciled?.previousSha256).toBe(created.sha256);
+  });
+
+  it('14. Survives interrupted atomic writes with zero target corruption and zero leftover temp files', async () => {
+    const { vaultRoot, engine } = await createFixture();
+
+    const original = [
+      '---',
+      'schema: "xyp3rn.entity/v3"',
+      'id: "ent-atomic-01"',
+      'title: "Atomic Target"',
+      'domain: "CORE"',
+      '---',
+      '',
+      'Intact baseline content.',
+    ].join('\n');
+
+    const written = await engine.write({
+      vaultPath: '11_INBOX/AtomicTarget.md',
+      content: original,
+      actor: 'operator',
+    });
+
+    const absTarget = join(vaultRoot, '11_INBOX', 'AtomicTarget.md');
+    let observedTempExistsDuringStaging = false;
+
+    await expect(
+      writeFileAtomic(absTarget, 'PARTIAL CORRUPTED INTERRUPTED WRITE', {
+        onBeforeRename: async (tempPath) => {
+          const tempContent = await readFile(tempPath, 'utf8');
+          observedTempExistsDuringStaging = tempContent === 'PARTIAL CORRUPTED INTERRUPTED WRITE';
+          throw new Error('Simulated power loss mid-write');
+        },
+      }),
+    ).rejects.toThrow(/Simulated power loss mid-write/);
+
+    expect(observedTempExistsDuringStaging).toBe(true);
+    // Live file remains 100% intact with identical SHA-256
+    const afterRead = await engine.read('11_INBOX/AtomicTarget.md', 'operator');
+    expect(afterRead.sha256).toBe(written.sha256);
+    expect(afterRead.rawContent).toBe(original);
+
+    // Zero .tmp-* orphan files left in directory
+    const dirFiles = await readdir(join(vaultRoot, '11_INBOX'));
+    expect(dirFiles.some((f) => f.startsWith('.tmp-'))).toBe(false);
+  });
+
+  it('15. Detects corrupted documents on disk and blocks restoring tampered or corrupted revision blobs', async () => {
+    const { vaultRoot, engine } = await createFixture();
+
+    const v1 = [
+      '---',
+      'schema: "xyp3rn.entity/v3"',
+      'id: "ent-corrupt-01"',
+      'title: "Corruption Test Note"',
+      'domain: "CORE"',
+      '---',
+      '',
+      'Healthy v1 body.',
+    ].join('\n');
+
+    const r1 = await engine.write({
+      vaultPath: '11_INBOX/CorruptionTarget.md',
+      content: v1,
+      actor: 'operator',
+    });
+
+    const v2 = v1.replace('Healthy v1 body.', 'Healthy v2 body.');
+    await engine.update({
+      vaultPath: '11_INBOX/CorruptionTarget.md',
+      content: v2,
+      actor: 'operator',
+      expectedSha256: r1.sha256,
+    });
+
+    // 1. Corrupt live disk note with unclosed YAML fence
+    const diskAbs = join(vaultRoot, '11_INBOX', 'CorruptionTarget.md');
+    await writeFile(diskAbs, '---\nid: "ent-corrupt-01"\ntitle: [BROKEN\nBody without closing fence', 'utf8');
+
+    const badYamlRes = await engine.validate('11_INBOX/CorruptionTarget.md', { requireSchema: false });
+    expect(badYamlRes.ok).toBe(false);
+    expect(badYamlRes.issues.some((i) => i.code === 'INVALID_YAML')).toBe(true);
+
+    const readCorrupt = await engine.read('11_INBOX/CorruptionTarget.md', 'operator');
+    expect(readCorrupt.frontmatterError).not.toBeNull();
+
+    const conflictCorrupt = await engine.inspectConflict('11_INBOX/CorruptionTarget.md', null, 'operator');
+    expect(conflictCorrupt.hasConflict).toBe(true);
+    expect(conflictCorrupt.kind).toBe('corrupted_document');
+
+    // 2. Corrupt live disk note with binary NUL bytes
+    await writeFile(diskAbs, `${v1}\0CORRUPT`, 'utf8');
+    const nulRes = await engine.validate('11_INBOX/CorruptionTarget.md', { requireSchema: false });
+    expect(nulRes.ok).toBe(false);
+    expect(nulRes.issues.some((i) => i.code === 'INVALID_YAML' && i.message.includes('NUL'))).toBe(true);
+
+    await expect(
+      engine.append({
+        vaultPath: '11_INBOX/CorruptionTarget.md',
+        appendText: 'Appending to NUL-corrupted file',
+        actor: 'operator',
+      }),
+    ).rejects.toMatchObject({ name: 'VaultValidationError', code: 'INVALID_YAML' });
+
+    // 3. Corrupt revision r1 blob inside .vault-revisions/ -> verifyHistory detects & restore() rejects CHECKSUM_MISMATCH
+    const blobAbs = join(vaultRoot, '.vault-revisions', r1.sha256.slice(0, 2), `${r1.sha256}.blob`);
+    await writeFile(blobAbs, 'TAMPERED REVISION BYTES ON DISK', 'utf8');
+
+    const histCheck = await engine.verifyHistory('11_INBOX/CorruptionTarget.md');
+    expect(histCheck.ok).toBe(false);
+    expect(histCheck.corruptedBlobs).toContain(r1.sha256);
+
+    await expect(
+      engine.restore({
+        vaultPath: '11_INBOX/CorruptionTarget.md',
+        targetSha256: r1.sha256,
+        actor: 'operator',
+        reason: 'Attempt restore from corrupted blob',
+      }),
+    ).rejects.toMatchObject({ name: 'VaultConflictError', code: 'CHECKSUM_MISMATCH' });
+  });
+
+  it('16. Enforces actor authorization, readOnly mode, and custom ACL policies across all operations', async () => {
+    const { vaultRoot, db, engine } = await createFixture();
+
+    // Empty actor on mutating operations rejected with UNAUTHORIZED_ACTOR
+    await expect(
+      engine.write({
+        vaultPath: '11_INBOX/NoActor.md',
+        content: '# Anonymous write',
+        actor: '   ',
+      }),
+    ).rejects.toMatchObject({ name: 'VaultPermissionError', code: 'UNAUTHORIZED_ACTOR' });
+
+    // Seed one note with authorized engine
+    const seeded = await engine.write({
+      vaultPath: '11_INBOX/AclTarget.md',
+      content: '---\nschema: "xyp3rn.entity/v3"\nid: "ent-acl-01"\ntitle: "ACL Note"\ndomain: "CORE"\n---\nBody',
+      actor: 'operator',
+    });
+
+    // Read-only VaultEngine blocks all writes/updates/restores/snapshots while allowing reads/list/search
+    const readOnlyEngine = new VaultEngine({ vaultRoot, db, readOnly: true });
+    expect((await readOnlyEngine.read(seeded.vaultPath, 'viewer')).sha256).toBe(seeded.sha256);
+    expect(readOnlyEngine.list({ sector: '11_INBOX' }, 'viewer').length).toBe(1);
+
+    await expect(
+      readOnlyEngine.write({
+        vaultPath: '11_INBOX/BlockedWrite.md',
+        content: '# Should block',
+        actor: 'operator',
+      }),
+    ).rejects.toMatchObject({ name: 'VaultPermissionError', code: 'UNAUTHORIZED_ACTOR' });
+
+    await expect(
+      readOnlyEngine.restore({
+        vaultPath: seeded.vaultPath,
+        targetSha256: seeded.sha256,
+        actor: 'operator',
+      }),
+    ).rejects.toMatchObject({ name: 'VaultPermissionError', code: 'UNAUTHORIZED_ACTOR' });
+
+    // Custom sector-scoped ACL policy
+    const scopedEngine = new VaultEngine({
+      vaultRoot,
+      db,
+      authorize: ({ actor, operation, sector }) => {
+        if (actor === 'daw-agent' && ['write', 'update', 'append'].includes(operation) && sector !== '10_DAW_BRAIN') {
+          return { allowed: false, reason: `Agent ${actor} may only write inside 10_DAW_BRAIN` };
+        }
+        return true;
+      },
+    });
+
+    await expect(
+      scopedEngine.write({
+        vaultPath: '11_INBOX/ForbiddenSector.md',
+        content: '# Disallowed for daw-agent',
+        actor: 'daw-agent',
+      }),
+    ).rejects.toMatchObject({ name: 'VaultPermissionError', code: 'UNAUTHORIZED_ACTOR' });
+
+    const dawNote = await scopedEngine.write({
+      vaultPath: '10_DAW_BRAIN/SESSIONS/ScopedSession.md',
+      content: '# Allowed inside 10_DAW_BRAIN',
+      actor: 'daw-agent',
+    });
+    expect(dawNote.vaultPath).toBe('10_DAW_BRAIN/SESSIONS/ScopedSession.md');
+
+    const denials = engine.listAuditLog({ result: 'denied', limit: 25 });
+    expect(denials.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('17. Prevents TOCTOU overwrites under concurrent no-overwrite writes and emits audit records across all operations', async () => {
+    const { engine } = await createFixture();
+
+    const makeBody = (label: string) =>
+      [
+        '---',
+        'schema: "xyp3rn.entity/v3"',
+        `id: "ent-race-${label.toLowerCase()}"`,
+        `title: "Race ${label}"`,
+        'domain: "CORE"',
+        '---',
+        '',
+        `Payload from writer ${label}`,
+      ].join('\n');
+
+    const concurrentWrites = await Promise.allSettled([
+      engine.write({
+        vaultPath: '11_INBOX/RaceCreate.md',
+        content: makeBody('ALPHA'),
+        actor: 'writer-alpha',
+        writeMode: 'no-overwrite',
+      }),
+      engine.write({
+        vaultPath: '11_INBOX/RaceCreate.md',
+        content: makeBody('BETA'),
+        actor: 'writer-beta',
+        writeMode: 'no-overwrite',
+      }),
+    ]);
+
+    const fulfilled = concurrentWrites.filter((r) => r.status === 'fulfilled');
+    const rejected = concurrentWrites.filter((r) => r.status === 'rejected');
+    expect(fulfilled.length).toBe(1);
+    expect(rejected.length).toBe(1);
+    if (rejected[0]?.status === 'rejected') {
+      expect(rejected[0].reason).toMatchObject({ name: 'VaultConflictError', code: 'LOCK_BUSY' });
+    }
+
+    // Winner's content is intact & never partially overwritten
+    const firstFulfilled = fulfilled[0];
+    const winner = firstFulfilled?.status === 'fulfilled' ? firstFulfilled.value : null;
+    expect(winner).not.toBeNull();
+    const saved = await engine.read('11_INBOX/RaceCreate.md', 'auditor');
+    expect(saved.sha256).toBe(winner!.sha256);
+
+    // Exercise remaining read/list/search/backlinks/history audit paths
+    await engine.readMetadata('11_INBOX/RaceCreate.md', 'auditor');
+    engine.list({ sector: '11_INBOX' }, 'auditor');
+    engine.search('Race', { sector: '11_INBOX' }, 'auditor');
+    engine.backlinks('11_INBOX/RaceCreate.md', 'auditor');
+    await engine.history('11_INBOX/RaceCreate.md', 'auditor');
+
+    const auditOps = new Set(engine.listAuditLog({ actor: 'auditor', limit: 20 }).map((a) => a.operation));
+    expect(auditOps.has('read')).toBe(true);
+    expect(auditOps.has('readMetadata')).toBe(true);
+    expect(auditOps.has('list')).toBe(true);
+    expect(auditOps.has('search')).toBe(true);
+    expect(auditOps.has('backlinks')).toBe(true);
+    expect(auditOps.has('history')).toBe(true);
+  });
+
+  it('18. Resolves concurrency/Obsidian conflicts safely (save-fork, keep-disk, accept-proposed) and guards promote() CAS', async () => {
+    const { vaultRoot, db, engine } = await createFixture();
+
+    const baseContent = [
+      '---',
+      'schema: "xyp3rn.entity/v3"',
+      'id: "ent-resolve-01"',
+      'title: "Conflict Resolution Target"',
+      'domain: "CORE"',
+      '---',
+      '',
+      'Base v1 line.',
+    ].join('\n');
+
+    const v1 = await engine.write({
+      vaultPath: '11_INBOX/ResolveMe.md',
+      content: baseContent,
+      actor: 'agent-author',
+    });
+
+    // Simulate external Obsidian edit on disk
+    const obsidianEdit = baseContent.replace('Base v1 line.', 'Human edited in Obsidian v2.');
+    await writeFile(join(vaultRoot, '11_INBOX', 'ResolveMe.md'), obsidianEdit, 'utf8');
+
+    const report = await engine.inspectConflict('11_INBOX/ResolveMe.md', v1.sha256, 'agent-author');
+    expect(report.hasConflict).toBe(true);
+    expect(report.kind).toBe('external_obsidian_edit');
+    expect(report.diskSha256).not.toBe(v1.sha256);
+
+    // Strategy 1: save-fork preserves agent's proposed edit side-by-side without clobbering Obsidian edit
+    const agentProposal = baseContent.replace('Base v1 line.', 'Agent proposed v2.');
+    const forkRes = await engine.resolveConflict({
+      vaultPath: '11_INBOX/ResolveMe.md',
+      strategy: 'save-fork',
+      actor: 'agent-author',
+      proposedContent: agentProposal,
+      reason: 'Preserve agent draft alongside Obsidian edit',
+    });
+    expect(forkRes.forkPath).toBe('11_INBOX/ResolveMe (2).md');
+    expect((await engine.read('11_INBOX/ResolveMe.md')).rawContent).toBe(obsidianEdit);
+    expect((await engine.read('11_INBOX/ResolveMe (2).md')).rawContent).toBe(agentProposal);
+
+    // Strategy 2: keep-disk preserves Obsidian edit & syncs version history/index
+    const keepRes = await engine.resolveConflict({
+      vaultPath: '11_INBOX/ResolveMe.md',
+      strategy: 'keep-disk',
+      actor: 'blago',
+      reason: 'Accept human Obsidian version',
+    });
+    expect(keepRes.sha256).toBe(report.diskSha256);
+
+    // Strategy 3: accept-proposed rejects stale expectedDiskSha256, succeeds with live disk SHA, and retains old disk blob in history!
+    await expect(
+      engine.resolveConflict({
+        vaultPath: '11_INBOX/ResolveMe.md',
+        strategy: 'accept-proposed',
+        actor: 'blago',
+        expectedDiskSha256: v1.sha256, // stale!
+        proposedContent: baseContent.replace('Base v1 line.', 'Merged resolution v3.'),
+      }),
+    ).rejects.toMatchObject({ name: 'VaultConflictError', code: 'CHECKSUM_MISMATCH' });
+
+    const mergedRes = await engine.resolveConflict({
+      vaultPath: '11_INBOX/ResolveMe.md',
+      strategy: 'accept-proposed',
+      actor: 'blago',
+      expectedDiskSha256: keepRes.sha256,
+      proposedContent: baseContent.replace('Base v1 line.', 'Merged resolution v3.'),
+      reason: 'Apply reviewed merge after inspecting Obsidian version',
+    });
+    expect(mergedRes.previousSha256).toBe(keepRes.sha256);
+
+    // Previous Obsidian edit (keepRes.sha256) MUST still be restorable from .vault-revisions!
+    const restoredObsidian = await engine.restore({
+      vaultPath: '11_INBOX/ResolveMe.md',
+      targetSha256: keepRes.sha256,
+      actor: 'blago',
+      reason: 'Verify Obsidian edit remained recoverable',
+    });
+    expect(restoredObsidian.sha256).toBe(keepRes.sha256);
+
+    // Optimistic concurrency on promote() revisions
+    const app1 = db.queueApproval({
+      itemType: 'vault_promotion',
+      itemId: 'daw-cap-promotion-01',
+      proposer: 'research-orchestrator',
+      request: {},
+    });
+    db.decideApproval({
+      approvalId: app1.id,
+      decision: 'approved',
+      approver: 'blago',
+      reason: 'Approved canonical rule',
+    });
+
+    const p1 = await engine.promote({
+      approvalId: app1.id,
+      targetVaultPath: '02_KNOWLEDGE/CANONICAL/KNOW-CAS-Test.md',
+      entityId: 'know-cas-test-01',
+      title: 'CAS Promoted Rule',
+      body: 'Canonical body v1.',
+      domain: 'KNOWLEDGE',
+      sourceRefs: ['02_KNOWLEDGE/SOURCES/SRC-0001.md'],
+      confidence: 0.92,
+    });
+
+    const app2 = db.queueApproval({
+      itemType: 'vault_promotion',
+      itemId: 'daw-cap-promotion-02',
+      proposer: 'research-orchestrator',
+      request: {},
+    });
+    db.decideApproval({
+      approvalId: app2.id,
+      decision: 'approved',
+      approver: 'blago',
+      reason: 'Approved revision',
+    });
+
+    await expect(
+      engine.promote({
+        approvalId: app2.id,
+        targetVaultPath: '02_KNOWLEDGE/CANONICAL/KNOW-CAS-Test.md',
+        entityId: 'know-cas-test-01',
+        title: 'CAS Promoted Rule',
+        body: 'Canonical body v2.',
+        domain: 'KNOWLEDGE',
+        sourceRefs: ['02_KNOWLEDGE/SOURCES/SRC-0001.md'],
+        confidence: 0.95,
+        expectedSha256: '0'.repeat(64),
+      }),
+    ).rejects.toMatchObject({ name: 'VaultConflictError', code: 'CHECKSUM_MISMATCH' });
+
+    const p2 = await engine.promote({
+      approvalId: app2.id,
+      targetVaultPath: '02_KNOWLEDGE/CANONICAL/KNOW-CAS-Test.md',
+      entityId: 'know-cas-test-01',
+      title: 'CAS Promoted Rule',
+      body: 'Canonical body v2.',
+      domain: 'KNOWLEDGE',
+      sourceRefs: ['02_KNOWLEDGE/SOURCES/SRC-0001.md'],
+      confidence: 0.95,
+      expectedSha256: p1.sha256,
+    });
+    expect(p2.previousSha256).toBe(p1.sha256);
+    expect(p2.revisionNumber).toBe(2);
   });
 });
