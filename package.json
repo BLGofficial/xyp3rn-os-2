@@ -35,6 +35,8 @@
     "trace:schemas": "node tech/trace/schemas-cli.ts",
     "vault": "node records/vault/cli.ts",
     "vault:os3": "node --env-file-if-exists=.env.local core/vault-engine/cli.ts",
+    "vault:validate": "node --env-file-if-exists=.env.local core/vault-engine/cli.ts validate",
+    "vault:validate-templates": "node --env-file-if-exists=.env.local core/vault-engine/cli.ts validate-templates",
     "gateway:os3": "node --env-file-if-exists=.env.local core/gateway/cli.ts",
     "index": "node knowledge/knowledge-graph/cli.ts",
     "audit:system": "pnpm typecheck && pnpm test && pnpm agents:validate",

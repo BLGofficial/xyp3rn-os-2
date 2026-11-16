@@ -11,7 +11,7 @@ import { resolveVaultPath, type VaultSector } from './path-resolver.ts';
 import { sha256Hex, writeFileAtomic } from './revision.ts';
 import { assertValidEntityContent } from './schema-validator.ts';
 import type { VaultTransactionManager } from './transaction-manager.ts';
-import type { VaultEngineConfig } from './vault-config.ts';
+import { assertVaultPermission, type VaultEngineConfig } from './vault-config.ts';
 import type { VaultVersionManager } from './version-manager.ts';
 import type { WriteNoteResult } from './writer.ts';
 
@@ -29,6 +29,7 @@ export type PromoteToCanonicalRequest = {
   readonly provenance?: string | undefined;
   readonly tags?: readonly string[] | undefined;
   readonly metadata?: Record<string, unknown> | undefined;
+  readonly expectedSha256?: string | undefined;
   readonly readOnlyOnDisk?: boolean | undefined;
   readonly reason?: string | undefined;
 };
@@ -187,15 +188,38 @@ export class VaultPromotionGate {
       requireWritableSector: false,
     });
 
+    assertVaultPermission(this.#ctx.config, this.#ctx.audit, {
+      actor: approver,
+      operation: 'promote',
+      vaultPath: check.normalizedPath,
+      sector: check.sector,
+      isCanonical: true,
+    });
+
     return this.#ctx.transactions.withPathLock(
       check.normalizedPath,
       approver,
       this.#ctx.config.lockTtlMs,
       async () => {
-        const diskState = await this.#ctx.transactions.inspectAndGuardDiskState({
-          vaultPath: check.normalizedPath,
-          absPath: check.absPath,
-        });
+        let diskState;
+        try {
+          diskState = await this.#ctx.transactions.inspectAndGuardDiskState({
+            vaultPath: check.normalizedPath,
+            absPath: check.absPath,
+            expectedSha256: req.expectedSha256,
+          });
+        } catch (err) {
+          this.#ctx.audit.record({
+            actor: approver,
+            operation: 'promote',
+            filePath: check.normalizedPath,
+            previousChecksum: req.expectedSha256,
+            reason: (err as Error).message,
+            result: 'conflict',
+            domain: 'GOVERNANCE',
+          });
+          throw err;
+        }
         const previousSha256 = diskState.diskSha256;
 
         const bodySha256 = sha256Hex(req.body.trim());

@@ -14,7 +14,9 @@ export type VaultAuditOperation =
   | 'history'
   | 'restore'
   | 'promote'
-  | 'snapshot';
+  | 'snapshot'
+  | 'inspectConflict'
+  | 'resolveConflict';
 
 export type VaultAuditResultStatus = 'success' | 'denied' | 'conflict' | 'invalid' | 'error';
 

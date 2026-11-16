@@ -2,23 +2,28 @@ import { join, resolve } from 'node:path';
 import { openRuntimeDb } from '../sqlite/client.ts';
 import { bootstrapAndSyncVault } from './bootstrap.ts';
 import { VaultEngine } from './engine.ts';
+import { UI_SECTOR_RECONCILIATION } from './path-guard.ts';
 import {
   provisionOs3Vault,
   resolveConfiguredVaultPath,
+  validateAllTemplates,
   validateOs3Vault,
 } from './vault-foundation.ts';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 const DEFAULT_SQLITE = join(REPO_ROOT, '.local-db', 'xyp3rn-os3.sqlite');
 
-const USAGE = `usage: vault-os3 provision | validate | init | scan [--full] | status | search "<query>"`;
+const USAGE = `usage: vault-os3 provision | validate | validate-templates | reconcile | init | scan [--full] | status | search "<query>"`;
 
 const vaultRoot = resolveConfiguredVaultPath();
 const sqlitePath = resolve(process.env.XYP_SQLITE_PATH ?? DEFAULT_SQLITE);
 
 const [cmd, ...rest] = process.argv.slice(2);
 
-if (!cmd || !['provision', 'validate', 'init', 'scan', 'status', 'search'].includes(cmd)) {
+if (
+  !cmd ||
+  !['provision', 'validate', 'validate-templates', 'reconcile', 'init', 'scan', 'status', 'search'].includes(cmd)
+) {
   console.error(USAGE);
   process.exit(2);
 }
@@ -61,6 +66,12 @@ try {
     const validation = await validateOs3Vault(vaultRoot);
     console.log(JSON.stringify(validation, null, 2));
     if (!validation.ok) process.exit(1);
+  } else if (cmd === 'validate-templates') {
+    const report = await validateAllTemplates(vaultRoot);
+    console.log(JSON.stringify(report, null, 2));
+    if (!report.ok) process.exit(1);
+  } else if (cmd === 'reconcile') {
+    console.log(JSON.stringify({ ok: true, uiSixSectorMapping: UI_SECTOR_RECONCILIATION }, null, 2));
   } else if (cmd === 'init') {
     const provision = await provisionOs3Vault({ vaultRoot, repoRoot: REPO_ROOT });
     const report = await bootstrapAndSyncVault({

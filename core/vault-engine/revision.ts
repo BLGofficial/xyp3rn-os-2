@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 export type RevisionMetadata = {
@@ -18,34 +18,58 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 const RETRYABLE_WIN_CODES = new Set(['EBUSY', 'EPERM', 'EACCES']);
 
+export type AtomicWriteOptions = {
+  readonly maxRetries?: number | undefined;
+  readonly onBeforeRename?: ((tempPath: string, targetAbsPath: string) => Promise<void> | void) | undefined;
+};
+
 /**
- * Writes `content` atomically to `targetAbsPath` via a sibling temporary file and atomic rename.
- * Includes bounded exponential backoff for Windows file-locking (`EBUSY`/`EPERM`) when Obsidian is open.
+ * Writes `content` atomically to `targetAbsPath` via a sibling temporary file,
+ * fsync durability flush, and atomic rename. Always removes the temporary file
+ * on interrupted writes/renames and retries transient Windows locks (`EBUSY`/`EPERM`/`EACCES`).
  */
 export const writeFileAtomic = async (
   targetAbsPath: string,
   content: string | Uint8Array,
-  maxRetries = 4,
+  retriesOrOptions: number | AtomicWriteOptions = 4,
 ): Promise<void> => {
+  const opts = typeof retriesOrOptions === 'number' ? { maxRetries: retriesOrOptions } : retriesOrOptions;
+  const maxRetries = opts.maxRetries ?? 4;
   const dir = dirname(targetAbsPath);
   await mkdir(dir, { recursive: true });
   const tempPath = join(dir, `.tmp-${process.pid}-${randomUUID()}`);
 
-  await writeFile(tempPath, content, typeof content === 'string' ? { encoding: 'utf8' } : undefined);
+  let handle: Awaited<ReturnType<typeof open>> | null = null;
+  try {
+    handle = await open(tempPath, 'w', 0o644);
+    await handle.writeFile(content, typeof content === 'string' ? { encoding: 'utf8' } : undefined);
+    await handle.sync().catch(() => undefined);
+    await handle.close();
+    handle = null;
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      await rename(tempPath, targetAbsPath);
-      return;
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code ?? '';
-      if (attempt < maxRetries && RETRYABLE_WIN_CODES.has(code)) {
-        await sleep(35 * Math.pow(2, attempt));
-        continue;
-      }
-      await rm(tempPath, { force: true }).catch(() => undefined);
-      throw err;
+    if (opts.onBeforeRename) {
+      await opts.onBeforeRename(tempPath, targetAbsPath);
     }
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await rename(tempPath, targetAbsPath);
+        return;
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code ?? '';
+        if (attempt < maxRetries && RETRYABLE_WIN_CODES.has(code)) {
+          await sleep(35 * Math.pow(2, attempt));
+          continue;
+        }
+        throw err;
+      }
+    }
+  } catch (err) {
+    if (handle) {
+      await handle.close().catch(() => undefined);
+    }
+    await rm(tempPath, { force: true }).catch(() => undefined);
+    throw err;
   }
 };
 
