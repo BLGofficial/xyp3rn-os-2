@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "jarvis",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["server.py"],
+      "cwd": "C:\\Users\\blago\\Desktop\\oss2\\xyp3rn-os-2-engine\\galaxy",
+      "port": 4700,
+      "url": "http://127.0.0.1:4700/"
+    }
+  ]
+}

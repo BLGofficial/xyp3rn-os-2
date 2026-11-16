@@ -1,0 +1,143 @@
+{
+  "source": {
+    "file": "agentic-second-brain (1).webp",
+    "width": 1668,
+    "height": 1352,
+    "aspect": 1.2337
+  },
+  "centre": {
+    "x": 842,
+    "y": 609
+  },
+  "radii_px": {
+    "core_disc": 63,
+    "inner_dashed_guide": 120,
+    "glow_envelope": 152,
+    "dot_cloud_band": [
+      90,
+      460
+    ],
+    "app_node_ring": 490,
+    "satellite_header_row": 640
+  },
+  "ratios_of_width": {
+    "core_disc": 0.0378,
+    "app_node_ring": 0.2938,
+    "inner_dashed_guide": 0.0719,
+    "glow_envelope": 0.0911
+  },
+  "counts": {
+    "applications": 22,
+    "routines": 7,
+    "memory": 77,
+    "dev_prs": 27,
+    "life_os": 16,
+    "content_media": 15,
+    "knowledge": 13,
+    "meta_infra": 9,
+    "collections": 5,
+    "skills": 85
+  },
+  "background_gradient": [
+    "#1A1F38",
+    "#11142A",
+    "#0A0C1C",
+    "#04050E"
+  ],
+  "core": {
+    "rim": "#FFC300",
+    "fill_gradient": [
+      "#2A2230",
+      "#191320",
+      "#0F0B16"
+    ],
+    "label_ink": "#EEF3FC",
+    "sub_ink": "#C9A227"
+  },
+  "node_glass": {
+    "fill_gradient": [
+      "#1B2547",
+      "#0D1329"
+    ],
+    "stroke": "rgba(168,205,245,.34)",
+    "catch_light": "rgba(255,255,255,.30)",
+    "size_px": 40,
+    "circumradius_px": 27
+  },
+  "cluster_colors": {
+    "SKILLS": "#FFCB18",
+    "MEMORY": "#A186FF",
+    "META & INFRA": "#52C7FD",
+    "COLLECTIONS": "#53E485",
+    "DEV & PRS": "#3AD9BF",
+    "KNOWLEDGE": "#A186FF",
+    "CONTENT & MEDIA": "#F76FB4",
+    "LIFE OS": "#FFCB18",
+    "APPLICATIONS": "#6BA8FE",
+    "ROUTINES": "#FFC300"
+  },
+  "measured_hues": {
+    "amber_gold": {
+      "median": "#E4B833",
+      "peak": "#FFCB18"
+    },
+    "teal": {
+      "median": "#44C0B4",
+      "peak": "#3AD9BF"
+    },
+    "ice_cyan": {
+      "median": "#47B3E3",
+      "peak": "#52C7FD"
+    },
+    "electric_blue": {
+      "median": "#70A1DE",
+      "peak": "#6BA8FE"
+    },
+    "green": {
+      "median": "#56D18A",
+      "peak": "#53E485"
+    },
+    "violet": {
+      "median": "#715EB2",
+      "peak": "#A186FF"
+    },
+    "magenta": {
+      "median": "#D06CA5",
+      "peak": "#F76FB4"
+    },
+    "deep_amber": {
+      "median": "#9D6606",
+      "peak": "#F8AB2C"
+    }
+  },
+  "type": {
+    "wordmark": "bold grotesque, letterspacing .20em, 27px",
+    "sublabel": "mono 13px, letterspacing .10em",
+    "cluster_label": "bold mono 15-17px, letterspacing .16em, uppercase",
+    "count": "mono 12px",
+    "app_label": "mono 14px, letterspacing .05em",
+    "footer": "mono 13px, letterspacing .18em"
+  },
+  "motion": {
+    "shell_periods_s": [
+      240,
+      300,
+      420
+    ],
+    "core_breath_s": 7,
+    "core_breath_scale": 1.055,
+    "glow_breath_s": 9,
+    "glow_opacity": [
+      0.62,
+      0.95
+    ],
+    "node_float_px": 4,
+    "node_float_s": 12,
+    "pulse_s": 5.5,
+    "pulse_stagger_s": 0.9,
+    "star_twinkle_s": [
+      3,
+      6
+    ]
+  }
+}

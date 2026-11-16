@@ -11,7 +11,10 @@ const clean = (s: string | undefined): string | null => (s === undefined || s.tr
 
 const tagList = (v: unknown): string[] => {
   const raw = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[,\s]+/) : [];
-  return raw.filter((t): t is string => typeof t === 'string').map((t) => t.trim().replace(/^#/, '')).filter((t) => t !== '');
+  return raw
+    .filter((t): t is string | number => typeof t === 'string' || typeof t === 'number')
+    .map((t) => String(t).trim().replace(/^#/, ''))
+    .filter((t) => t !== '');
 };
 
 /** @returns every wikilink in `text`, in order, ignoring code spans and blocks. */
@@ -37,7 +40,7 @@ export const parseObsidianNote = (raw: string): ParsedObsidianNote => {
   let frontmatterError: string | null = null;
   if (m) {
     try {
-      const parsed: unknown = parseYaml(m[1]!);
+      const parsed: unknown = parseYaml(m[1]!, { logLevel: 'silent' });
       if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed as Record<string, unknown>;
     } catch (e) {
       frontmatterError = (e as Error).message.split('\n')[0]!;

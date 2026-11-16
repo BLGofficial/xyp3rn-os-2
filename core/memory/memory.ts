@@ -20,10 +20,15 @@ export type RunMemory = {
   readonly snapshot: () => { readonly input: unknown; readonly steps: Readonly<Record<string, unknown>> };
 };
 
+const FORBIDDEN_PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 const walk = (root: unknown, keys: readonly string[], path: string): unknown => {
   let cur: unknown = root;
   for (const k of keys) {
-    if (cur === null || typeof cur !== 'object' || !(k in (cur as Record<string, unknown>))) {
+    if (FORBIDDEN_PROTO_KEYS.has(k)) {
+      throw new Error(`forbidden prototype path segment "${k}" in ${path}`);
+    }
+    if (cur === null || typeof cur !== 'object' || !Object.hasOwn(cur as Record<string, unknown>, k)) {
       throw new Error(`path ${path} does not resolve`);
     }
     cur = (cur as Record<string, unknown>)[k];
@@ -68,7 +73,14 @@ export const resolveBindings = (template: unknown, memory: RunMemory): unknown =
   if (template !== null && typeof template === 'object') {
     const o = template as Record<string, unknown>;
     if (Object.keys(o).length === 1 && typeof o.$from === 'string') return memory.recall(o.$from);
-    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, resolveBindings(v, memory)]));
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(o)) {
+      if (FORBIDDEN_PROTO_KEYS.has(k)) {
+        throw new Error(`forbidden key "${k}" in workflow binding`);
+      }
+      out[k] = resolveBindings(v, memory);
+    }
+    return out;
   }
   return template;
 };
