@@ -13,6 +13,7 @@ import {
   type AudioReverseEngineeredSpec,
 } from './audio-reverse-engineer.ts';
 import { computePulseSpectrum, type GatewayCommandRequest, type Os3JarvisRuntime } from './jarvis-runtime.ts';
+import { inspectVaultOrOsFile, searchWholeOs, searchWholeVault } from './jarvis-inspector.ts';
 import {
   buildAgentsSnapshot,
   buildKnowledgeGraph,
@@ -584,6 +585,8 @@ async function handleRequest(
         activeSector: typeof body.activeSector === 'string' ? (body.activeSector as GatewayCommandRequest['activeSector']) : undefined,
         selectedJobId: typeof body.selectedJobId === 'string' ? body.selectedJobId : null,
         sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
+        askBeforeChange: body.askBeforeChange === true,
+        readAccepted: body.readAccepted !== false,
       };
       const out = await runtime.execute(cmdReq);
       sendJson(res, 200, out, origin);
@@ -835,6 +838,83 @@ async function handleRequest(
         actor: typeof body.actor === 'string' ? body.actor : 'operator',
       });
       sendJson(res, 200, result, origin);
+      return;
+    }
+
+    // 20. GET /api/jarvis/search?q=<query>&scope=all|vault|os&limit=8 — Whole Vault + Whole OS code/function search
+    if (req.method === 'GET' && pathname === '/api/jarvis/search') {
+      const q = (parsedUrl.searchParams.get('q') ?? '').trim();
+      const scope = parsedUrl.searchParams.get('scope') ?? 'all';
+      const limit = Math.min(25, Math.max(1, Number(parsedUrl.searchParams.get('limit') ?? '8') || 8));
+      if (!q) {
+        sendJson(res, 400, { ok: false, error: 'q query parameter is required' }, origin);
+        return;
+      }
+      const [vaultHits, osHits] = await Promise.all([
+        scope === 'os' ? Promise.resolve([]) : searchWholeVault(runtime, q, { limit }),
+        scope === 'vault' ? Promise.resolve([]) : searchWholeOs(runtime, q, { limit }),
+      ]);
+      sendJson(
+        res,
+        200,
+        { ok: true, query: q, scope, vaultCount: vaultHits.length, osCount: osHits.length, vaultHits, osHits },
+        origin,
+      );
+      return;
+    }
+
+    // 21. GET /api/jarvis/inspect?scope=vault|os&path=<relPath> — Safe read-only inspection of Vault note or OS file
+    if (req.method === 'GET' && pathname === '/api/jarvis/inspect') {
+      const scope = parsedUrl.searchParams.get('scope') === 'os' ? 'os' : 'vault';
+      const relPath = (parsedUrl.searchParams.get('path') ?? '').trim();
+      if (!relPath) {
+        sendJson(res, 400, { ok: false, error: 'path query parameter is required' }, origin);
+        return;
+      }
+      try {
+        const inspected = await inspectVaultOrOsFile(runtime, scope, relPath);
+        sendJson(res, 200, inspected, origin);
+      } catch (err) {
+        const msg = redactSecrets((err as Error).message);
+        const status = /forbidden|rejected|escapes|secret/i.test(msg) ? 403 : 404;
+        sendJson(res, status, { ok: false, error: msg }, origin);
+      }
+      return;
+    }
+
+    // 22. POST /api/jarvis/proposal/decide — Human acceptance/rejection of a proposed Jarvis change
+    if (req.method === 'POST' && pathname === '/api/jarvis/proposal/decide') {
+      const body = await readJsonBody(req);
+      const proposalId = typeof body.proposalId === 'string' ? body.proposalId.trim() : '';
+      const decision = body.decision === 'approved' || body.decision === 'rejected' ? body.decision : null;
+      const approver = typeof body.approver === 'string' && body.approver.trim() ? body.approver.trim() : 'operator';
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+
+      if (!proposalId || !decision) {
+        sendJson(res, 400, { ok: false, error: 'proposalId and decision (approved|rejected) are required' }, origin);
+        return;
+      }
+      if (decision === 'approved' && isAgentIdentity(approver)) {
+        sendJson(
+          res,
+          403,
+          {
+            ok: false,
+            code: 'SELF_APPROVAL_FORBIDDEN',
+            error: `403 FORBIDDEN: agent identity "${approver}" cannot approve Jarvis change proposals.`,
+          },
+          origin,
+        );
+        return;
+      }
+      try {
+        const out = await runtime.decideChangeProposal({ proposalId, decision, approver, reason });
+        sendJson(res, 200, out, origin);
+      } catch (err) {
+        const msg = redactSecrets((err as Error).message);
+        const status = /not found/i.test(msg) ? 404 : /sealed/i.test(msg) ? 409 : 400;
+        sendJson(res, status, { ok: false, error: msg }, origin);
+      }
       return;
     }
 

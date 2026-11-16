@@ -144,5 +144,19 @@ describe('Audio Reverse-Engineer & Dedicated Obsidian Extracted Prompts Folder',
     // 4. Whole Vault validation passes cleanly with saved prompt notes
     const vaultReport = await validateOs3Vault(tempVault);
     expect(vaultReport.ok).toBe(true);
+
+    // 5. Dashboard /api/records overview merges 09_X3LIUS_MUSIC extracted prompts
+    const recordsRes = await fetch(`${server.url}/api/records`, {
+      headers: { Origin: 'http://127.0.0.1:3000' },
+    });
+    expect(recordsRes.status).toBe(200);
+    const recordsJson = (await recordsRes.json()) as {
+      ok: boolean;
+      sunoPrompts: Array<{ vaultPath: string }>;
+    };
+    expect(recordsJson.ok).toBe(true);
+    expect(
+      recordsJson.sunoPrompts.filter((item) => item.vaultPath.startsWith(`${AUDIO_EXTRACTED_PROMPTS_DIR}/`)).length,
+    ).toBe(3);
   });
 });
