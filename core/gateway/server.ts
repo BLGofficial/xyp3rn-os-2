@@ -2,6 +2,16 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { redactSecrets, StructuredLogger } from '../runtime/logger.ts';
 import { validateEntityContent } from '../vault-engine/schema-validator.ts';
+import {
+  AUDIO_EXTRACTED_PROMPTS_DIR,
+  listExtractedAudioPrompts,
+  reverseEngineerAudioTelemetry,
+  saveExtractedAudioPromptsToVault,
+  type AudioAcousticTelemetry,
+  type AudioPromptFacet,
+  type AudioPromptSaveMode,
+  type AudioReverseEngineeredSpec,
+} from './audio-reverse-engineer.ts';
 import { computePulseSpectrum, type GatewayCommandRequest, type Os3JarvisRuntime } from './jarvis-runtime.ts';
 import {
   buildAgentsSnapshot,
@@ -779,6 +789,52 @@ async function handleRequest(
     // 16. GET /api/records
     if (req.method === 'GET' && pathname === '/api/records') {
       sendJson(res, 200, buildRecordsOverview(runtime), origin);
+      return;
+    }
+
+    // 17. GET /api/audio/prompts — list extracted Markdown prompts strictly from 09_X3LIUS_MUSIC/AUDIO_EXTRACTED_PROMPTS/
+    if (req.method === 'GET' && pathname === '/api/audio/prompts') {
+      const prompts = listExtractedAudioPrompts(runtime);
+      sendJson(res, 200, { ok: true, folder: AUDIO_EXTRACTED_PROMPTS_DIR, count: prompts.length, prompts }, origin);
+      return;
+    }
+
+    // 18. POST /api/audio/reverse-engineer — extract style/genres/vocal/flow/instruments from acoustic telemetry (never stores binary audio)
+    if (req.method === 'POST' && pathname === '/api/audio/reverse-engineer') {
+      const body = await readJsonBody(req, 512 * 1024);
+      const telemetry = body.telemetry as AudioAcousticTelemetry | undefined;
+      if (!telemetry || typeof telemetry !== 'object' || typeof telemetry.fileName !== 'string' || !telemetry.fileName.trim()) {
+        sendJson(res, 400, { ok: false, error: 'telemetry object with non-empty fileName is required' }, origin);
+        return;
+      }
+      const spec = await reverseEngineerAudioTelemetry(runtime, telemetry, {
+        useLlm: body.useLlm === true,
+        titleHint: typeof body.titleHint === 'string' ? body.titleHint : undefined,
+      });
+      sendJson(res, 200, { ok: true, folder: AUDIO_EXTRACTED_PROMPTS_DIR, spec }, origin);
+      return;
+    }
+
+    // 19. POST /api/audio/save-prompts — operator-confirmed save of extracted Markdown notes into dedicated Obsidian folder
+    if (req.method === 'POST' && pathname === '/api/audio/save-prompts') {
+      const body = await readJsonBody(req, 512 * 1024);
+      const spec = body.spec as AudioReverseEngineeredSpec | undefined;
+      if (!spec || typeof spec !== 'object' || typeof spec.stylePrompt !== 'string' || !spec.sourceFileName) {
+        sendJson(res, 400, { ok: false, error: 'valid reverse-engineered spec is required' }, origin);
+        return;
+      }
+      const saveMode: AudioPromptSaveMode = body.saveMode === 'per-facet' ? 'per-facet' : 'unified';
+      const selectedFacets = Array.isArray(body.selectedFacets)
+        ? (body.selectedFacets.filter((f): f is AudioPromptFacet => typeof f === 'string'))
+        : undefined;
+      const result = await saveExtractedAudioPromptsToVault(runtime, {
+        spec,
+        saveMode,
+        selectedFacets,
+        customTitle: typeof body.customTitle === 'string' ? body.customTitle : undefined,
+        actor: typeof body.actor === 'string' ? body.actor : 'operator',
+      });
+      sendJson(res, 200, result, origin);
       return;
     }
 
