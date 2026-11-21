@@ -3,8 +3,9 @@ import { basename, join, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { isAgentClass, isDomain, type AgentClass, type Domain } from '../contracts/taxonomy.ts';
 import type { SqliteRuntimeDb } from '../sqlite/client.ts';
-import { isCapability, type Capability } from '../tool-registry/capabilities.ts';
+import { CLASS_CAPABILITIES, isCapability, type Capability } from '../tool-registry/capabilities.ts';
 import type { Os3ToolRegistry } from '../tool-registry/os3-tool-registry.ts';
+import { VALID_ENTITY_STATUSES } from '../vault-engine/vault-schemas.ts';
 import type { ValidationFailure } from './registry.ts';
 
 export const ALLOWED_OS3_AGENT_FRONTMATTER_FIELDS = [
@@ -21,12 +22,18 @@ export const ALLOWED_OS3_AGENT_FRONTMATTER_FIELDS = [
   'model',
   'tools',
   'capabilities',
+  'permissions',
+  'role',
   'responsibilities',
   'input_contract',
   'output_contract',
   'read_permissions',
   'write_permissions',
+  'procedure',
+  'constraints',
+  'side_effects',
   'refusals',
+  'escalation',
   'tags',
   'provenance',
   'source_sha256',
@@ -34,21 +41,39 @@ export const ALLOWED_OS3_AGENT_FRONTMATTER_FIELDS = [
   'updated_at',
 ] as const;
 
+export const VALID_AGENT_STATUSES = VALID_ENTITY_STATUSES;
+export const INACTIVE_AGENT_STATUSES = new Set<string>(['retired', 'archived', 'superseded', 'inactive']);
+
+export type Os3AgentPermissions = {
+  readonly capabilities: readonly Capability[];
+  readonly reads: string;
+  readonly writes: string;
+  readonly allowedTools: readonly string[];
+  readonly denyByDefault: true;
+};
+
 export type Os3AgentDefinition = {
   readonly id: string;
   readonly schema: 'xyp3rn.agent/v3';
   readonly name: string;
   readonly class: AgentClass;
   readonly domain: Domain;
+  readonly version: number;
+  readonly status: string;
   readonly model: string;
   readonly tools: readonly string[];
   readonly capabilities: readonly Capability[];
+  readonly permissions: Os3AgentPermissions;
   readonly responsibilities: string;
   readonly inputContract: string;
   readonly outputContract: string;
   readonly readPermissions: string;
   readonly writePermissions: string;
+  readonly procedure: string;
+  readonly constraints: string;
   readonly refusals: string;
+  readonly escalation: string;
+  readonly scope: string;
   readonly role: string;
   readonly contract: string;
   readonly refuses: string;
@@ -90,22 +115,43 @@ export const extractContractBullets = (contractSection: string): {
   readonly outputs: string;
   readonly reads: string;
   readonly writes: string;
+  readonly sideEffects: string;
+  readonly procedure: string;
+  readonly constraints: string;
+  readonly escalation: string;
 } => {
-  const extract = (label: string): string => {
+  const extract = (label: string, fallback: string): string => {
     const re = new RegExp(`^-\\s*\\*\\*${label}:\\*\\*\\s*(.+)$`, 'im');
     const m = re.exec(contractSection);
-    return m?.[1]?.trim() ?? contractSection;
+    return m?.[1]?.trim() ?? fallback;
   };
   return {
-    inputs: extract('Inputs'),
-    outputs: extract('Outputs'),
-    reads: extract('Reads'),
-    writes: extract('Writes'),
+    inputs: extract('Inputs', contractSection),
+    outputs: extract('Outputs', contractSection),
+    reads: extract('Reads', contractSection),
+    writes: extract('Writes', contractSection),
+    sideEffects: extract('Side effects', ''),
+    procedure: extract('Procedure', ''),
+    constraints: extract('Constraints', ''),
+    escalation: extract('Escalation', ''),
   };
+};
+
+const nonEmptyStr = (v: unknown): string | null =>
+  typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+
+const firstNonEmpty = (...values: readonly (string | undefined | null)[]): string => {
+  for (const v of values) {
+    if (typeof v === 'string' && v.trim().length > 0) return v.trim();
+  }
+  return '';
 };
 
 /**
  * Parses and validates a single OS 3.0 Agent definition file from `04_AGENTS/`.
+ * Enforces `AGENT_CLASSES` (all 8 classes), `DOMAINS` (6 domains), stable ID/name,
+ * positive integer version, valid lifecycle status, tool resolution & class permissions,
+ * and preserves role/responsibility/inputs/outputs/procedure/constraints/refusal/escalation sections.
  */
 export const parseOs3AgentFile = (
   filePath: string,
@@ -173,6 +219,24 @@ export const parseOs3AgentFile = (
     errors.push(`unknown domain: ${String(f.domain)}`);
   }
 
+  let version = 1;
+  if ('version' in f && f.version !== undefined) {
+    if (typeof f.version !== 'number' || !Number.isInteger(f.version) || f.version < 1) {
+      errors.push(`invalid version: expected positive integer >= 1, got "${String(f.version)}"`);
+    } else {
+      version = f.version;
+    }
+  }
+
+  let status = 'live';
+  if ('status' in f && f.status !== undefined) {
+    if (typeof f.status !== 'string' || !VALID_AGENT_STATUSES.has(f.status.trim().toLowerCase())) {
+      errors.push(`unknown status: "${String(f.status)}"`);
+    } else {
+      status = f.status.trim().toLowerCase();
+    }
+  }
+
   if ('model' in f) {
     if (typeof f.model !== 'string' || !VALID_MODEL_RE.test(f.model.trim())) {
       errors.push(`invalid model: "${String(f.model)}" (must be "none" or "<provider>:<model>")`);
@@ -212,12 +276,47 @@ export const parseOs3AgentFile = (
     }
   }
 
-  if ('capabilities' in f && Array.isArray(f.capabilities)) {
-    for (const c of f.capabilities) {
-      if (!isCapability(c)) {
-        errors.push(`unknown capability: ${String(c)}`);
-      } else {
-        derivedCapabilities.add(c);
+  const validateDeclaredCapability = (capRaw: unknown, sourceLabel: string): void => {
+    if (!isCapability(capRaw)) {
+      errors.push(`unknown capability in ${sourceLabel}: ${String(capRaw)}`);
+      return;
+    }
+    if (isAgentClass(f.class) && !CLASS_CAPABILITIES[capRaw].includes(f.class)) {
+      errors.push(
+        `permission violation: class "${f.class}" cannot hold declared capability "${capRaw}" in ${sourceLabel}`,
+      );
+      return;
+    }
+    derivedCapabilities.add(capRaw);
+  };
+
+  if ('capabilities' in f && f.capabilities !== undefined) {
+    if (!Array.isArray(f.capabilities)) {
+      errors.push('capabilities must be a list');
+    } else {
+      for (const c of f.capabilities) {
+        validateDeclaredCapability(c, 'capabilities');
+      }
+    }
+  }
+
+  let permReads: string | null = null;
+  let permWrites: string | null = null;
+  if ('permissions' in f && f.permissions !== undefined) {
+    if (typeof f.permissions !== 'object' || f.permissions === null || Array.isArray(f.permissions)) {
+      errors.push('permissions must be a mapping ({ reads?, writes?, capabilities? })');
+    } else {
+      const permObj = f.permissions as Record<string, unknown>;
+      permReads = nonEmptyStr(permObj.reads) ?? nonEmptyStr(permObj.read);
+      permWrites = nonEmptyStr(permObj.writes) ?? nonEmptyStr(permObj.write);
+      if ('capabilities' in permObj && permObj.capabilities !== undefined) {
+        if (!Array.isArray(permObj.capabilities)) {
+          errors.push('permissions.capabilities must be a list');
+        } else {
+          for (const c of permObj.capabilities) {
+            validateDeclaredCapability(c, 'permissions.capabilities');
+          }
+        }
       }
     }
   }
@@ -230,16 +329,82 @@ export const parseOs3AgentFile = (
       errors.push(`empty body section: ## ${sec}`);
     }
   }
+  for (const optSec of ['Procedure', 'Constraints', 'Escalation', 'Responsibilities', 'Inputs', 'Outputs'] as const) {
+    if (bodyMap.has(optSec) && bodyMap.get(optSec) === '') {
+      errors.push(`empty body section: ## ${optSec}`);
+    }
+  }
 
   if (errors.length > 0) {
     return fail(errors);
   }
 
-  const roleText = bodyMap.get('Role')!;
+  const roleText = nonEmptyStr(f.role) ?? bodyMap.get('Role')!;
   const contractText = bodyMap.get('Contract')!;
   const refusesText = bodyMap.get('Refuses')!;
+  const scopeText = bodyMap.get('Scope') ?? '';
   const bullets = extractContractBullets(contractText);
   const agentName = f.name as string;
+
+  const responsibilities = firstNonEmpty(
+    nonEmptyStr(f.responsibilities),
+    bodyMap.get('Responsibilities'),
+    roleText,
+  );
+  const inputContract = firstNonEmpty(
+    nonEmptyStr(f.input_contract),
+    bodyMap.get('Inputs'),
+    bullets.inputs,
+  );
+  const outputContract = firstNonEmpty(
+    nonEmptyStr(f.output_contract),
+    bodyMap.get('Outputs'),
+    bullets.outputs,
+  );
+  const readPermissions = firstNonEmpty(
+    permReads,
+    nonEmptyStr(f.read_permissions),
+    bullets.reads,
+  );
+  const writePermissions = firstNonEmpty(
+    permWrites,
+    nonEmptyStr(f.write_permissions),
+    bullets.writes,
+  );
+  const refusals = firstNonEmpty(nonEmptyStr(f.refusals), refusesText);
+
+  const procedure = firstNonEmpty(
+    nonEmptyStr(f.procedure),
+    bodyMap.get('Procedure'),
+    bullets.procedure,
+    nonEmptyStr(f.side_effects),
+    bullets.sideEffects
+      ? `Execute within ${f.class as string} boundaries via tools [${validTools.join(', ') || 'none'}]; side effects: ${bullets.sideEffects}`
+      : `Execute deterministically within ${f.class as string} boundaries via registered tools [${validTools.join(', ') || 'none'}].`,
+  );
+
+  const constraints = firstNonEmpty(
+    nonEmptyStr(f.constraints),
+    bodyMap.get('Constraints'),
+    bullets.constraints,
+    `Reads: ${readPermissions} | Writes: ${writePermissions}${scopeText ? ` | Scope: ${scopeText.split('\n')[0]}` : ''}`,
+  );
+
+  const escalation = firstNonEmpty(
+    nonEmptyStr(f.escalation),
+    bodyMap.get('Escalation'),
+    bullets.escalation,
+    `Block on refusal rules and escalate to Governance / human operator queue.`,
+  );
+
+  const capabilities = [...derivedCapabilities];
+  const permissions: Os3AgentPermissions = {
+    capabilities,
+    reads: readPermissions,
+    writes: writePermissions,
+    allowedTools: validTools,
+    denyByDefault: true,
+  };
 
   return {
     ok: true,
@@ -249,33 +414,22 @@ export const parseOs3AgentFile = (
       name: agentName,
       class: f.class as AgentClass,
       domain: f.domain as Domain,
+      version,
+      status,
       model: (f.model as string).trim(),
       tools: validTools,
-      capabilities: [...derivedCapabilities],
-      responsibilities:
-        typeof f.responsibilities === 'string' && f.responsibilities.trim()
-          ? f.responsibilities.trim()
-          : roleText,
-      inputContract:
-        typeof f.input_contract === 'string' && f.input_contract.trim()
-          ? f.input_contract.trim()
-          : bullets.inputs,
-      outputContract:
-        typeof f.output_contract === 'string' && f.output_contract.trim()
-          ? f.output_contract.trim()
-          : bullets.outputs,
-      readPermissions:
-        typeof f.read_permissions === 'string' && f.read_permissions.trim()
-          ? f.read_permissions.trim()
-          : bullets.reads,
-      writePermissions:
-        typeof f.write_permissions === 'string' && f.write_permissions.trim()
-          ? f.write_permissions.trim()
-          : bullets.writes,
-      refusals:
-        typeof f.refusals === 'string' && f.refusals.trim()
-          ? f.refusals.trim()
-          : refusesText,
+      capabilities,
+      permissions,
+      responsibilities,
+      inputContract,
+      outputContract,
+      readPermissions,
+      writePermissions,
+      procedure,
+      constraints,
+      refusals,
+      escalation,
+      scope: scopeText,
       role: roleText,
       contract: contractText,
       refuses: refusesText,
@@ -435,6 +589,9 @@ export class Os3VaultAgentRegistry {
     const agent = this.get(agentName);
     if (!agent) {
       throw new Error(`Agent not found in registry: "${agentName}"`);
+    }
+    if (INACTIVE_AGENT_STATUSES.has(agent.status)) {
+      throw new Error(`Agent "${agent.name}" is inactive (status="${agent.status}") and cannot execute`);
     }
     if (!this.#toolRegistry) {
       throw new Error(`Cannot execute test run for "${agentName}": no ToolRegistry bound`);

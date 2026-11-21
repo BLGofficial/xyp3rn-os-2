@@ -59,9 +59,24 @@ export const archiveVaultNote = async (
       { vaultPath: req.sourceVaultPath },
     );
   }
+  if (sourceDoc.sector === '12_ARCHIVE' || sourceDoc.sector === '11_ARCHIVE') {
+    throw new VaultValidationError(
+      'INVALID_ARCHIVE_OR_SUPERSESSION',
+      `Source note "${req.sourceVaultPath}" is already inside an immutable archive sector (${sourceDoc.sector})`,
+      { vaultPath: req.sourceVaultPath },
+    );
+  }
 
   const archivedAt = new Date().toISOString();
-  const subdir = req.targetSubdir ?? 'RETIRED';
+  const rawSubdir = req.targetSubdir ?? 'RETIRED';
+  if (rawSubdir !== 'RETIRED' && rawSubdir !== 'SUPERSEDED') {
+    throw new VaultValidationError(
+      'INVALID_ARCHIVE_OR_SUPERSESSION',
+      `Invalid archive subdirectory "${String(rawSubdir)}": must be RETIRED or SUPERSEDED`,
+      { vaultPath: req.sourceVaultPath },
+    );
+  }
+  const subdir = rawSubdir;
   const rawId = sourceDoc.frontmatter.id ? String(sourceDoc.frontmatter.id) : basename(req.sourceVaultPath, '.md');
   const suffix = randomUUID().slice(0, 6);
   const targetPath = `12_ARCHIVE/${subdir}/${archivedAt.slice(0, 10)}-${basename(req.sourceVaultPath)}`;

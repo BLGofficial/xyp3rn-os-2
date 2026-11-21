@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
@@ -7,6 +8,7 @@ import type { Os3Orchestrator } from '../orchestrator/os3-orchestrator.ts';
 import type { AgentRunRecord, ApprovalItemType, JobRecord, SqliteRuntimeDb } from '../sqlite/client.ts';
 import type { Os3ToolRegistry } from '../tool-registry/os3-tool-registry.ts';
 import { sha256Hex } from '../vault-engine/revision.ts';
+import type { VaultEngine } from '../vault-engine/vault-engine.ts';
 import { topoOrder } from './spec.ts';
 
 export type Os3WorkflowCondition = {
@@ -29,18 +31,23 @@ export type Os3WorkflowStepRetry = {
 export type Os3WorkflowStepSpec = {
   readonly id: string;
   readonly agent: string;
+  readonly tool?: string | undefined;
+  readonly toolArgs?: unknown;
   readonly dependsOn: readonly string[];
   readonly tools?: readonly string[] | undefined;
   readonly input: unknown;
   readonly when?: Os3WorkflowCondition | undefined;
   readonly approvalGate?: Os3WorkflowApprovalGate | undefined;
   readonly retryPolicy?: Os3WorkflowStepRetry | undefined;
+  readonly timeoutMs?: number | undefined;
+  readonly onError?: 'fail' | 'fallback' | 'continue' | undefined;
   readonly fallbackOutput?: Record<string, unknown> | undefined;
 };
 
 export type Os3WorkflowDefinition = {
   readonly id: string;
   readonly name: string;
+  readonly version: number;
   readonly description: string;
   readonly requiredInput: readonly string[];
   readonly optionalInput: readonly string[];
@@ -53,6 +60,7 @@ export type Os3WorkflowDefinition = {
 export type Os3WorkflowStepRunRecord = {
   readonly stepId: string;
   readonly agentName: string;
+  readonly toolName?: string | undefined;
   readonly agentRunId: string | null;
   readonly status: 'success' | 'error' | 'skipped' | 'awaiting_approval';
   readonly attempts: number;
@@ -60,9 +68,20 @@ export type Os3WorkflowStepRunRecord = {
   readonly error?: string | undefined;
 };
 
+export type Os3WorkflowAggregationSummary = {
+  readonly correlationId: string;
+  readonly totalSteps: number;
+  readonly succeededSteps: number;
+  readonly failedSteps: number;
+  readonly skippedStepsCount: number;
+  readonly awaitingApprovalSteps: number;
+  readonly totalAttempts: number;
+};
+
 export type Os3WorkflowExecutionResult = {
   readonly workflowRunId: string;
   readonly workflowName: string;
+  readonly correlationId: string;
   readonly status: 'success' | 'error' | 'awaiting_approval' | 'cancelled';
   readonly output?: unknown;
   readonly failedStep?: string | undefined;
@@ -71,22 +90,40 @@ export type Os3WorkflowExecutionResult = {
   readonly error?: string | undefined;
   readonly skippedSteps: readonly string[];
   readonly steps: readonly Os3WorkflowStepRunRecord[];
+  readonly aggregation: Os3WorkflowAggregationSummary;
 };
 
-const TOP_KEYS = new Set(['name', 'description', 'input', 'steps', 'output']);
-const STEP_KEYS = new Set([
-  'id',
-  'agent',
-  'dependsOn',
-  'tools',
-  'input',
-  'when',
-  'approvalGate',
-  'retryPolicy',
-  'fallbackOutput',
-]);
+/**
+ * Formal OS 3.0 Workflow YAML Schema descriptor for Vault workflows (`05_WORKFLOWS/DEFINITIONS/*.workflow.yaml`).
+ */
+export const OS3_WORKFLOW_SCHEMA = {
+  schemaVersion: 'xyp3rn.workflow-dsl/v3',
+  allowedTopLevelKeys: ['id', 'version', 'name', 'description', 'input', 'steps', 'output'] as const,
+  allowedStepKeys: [
+    'id',
+    'agent',
+    'tool',
+    'toolArgs',
+    'dependsOn',
+    'tools',
+    'input',
+    'when',
+    'approvalGate',
+    'retryPolicy',
+    'timeoutMs',
+    'onError',
+    'fallbackOutput',
+  ] as const,
+  stepErrorPolicies: ['fail', 'fallback', 'continue'] as const,
+} as const;
+
+const TOP_KEYS = new Set<string>(OS3_WORKFLOW_SCHEMA.allowedTopLevelKeys);
+const STEP_KEYS = new Set<string>(OS3_WORKFLOW_SCHEMA.allowedStepKeys);
 const KEBAB_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const STEP_ID_RE = /^[a-z][a-z0-9_-]*$/;
+const SNAKE_RE = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 const extractFromRefs = (v: unknown): string[] => {
   if (Array.isArray(v)) return v.flatMap(extractFromRefs);
@@ -161,6 +198,9 @@ export const validateAndCompileOs3Workflow = (
   if (typeof r.description !== 'string' || r.description.trim() === '') {
     errors.push('description is required');
   }
+  if (r.version !== undefined && (typeof r.version !== 'number' || !Number.isInteger(r.version) || r.version < 1)) {
+    errors.push(`invalid version: ${String(r.version)}`);
+  }
 
   const inputDecl = (r.input ?? { required: [] }) as { required?: unknown; optional?: unknown };
   const requiredInput = Array.isArray(inputDecl.required) ? inputDecl.required.map(String) : [];
@@ -204,6 +244,25 @@ export const validateAndCompileOs3Workflow = (
       errors.push(`step ${id}: unknown agent ${agentName}`);
     }
 
+    let stepTool: string | undefined;
+    if (st.tool !== undefined) {
+      if (typeof st.tool !== 'string' || !SNAKE_RE.test(st.tool)) {
+        errors.push(`step ${id}: tool must be snake_case`);
+      } else {
+        stepTool = st.tool;
+        if (agentDef) {
+          if (!agentDef.tools.includes(stepTool)) {
+            errors.push(`step ${id}: tool "${stepTool}" is not declared by agent "${agentDef.name}"`);
+          } else if (toolRegistry) {
+            const auth = toolRegistry.authorize(agentDef.class, stepTool);
+            if (!auth.allow) {
+              errors.push(`step ${id}: tool authorization failed for "${stepTool}": ${auth.reason}`);
+            }
+          }
+        }
+      }
+    }
+
     let stepTools: readonly string[] | undefined;
     if (st.tools !== undefined) {
       if (!Array.isArray(st.tools)) {
@@ -225,6 +284,17 @@ export const validateAndCompileOs3Workflow = (
       }
     }
 
+    if (
+      st.onError !== undefined &&
+      (typeof st.onError !== 'string' || !['fail', 'fallback', 'continue'].includes(st.onError))
+    ) {
+      errors.push(`step ${id}: onError must be fail|fallback|continue`);
+    }
+
+    if (st.timeoutMs !== undefined && (typeof st.timeoutMs !== 'number' || !Number.isFinite(st.timeoutMs) || st.timeoutMs <= 0)) {
+      errors.push(`step ${id}: timeoutMs must be a positive number`);
+    }
+
     const dependsOnRaw = st.dependsOn === undefined ? [] : st.dependsOn;
     if (!Array.isArray(dependsOnRaw)) {
       errors.push(`step ${id}: dependsOn must be a list`);
@@ -233,12 +303,16 @@ export const validateAndCompileOs3Workflow = (
     steps.push({
       id,
       agent: agentName,
+      tool: stepTool,
+      toolArgs: st.toolArgs,
       dependsOn: Array.isArray(dependsOnRaw) ? dependsOnRaw.map(String) : [],
       tools: stepTools,
       input: st.input ?? {},
       when: st.when as Os3WorkflowCondition | undefined,
       approvalGate: st.approvalGate as Os3WorkflowApprovalGate | undefined,
       retryPolicy: st.retryPolicy as Os3WorkflowStepRetry | undefined,
+      timeoutMs: typeof st.timeoutMs === 'number' ? st.timeoutMs : undefined,
+      onError: st.onError as 'fail' | 'fallback' | 'continue' | undefined,
       fallbackOutput: st.fallbackOutput as Record<string, unknown> | undefined,
     });
   }
@@ -288,6 +362,11 @@ export const validateAndCompileOs3Workflow = (
       for (const ref of extractFromRefs(s.input)) {
         checkRef(`step ${s.id}`, ref, up);
       }
+      if (s.toolArgs !== undefined) {
+        for (const ref of extractFromRefs(s.toolArgs)) {
+          checkRef(`step ${s.id} (toolArgs)`, ref, up);
+        }
+      }
       if (s.when) {
         checkRef(`step ${s.id} (when)`, s.when.$from, up);
       }
@@ -306,8 +385,9 @@ export const validateAndCompileOs3Workflow = (
   return {
     ok: true,
     workflow: {
-      id: `wf-${wfName}`,
+      id: typeof r.id === 'string' && r.id.trim() ? r.id.trim() : `wf-${wfName}`,
       name: wfName,
+      version: typeof r.version === 'number' ? r.version : 1,
       description: r.description as string,
       requiredInput,
       optionalInput,
@@ -319,11 +399,6 @@ export const validateAndCompileOs3Workflow = (
   };
 };
 
-/**
- * OS 3.0 Workflow Engine loading YAML definitions from `05_WORKFLOWS/DEFINITIONS/`
- * and executing topological DAGs with step dependencies, conditional steps, human approval gates,
- * retry policies, failure handling, and full SQLite execution history.
- */
 const FORBIDDEN_INPUT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const MAX_WORKFLOW_INPUT_BYTES = 256 * 1024;
 
@@ -344,6 +419,26 @@ const assertSafeWorkflowInput = (val: unknown, depth = 0): void => {
   }
 };
 
+const buildAggregation = (
+  correlationId: string,
+  steps: readonly Os3WorkflowStepRunRecord[],
+  skippedSteps: readonly string[],
+): Os3WorkflowAggregationSummary => ({
+  correlationId,
+  totalSteps: steps.length + Math.max(0, skippedSteps.length - steps.filter((s) => s.status === 'skipped').length),
+  succeededSteps: steps.filter((s) => s.status === 'success').length,
+  failedSteps: steps.filter((s) => s.status === 'error').length,
+  skippedStepsCount: skippedSteps.length,
+  awaitingApprovalSteps: steps.filter((s) => s.status === 'awaiting_approval').length,
+  totalAttempts: steps.reduce((acc, s) => acc + s.attempts, 0),
+});
+
+/**
+ * OS 3.0 Workflow Engine loading canonical YAML definitions from `05_WORKFLOWS/DEFINITIONS/`
+ * (or directly via `VaultEngine`) and executing topological DAGs with step dependencies,
+ * conditional steps, direct agent/tool step invocation, human approval gates, retries,
+ * failure recovery, correlation IDs, and SQLite execution history.
+ */
 export class Os3WorkflowEngine {
   readonly #definitionsDir: string;
   readonly #db: SqliteRuntimeDb;
@@ -400,7 +495,6 @@ export class Os3WorkflowEngine {
         this.#workflows.set(compiled.workflow.name, compiled.workflow);
         const fileStem = file.replace(/\.workflow\.yaml$/, '').replace(/\.yaml$/, '');
         if (fileStem !== compiled.workflow.name) {
-          // Also index by file stem (e.g., "write-lyrics" -> "x3lius-write-lyrics")
           this.#workflows.set(fileStem, compiled.workflow);
         }
       } else {
@@ -412,6 +506,32 @@ export class Os3WorkflowEngine {
       loaded: this.list(),
       failures: [...this.#failures],
     };
+  }
+
+  /**
+   * Loads and compiles a canonical workflow directly through `VaultEngine` (`.workflow.yaml`
+   * or Markdown `05_WORKFLOWS/*.md` containing a fenced `yaml` workflow definition block).
+   */
+  async loadFromVault(
+    vault: VaultEngine,
+    vaultPath: string,
+    actor = 'workflow-engine',
+  ): Promise<Os3WorkflowDefinition> {
+    const doc = await vault.read(vaultPath, actor);
+    let yamlSource = doc.rawContent;
+    if (vaultPath.toLowerCase().endsWith('.md')) {
+      const match = /```yaml\r?\n([\s\S]*?)\r?\n```/i.exec(doc.body);
+      if (!match?.[1]) {
+        throw new Error(`Vault workflow note "${vaultPath}" does not contain a fenced \`\`\`yaml workflow block`);
+      }
+      yamlSource = match[1];
+    }
+    const compiled = validateAndCompileOs3Workflow(yamlSource, this.#agents, this.#tools, vaultPath);
+    if (!compiled.ok) {
+      throw new Error(`Workflow compilation failed for "${vaultPath}": ${compiled.errors.join('; ')}`);
+    }
+    this.#workflows.set(compiled.workflow.name, compiled.workflow);
+    return compiled.workflow;
   }
 
   list(): readonly Os3WorkflowDefinition[] {
@@ -426,10 +546,117 @@ export class Os3WorkflowEngine {
     return this.#workflows.get(nameOrStem.trim());
   }
 
+  async #executeDirectToolStep(params: {
+    readonly jobId: string;
+    readonly step: Os3WorkflowStepSpec;
+    readonly correlationId: string;
+    readonly args: Record<string, unknown>;
+  }): Promise<Os3WorkflowStepRunRecord> {
+    const agent = this.#agents.get(params.step.agent);
+    if (!agent) {
+      return {
+        stepId: params.step.id,
+        agentName: params.step.agent,
+        toolName: params.step.tool,
+        agentRunId: null,
+        status: 'error',
+        attempts: 0,
+        error: `Agent not found: "${params.step.agent}"`,
+      };
+    }
+
+    const startMs = Date.now();
+    const runRow = this.#db.startAgentRun({
+      agentName: agent.name,
+      class: agent.class,
+      domain: agent.domain,
+      model: agent.model,
+      input: { tool: params.step.tool, args: params.args, _correlationId: params.correlationId },
+      jobId: params.jobId,
+      stepId: params.step.id,
+    });
+
+    const maxAttempts = Math.max(1, (params.step.retryPolicy?.maxRetries ?? 0) + 1);
+    const backoffMs = Math.max(0, params.step.retryPolicy?.backoffMs ?? 0);
+    let attempts = 0;
+    let lastError = 'Tool step execution failed';
+
+    while (attempts < maxAttempts) {
+      attempts += 1;
+      try {
+        const res = await this.#tools.execute(
+          {
+            runId: runRow.id,
+            agentName: agent.name,
+            agentClass: agent.class,
+            log: () => undefined,
+          },
+          params.step.tool!,
+          params.args,
+        );
+        this.#db.completeAgentRun(runRow.id, {
+          output: res.output,
+          tokensUsed: 0,
+          latencyMs: Date.now() - startMs,
+          model: agent.model,
+        });
+        return {
+          stepId: params.step.id,
+          agentName: agent.name,
+          toolName: params.step.tool,
+          agentRunId: runRow.id,
+          status: 'success',
+          attempts,
+          output: res.output,
+        };
+      } catch (err) {
+        lastError = (err as Error).message;
+        if (attempts < maxAttempts && backoffMs > 0) {
+          await sleep(backoffMs * attempts);
+        }
+      }
+    }
+
+    if (params.step.fallbackOutput) {
+      const recovered = { ...params.step.fallbackOutput, recoveredFromError: lastError };
+      this.#db.completeAgentRun(runRow.id, {
+        output: recovered,
+        tokensUsed: 0,
+        latencyMs: Date.now() - startMs,
+        model: agent.model,
+      });
+      return {
+        stepId: params.step.id,
+        agentName: agent.name,
+        toolName: params.step.tool,
+        agentRunId: runRow.id,
+        status: 'success',
+        attempts,
+        output: recovered,
+      };
+    }
+
+    this.#db.failAgentRun(runRow.id, {
+      errorDetail: lastError,
+      tokensUsed: 0,
+      latencyMs: Date.now() - startMs,
+    });
+    return {
+      stepId: params.step.id,
+      agentName: agent.name,
+      toolName: params.step.tool,
+      agentRunId: runRow.id,
+      status: 'error',
+      attempts,
+      error: lastError,
+    };
+  }
+
   async execute(
     workflowOrName: string | Os3WorkflowDefinition,
     input: Readonly<Record<string, unknown>>,
     options: {
+      readonly correlationId?: string | undefined;
       readonly timeoutMs?: number | undefined;
       readonly stepApprovals?: Readonly<Record<string, string>> | undefined;
       readonly signal?: AbortSignal | undefined;
@@ -446,11 +673,12 @@ export class Os3WorkflowEngine {
       throw new Error(`Security violation: workflow input exceeds ${MAX_WORKFLOW_INPUT_BYTES} byte limit`);
     }
 
+    const correlationId = options.correlationId ?? `corr-${randomUUID()}`;
     const job = this.#db.enqueueJob({
       kind: 'workflow',
       name: wf.name,
       specSha256: wf.sha256,
-      input,
+      input: { ...input, _correlationId: correlationId },
       startImmediately: true,
     });
 
@@ -470,11 +698,13 @@ export class Os3WorkflowEngine {
       return {
         workflowRunId: job.id,
         workflowName: wf.name,
+        correlationId,
         status: 'error',
         failedStep,
         error: errorMsg,
         skippedSteps: allSkipped,
         steps: stepRecords,
+        aggregation: buildAggregation(correlationId, stepRecords, allSkipped),
       };
     };
 
@@ -496,10 +726,12 @@ export class Os3WorkflowEngine {
         return {
           workflowRunId: job.id,
           workflowName: wf.name,
+          correlationId,
           status: 'cancelled',
           error: 'Workflow cancelled via AbortSignal',
           skippedSteps,
           steps: stepRecords,
+          aggregation: buildAggregation(correlationId, stepRecords, skippedSteps),
         };
       }
 
@@ -530,6 +762,7 @@ export class Os3WorkflowEngine {
           stepRecords.push({
             stepId,
             agentName: step.agent,
+            toolName: step.tool,
             agentRunId: null,
             status: 'skipped',
             attempts: 0,
@@ -550,6 +783,7 @@ export class Os3WorkflowEngine {
             request: {
               workflowName: wf.name,
               workflowRunId: job.id,
+              correlationId,
               stepId,
               reason: step.approvalGate.reason ?? `Human approval required for step "${stepId}"`,
             },
@@ -558,6 +792,7 @@ export class Os3WorkflowEngine {
           stepRecords.push({
             stepId,
             agentName: step.agent,
+            toolName: step.tool,
             agentRunId: null,
             status: 'awaiting_approval',
             attempts: 0,
@@ -566,11 +801,13 @@ export class Os3WorkflowEngine {
           return {
             workflowRunId: job.id,
             workflowName: wf.name,
+            correlationId,
             status: 'awaiting_approval',
             awaitingStep: stepId,
             pendingApprovalId: pending.id,
             skippedSteps,
             steps: stepRecords,
+            aggregation: buildAggregation(correlationId, stepRecords, skippedSteps),
           };
         }
 
@@ -592,10 +829,10 @@ export class Os3WorkflowEngine {
         }
       }
 
-      // 3. Resolve input bindings
+      // 3. Resolve input/toolArgs bindings
       let resolvedStepInput: unknown;
       try {
-        resolvedStepInput = resolveBindings(step.input, memory);
+        resolvedStepInput = resolveBindings(step.toolArgs !== undefined ? step.toolArgs : step.input, memory);
       } catch (err) {
         return failWorkflow(stepId, `input binding failed: ${(err as Error).message}`);
       }
@@ -605,32 +842,49 @@ export class Os3WorkflowEngine {
           ? (resolvedStepInput as Record<string, unknown>)
           : { value: resolvedStepInput };
 
-      // 4. Dispatch step through Os3Orchestrator
-      const runRes = await this.#orchestrator.executeSingleAgent(step.agent, inputRecord, {
-        jobId: job.id,
-        stepId,
-        allowedTools: step.tools,
-        timeoutMs: options.timeoutMs,
-        maxRetries: step.retryPolicy?.maxRetries,
-        fallbackOutput: step.fallbackOutput,
-        signal: options.signal,
-      });
-
-      stepRecords.push({
-        stepId,
-        agentName: step.agent,
-        agentRunId: runRes.runId,
-        status: runRes.status === 'success' ? 'success' : 'error',
-        attempts: runRes.attempts,
-        output: runRes.output,
-        error: runRes.error,
-      });
-
-      if (runRes.status !== 'success') {
-        return failWorkflow(stepId, runRes.error ?? 'step execution failed');
+      // 4. Direct tool step invocation OR orchestrated agent step execution
+      let stepRec: Os3WorkflowStepRunRecord;
+      if (step.tool) {
+        stepRec = await this.#executeDirectToolStep({
+          jobId: job.id,
+          step,
+          correlationId,
+          args: inputRecord,
+        });
+      } else {
+        const runRes = await this.#orchestrator.executeSingleAgent(step.agent, inputRecord, {
+          correlationId,
+          jobId: job.id,
+          stepId,
+          allowedTools: step.tools,
+          timeoutMs: step.timeoutMs ?? options.timeoutMs,
+          maxRetries: step.retryPolicy?.maxRetries,
+          retryBackoffMs: step.retryPolicy?.backoffMs,
+          fallbackOutput: step.fallbackOutput,
+          signal: options.signal,
+        });
+        stepRec = {
+          stepId,
+          agentName: step.agent,
+          agentRunId: runRes.runId,
+          status: runRes.status === 'success' ? 'success' : 'error',
+          attempts: runRes.attempts,
+          output: runRes.output,
+          error: runRes.error,
+        };
       }
 
-      memory.remember(stepId, runRes.output);
+      stepRecords.push(stepRec);
+
+      if (stepRec.status !== 'success') {
+        if (step.onError === 'continue') {
+          memory.remember(stepId, { ok: false, error: stepRec.error ?? 'step error continued' });
+          continue;
+        }
+        return failWorkflow(stepId, stepRec.error ?? 'step execution failed');
+      }
+
+      memory.remember(stepId, stepRec.output);
     }
 
     let finalOutput: unknown;
@@ -644,10 +898,12 @@ export class Os3WorkflowEngine {
     return {
       workflowRunId: job.id,
       workflowName: wf.name,
+      correlationId,
       status: 'success',
       output: finalOutput,
       skippedSteps,
       steps: stepRecords,
+      aggregation: buildAggregation(correlationId, stepRecords, skippedSteps),
     };
   }
 

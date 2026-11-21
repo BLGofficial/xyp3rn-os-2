@@ -912,12 +912,23 @@ export const provisionOs3Vault = async (options: {
         status: 'live',
         version: 1,
         capabilities,
+        permissions: {
+          capabilities,
+          reads: contractBullets.reads,
+          writes: contractBullets.writes,
+          deny_by_default: true,
+        },
         responsibilities: roleText,
         input_contract: contractBullets.inputs,
         output_contract: contractBullets.outputs,
         read_permissions: contractBullets.reads,
         write_permissions: contractBullets.writes,
+        procedure: contractBullets.sideEffects
+          ? `Execute strictly within ${cls} capabilities using registered tools [${tools.join(', ') || 'none'}]; side effects: ${contractBullets.sideEffects}`
+          : `Execute deterministically within ${cls} boundaries using registered tools [${tools.join(', ') || 'none'}].`,
+        constraints: `Read scope: ${contractBullets.reads} | Write scope: ${contractBullets.writes}`,
         refusals: refusesText,
+        escalation: 'Block unauthorized/out-of-scope operations and escalate to Governance Audit / human approval queue.',
         tags: [...new Set(['xyp3rn', 'os3', 'agent', `domain/${domain.toLowerCase()}`, ...parsed.frontmatter.tags])],
       };
 

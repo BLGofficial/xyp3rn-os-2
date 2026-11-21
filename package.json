@@ -9,6 +9,8 @@
   },
   "scripts": {
     "test": "vitest run",
+    "test:os3": "vitest run tests/os3-phase1 tests/os3-phase2 tests/os3-phase3 tests/os3-phase3-vault tests/os3-phase4 tests/os3-phase4-vault-engine tests/os3-phase5-runtime tests/os3-phase6-context tests/os3-phase7-agents-tools tests/os3-phase8-orchestration tests/os3-phase9-research tests/os3-phase10-records tests/os3-phase10-daw-foundation tests/os3-phase11-fl-studio-adapter tests/os3-phase11-ui-gateway tests/os3-phase12-daw-session-intelligence tests/os3-phase12-security tests/os3-phase13-e2e tests/os3-phase13-plugin-brain tests/os3-phase14-audio-brain tests/os3-phase15-daw-agent-team tests/os3-phase16-command-gateway tests/os3-phase17-reaper-multi-daw tests/os3-phase18-evaluation-workflows tests/os3-phase19-research-migration tests/os3-phase20-records-music tests/os3-phase21-daw-ui tests/os3-phase22-full-ui tests/os3-phase23-security-hardening tests/os3-phase24-acceptance tests/os3-phase25-release-candidate",
+    "test:daw": "vitest run tests/os3-phase10-daw-foundation tests/os3-phase11-fl-studio-adapter tests/os3-phase12-daw-session-intelligence tests/os3-phase13-plugin-brain tests/os3-phase14-audio-brain tests/os3-phase15-daw-agent-team tests/os3-phase16-command-gateway tests/os3-phase17-reaper-multi-daw tests/os3-phase18-evaluation-workflows tests/os3-phase21-daw-ui",
     "typecheck": "tsc --noEmit",
     "db:setup": "./supabase/local/setup.sh",
     "db:up": "node core/db/cli.ts up",
@@ -29,6 +31,8 @@
     "start:legacy-os2": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-xyp3rn.ps1",
     "specialists:table": "node research-intelligence/specialists/table-cli.ts",
     "research": "node research-intelligence/cli.ts",
+    "research:migrate": "node scripts/migrate-os2-research.ts",
+    "records:migrate": "node scripts/migrate-os2-records.ts",
     "gate": "node knowledge/promotion-gate/cli.ts",
     "evaluate": "node records/x3lius/evaluation/cli.ts",
     "trace:serve": "node tech/trace/serve-cli.ts",

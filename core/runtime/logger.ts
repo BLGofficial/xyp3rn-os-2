@@ -20,19 +20,32 @@ const LEVEL_RANK: Readonly<Record<LogLevel, number>> = {
 const SECRET_REDACTION_PATTERNS: readonly RegExp[] = [
   /\bsk-or-v1-[a-zA-Z0-9_-]{12,}\b/g,
   /\bsk-ant-[a-zA-Z0-9_-]{12,}\b/g,
+  /\bsk-proj-[a-zA-Z0-9_-]{12,}\b/g,
+  /\bghp_[a-zA-Z0-9]{16,}\b/g,
+  /\bgithub_pat_[a-zA-Z0-9_]{20,}\b/g,
   /\bgsk_[a-zA-Z0-9_-]{12,}\b/g,
   /\bAIza[0-9A-Za-z_-]{20,}\b/g,
   /\bBearer\s+[a-zA-Z0-9._-]{16,}\b/gi,
+  /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^:/\s]+:)[^@\s]+(@)/g,
+  /([?&](?:api_?key|token|secret|password|auth|x-xyp-token)=)[^&\s]+/gi,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
 ];
 
 export const redactSecrets = (text: string): string => {
   let out = text;
   for (const re of SECRET_REDACTION_PATTERNS) {
-    out = out.replace(re, '[REDACTED_SECRET]');
+    if (re.source.includes('@)')) {
+      out = out.replace(re, '$1[REDACTED_SECRET]$2');
+    } else if (re.source.startsWith('([?&]')) {
+      out = out.replace(re, '$1[REDACTED_SECRET]');
+    } else {
+      out = out.replace(re, '[REDACTED_SECRET]');
+    }
   }
   return out;
 };
+
+const AUDIO_BUFFER_KEY_RE = /^(channelData|pcmSamples|audioBuffer|audioBase64|rawBytes|samples)$/i;
 
 const redactValue = (val: unknown): unknown => {
   if (typeof val === 'string') return redactSecrets(val);
@@ -40,8 +53,10 @@ const redactValue = (val: unknown): unknown => {
   if (val !== null && typeof val === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-      if (/api[_-]?key|secret|password|token|authorization/i.test(k)) {
+      if (/api[_-]?key|secret|password|token|authorization|cookie|credential|connection[_-]?string|x[-_]xyp/i.test(k)) {
         out[k] = '[REDACTED_SECRET]';
+      } else if (AUDIO_BUFFER_KEY_RE.test(k)) {
+        out[k] = '[AUDIO_CONTENT_REDACTED]';
       } else {
         out[k] = redactValue(v);
       }
