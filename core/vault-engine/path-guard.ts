@@ -138,26 +138,23 @@ export const ALLOWED_VAULT_EXTENSIONS = new Set([
  * Agents may never write to these paths directly.
  */
 export const CANONICAL_PATH_PREFIXES = [
-  '00_SYSTEM/SCHEMAS/',
-  '00_SYSTEM/SYSTEM_MANIFEST.md',
-  '00_SYSTEM/TAXONOMY.md',
+  '00_SYSTEM/',
   '01_CORE/00_Identity/',
   '01_CORE/01_System_Prompts/',
   '01_CORE/IDENTITY/',
   '01_CORE/SYSTEM_PROMPTS/',
   '02_KNOWLEDGE/CANONICAL/',
   '02_KNOWLEDGE_LAYER/',
-  '06_GOVERNANCE/00_Policies/',
-  '06_GOVERNANCE/01_Standards/',
-  '06_GOVERNANCE/02_Access_Control/',
-  '08_GOVERNANCE/POLICIES/',
-  '08_GOVERNANCE/STANDARDS/',
-  '08_GOVERNANCE/ACCESS_CONTROL/',
+  '06_GOVERNANCE/',
+  '08_GOVERNANCE/',
   '10_DAW_BRAIN/CAPABILITIES/',
   '10_DAW_BRAIN/ADAPTERS/',
   '10_DAW_BRAIN/MIX_MASTER_REFS/',
   'canonical/',
 ] as const;
+
+const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/;
+const WINDOWS_RESERVED_STEM_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
 
 /**
  * Ignored directories during Vault structural scans and agent operations.
@@ -199,11 +196,11 @@ export const validateVaultPath = (
   if (!trimmed) {
     return { ok: false, reason: 'empty vault path' };
   }
-  if (trimmed.includes('\0')) {
-    return { ok: false, reason: 'null byte in vault path' };
+  if (trimmed.includes('\0') || CONTROL_CHAR_RE.test(trimmed)) {
+    return { ok: false, reason: 'null byte or control character in vault path' };
   }
-  if (trimmed.startsWith('/') || trimmed.startsWith('\\') || /^[a-zA-Z]:/.test(trimmed)) {
-    return { ok: false, reason: `absolute path rejected: ${trimmed}` };
+  if (trimmed.startsWith('/') || trimmed.startsWith('\\') || trimmed.includes(':')) {
+    return { ok: false, reason: `absolute path, drive prefix, or alternate data stream rejected: ${trimmed}` };
   }
   if (trimmed.includes('\\') || trimmed.includes('//')) {
     return { ok: false, reason: `non-POSIX path separator rejected: ${trimmed}` };
@@ -217,14 +214,19 @@ export const validateVaultPath = (
     if (segment.startsWith('.')) {
       return { ok: false, reason: `hidden segment rejected: ${segment}` };
     }
+    if (WINDOWS_RESERVED_STEM_RE.test(segment)) {
+      return { ok: false, reason: `reserved Windows device filename rejected: ${segment}` };
+    }
   }
 
   const normalizedPath = posix.normalize(trimmed);
   const rootAbs = resolve(vaultRoot);
   const absPath = resolve(rootAbs, ...segments);
+  const normRootCmp = process.platform === 'win32' ? rootAbs.toLowerCase() : rootAbs;
+  const normAbsCmp = process.platform === 'win32' ? absPath.toLowerCase() : absPath;
   const relFromRoot = absPath.slice(rootAbs.length);
   if (
-    !absPath.startsWith(rootAbs) ||
+    !normAbsCmp.startsWith(normRootCmp) ||
     (relFromRoot.length > 0 && !relFromRoot.startsWith(sep))
   ) {
     return { ok: false, reason: `path escapes vault root: ${trimmed}` };
@@ -254,8 +256,9 @@ export const validateVaultPath = (
     ? (firstSegment as VaultSector)
     : 'ROOT_KB';
 
+  const normalizedLower = normalizedPath.toLowerCase();
   const isCanonical =
-    CANONICAL_PATH_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix)) ||
+    CANONICAL_PATH_PREFIXES.some((prefix) => normalizedLower.startsWith(prefix.toLowerCase())) ||
     (sector === 'ROOT_KB' && normalizedPath !== 'README.md');
 
   return {

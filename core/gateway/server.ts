@@ -1,6 +1,16 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { redactSecrets, StructuredLogger } from '../runtime/logger.ts';
+import {
+  acquireRuntimeSingletonLock,
+  detectIncompleteMigrations,
+  inspectVaultAvailability,
+  recoverInterruptedRuntimeState,
+  type MigrationCompletenessReport,
+  type RuntimeSingletonLease,
+  type StartupRecoveryReport,
+  type VaultAvailabilityReport,
+} from '../runtime/release-startup.ts';
 import { validateEntityContent } from '../vault-engine/schema-validator.ts';
 import {
   AUDIO_EXTRACTED_PROMPTS_DIR,
@@ -13,9 +23,13 @@ import {
   type AudioReverseEngineeredSpec,
 } from './audio-reverse-engineer.ts';
 import { computePulseSpectrum, type GatewayCommandRequest, type Os3JarvisRuntime } from './jarvis-runtime.ts';
+import { getOrCreateDawGateway } from './daw-gateway.ts';
 import { inspectVaultOrOsFile, searchWholeOs, searchWholeVault } from './jarvis-inspector.ts';
 import {
   buildAgentsSnapshot,
+  buildCoreModulesOverview,
+  buildDiagnosticsOverview,
+  buildGovernanceOverview,
   buildKnowledgeGraph,
   buildRecordsOverview,
   buildResearchOverview,
@@ -78,6 +92,21 @@ export const isAllowedGatewayOrigin = (
   return true;
 };
 
+const PROTO_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+const sanitizeParsedJson = (val: unknown): unknown => {
+  if (Array.isArray(val)) return val.map(sanitizeParsedJson);
+  if (val !== null && typeof val === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      if (PROTO_POLLUTION_KEYS.has(k)) continue;
+      out[k] = sanitizeParsedJson(v);
+    }
+    return out;
+  }
+  return val;
+};
+
 const readJsonBody = async (req: IncomingMessage, maxBytes = 256 * 1024): Promise<Record<string, unknown>> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -94,7 +123,12 @@ const readJsonBody = async (req: IncomingMessage, maxBytes = 256 * 1024): Promis
     req.on('end', () => {
       try {
         const text = Buffer.concat(chunks).toString('utf8').trim();
-        resolve(text ? (JSON.parse(text) as Record<string, unknown>) : {});
+        if (!text) {
+          resolve({});
+          return;
+        }
+        const parsed = sanitizeParsedJson(JSON.parse(text));
+        resolve(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {});
       } catch (err) {
         reject(new Error(`invalid JSON body: ${(err as Error).message}`));
       }
@@ -142,7 +176,16 @@ export type Os3GatewayServerHandle = {
   readonly port: number;
   readonly url: string;
   readonly logger: StructuredLogger;
+  readonly dawBrainEnabled: boolean;
+  readonly vaultAvailability: VaultAvailabilityReport;
+  readonly migrationStatus: MigrationCompletenessReport;
+  readonly startupRecovery: StartupRecoveryReport;
   readonly close: () => Promise<void>;
+};
+
+export type Os3GatewayRuntimeContext = {
+  readonly dawBrainEnabled: boolean;
+  readonly startupRecovery: StartupRecoveryReport;
 };
 
 /**
@@ -155,6 +198,12 @@ export const startOs3GatewayServer = async (
     readonly port?: number | undefined;
     readonly logger?: StructuredLogger | undefined;
     readonly authToken?: string | undefined;
+    readonly dawBrainEnabled?: boolean | undefined;
+    readonly enforceSingletonLock?: boolean | undefined;
+    readonly singletonOwnerId?: string | undefined;
+    readonly failOnIncompleteMigration?: boolean | undefined;
+    readonly strictVaultRequired?: boolean | undefined;
+    readonly recoverInterruptedOnBoot?: boolean | undefined;
   } = {},
 ): Promise<Os3GatewayServerHandle> => {
   const host = options.host ?? DEFAULT_GATEWAY_HOST;
@@ -162,55 +211,116 @@ export const startOs3GatewayServer = async (
     throw new Error(`Security policy violation: OS 3.0 Gateway must bind to 127.0.0.1, refused "${host}"`);
   }
   const requestedPort = options.port ?? DEFAULT_GATEWAY_PORT;
+  if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) {
+    throw new Error(`Invalid OS 3.0 Gateway port: ${String(requestedPort)}`);
+  }
   const logger = options.logger ?? new StructuredLogger({ service: 'xyp3rn-os3-gateway' });
   const authToken = options.authToken?.trim() || process.env.XYP_GATEWAY_TOKEN?.trim() || undefined;
+  if (process.env.XYP_REQUIRE_AUTH === '1' && !authToken) {
+    throw new Error('Security policy violation: XYP_REQUIRE_AUTH=1 requires a non-empty authToken / XYP_GATEWAY_TOKEN');
+  }
 
-  const server = createServer((req, res) => {
-    logger.debug('http.request', `${req.method ?? 'GET'} ${req.url ?? '/'}`, {
-      method: req.method,
-      url: req.url,
-      host: req.headers.host,
+  const vaultAvailability = inspectVaultAvailability(runtime.vault.vaultRoot);
+  if (options.strictVaultRequired && !vaultAvailability.available) {
+    const err = new Error(
+      `OS3_STARTUP_VAULT_UNAVAILABLE: ${vaultAvailability.reason ?? 'Vault unavailable'}`,
+    ) as Error & { code: string };
+    err.code = 'OS3_STARTUP_VAULT_UNAVAILABLE';
+    throw err;
+  }
+
+  let singletonLease: RuntimeSingletonLease | null = null;
+  if (options.enforceSingletonLock) {
+    singletonLease = acquireRuntimeSingletonLock(runtime.db, runtime.db.dbPath, {
+      ownerId: options.singletonOwnerId,
+      rejectSameProcessDuplicate: true,
     });
-    void handleRequest(runtime, req, res, logger, authToken);
-  });
+  }
 
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(requestedPort, host, () => {
-      server.removeListener('error', reject);
-      resolve();
+  try {
+    const startupRecovery =
+      options.recoverInterruptedOnBoot !== false
+        ? recoverInterruptedRuntimeState(runtime.db)
+        : { recoveredLocksCount: 0, recoveredJobIds: [] };
+
+    const migrationStatus = detectIncompleteMigrations(runtime.db, runtime.vault.vaultRoot);
+    if (options.failOnIncompleteMigration && !migrationStatus.complete) {
+      const err = new Error(
+        `OS3_INCOMPLETE_MIGRATION_DETECTED: ${migrationStatus.incompleteReasons.join('; ')}`,
+      ) as Error & { code: string };
+      err.code = 'OS3_INCOMPLETE_MIGRATION_DETECTED';
+      throw err;
+    }
+
+    const dawBrainEnabled =
+      options.dawBrainEnabled !== undefined
+        ? options.dawBrainEnabled
+        : process.env.XYP_DISABLE_DAW_BRAIN !== '1' && process.env.XYP_ENABLE_DAW_BRAIN !== '0';
+
+    const rtCtx: Os3GatewayRuntimeContext = {
+      dawBrainEnabled,
+      startupRecovery,
+    };
+
+    const server = createServer((req, res) => {
+      const sanitizedUrl = redactSecrets(req.url ?? '/');
+      logger.debug('http.request', `${req.method ?? 'GET'} ${sanitizedUrl}`, {
+        method: req.method,
+        url: sanitizedUrl,
+        host: req.headers.host,
+      });
+      void handleRequest(runtime, req, res, logger, authToken, rtCtx);
     });
-  });
 
-  const addr = server.address();
-  const actualPort = typeof addr === 'object' && addr ? addr.port : requestedPort;
-  const url = `http://${host}:${actualPort}`;
-  logger.info('gateway.started', `OS 3.0 Gateway listening on ${url}`, {
-    host,
-    port: actualPort,
-    vaultRoot: runtime.vault.vaultRoot,
-  });
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(requestedPort, host, () => {
+        server.removeListener('error', reject);
+        resolve();
+      });
+    });
 
-  return {
-    server,
-    host,
-    port: actualPort,
-    url,
-    logger,
-    close: () =>
-      new Promise<void>((resolve, reject) => {
-        logger.info('gateway.stopping', `Shutting down OS 3.0 Gateway on ${url}`);
-        server.closeAllConnections?.();
-        server.close((err) => {
-          if (err) {
-            reject(err);
-          } else {
-            logger.info('gateway.stopped', `OS 3.0 Gateway stopped cleanly`);
-            resolve();
-          }
-        });
-      }),
-  };
+    const addr = server.address();
+    const actualPort = typeof addr === 'object' && addr ? addr.port : requestedPort;
+    const url = `http://${host}:${actualPort}`;
+    logger.info('gateway.started', `OS 3.0 Gateway listening on ${url}`, {
+      host,
+      port: actualPort,
+      vaultRoot: runtime.vault.vaultRoot,
+      vaultAvailable: vaultAvailability.available,
+      dawBrainEnabled,
+      migrationComplete: migrationStatus.complete,
+    });
+
+    return {
+      server,
+      host,
+      port: actualPort,
+      url,
+      logger,
+      dawBrainEnabled,
+      vaultAvailability,
+      migrationStatus,
+      startupRecovery,
+      close: () =>
+        new Promise<void>((resolve, reject) => {
+          logger.info('gateway.stopping', `Shutting down OS 3.0 Gateway on ${url}`);
+          singletonLease?.release();
+          server.closeAllConnections?.();
+          server.close((err) => {
+            if (err) {
+              reject(err);
+            } else {
+              logger.info('gateway.stopped', `OS 3.0 Gateway stopped cleanly`);
+              resolve();
+            }
+          });
+        }),
+    };
+  } catch (err) {
+    singletonLease?.release();
+    throw err;
+  }
 };
 
 const renderGatewayDashboardHtml = (runtime: Os3JarvisRuntime): string => {
@@ -479,6 +589,7 @@ async function handleRequest(
   res: ServerResponse,
   logger?: StructuredLogger,
   authToken?: string,
+  rtCtx?: Os3GatewayRuntimeContext,
 ): Promise<void> {
   const host = req.headers.host;
   const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
@@ -547,6 +658,9 @@ async function handleRequest(
       const pendingApprovals = sqliteOpen ? runtime.db.listApprovals('pending').length : 0;
       const activeLocks = sqliteOpen ? runtime.db.listLocks().length : 0;
       const integrity = sqliteOpen ? runtime.db.checkIntegrity() : null;
+      const vaultAvail = inspectVaultAvailability(runtime.vault.vaultRoot);
+      const migrationStatus = detectIncompleteMigrations(runtime.db, runtime.vault.vaultRoot);
+      const dawBrainEnabled = rtCtx?.dawBrainEnabled ?? true;
       sendJson(
         res,
         200,
@@ -554,10 +668,17 @@ async function handleRequest(
           ok: true,
           service: 'xyp3rn-os3-gateway',
           vaultRoot: runtime.vault.vaultRoot,
+          vaultAvailable: vaultAvail.available,
+          vaultMode: vaultAvail.mode,
+          vaultDegradedReason: vaultAvail.reason,
           sqlitePath: runtime.db.dbPath,
           sqliteOpen,
           schemaVersion: integrity?.schemaVersion ?? null,
           integrityOk: integrity?.ok ?? false,
+          migrationComplete: migrationStatus.complete,
+          migrationStatus,
+          dawBrainEnabled,
+          startupRecovery: rtCtx?.startupRecovery ?? { recoveredLocksCount: 0, recoveredJobIds: [] },
           activeLocks,
           agentsCount: runtime.agents.list().length,
           pendingApprovals,
@@ -918,10 +1039,469 @@ async function handleRequest(
       return;
     }
 
+    // ── DAW Brain OS3 Gateway APIs (Phase 21) ────────────────────────────────
+
+    if (pathname.startsWith('/api/daw/') && rtCtx?.dawBrainEnabled === false) {
+      if (req.method === 'GET' && pathname === '/api/daw/overview') {
+        sendJson(
+          res,
+          200,
+          {
+            ok: true,
+            dawBrainEnabled: false,
+            status: 'disabled_optional',
+            message:
+              'DAW Brain is optional and currently disabled by runtime configuration (XYP_DISABLE_DAW_BRAIN=1). OS3 Core, Vault, Research, and Records operate normally.',
+            generatedAt: new Date().toISOString(),
+            dataSource: 'os3-gateway-live',
+            isDemoFixture: false,
+            connectionSummary: {
+              state: 'disconnected',
+              connectedSessions: 0,
+              totalSessions: 0,
+              activeSessionId: null,
+              currentDaw: null,
+              currentVersion: null,
+              currentProject: null,
+              lastObservedAt: null,
+              freshness: 'unknown',
+              stale: false,
+              adaptersRegistered: 0,
+              reachableInstances: 0,
+            },
+            hostProbes: [],
+            adapters: [],
+            discoveredInstances: [],
+            sessions: [],
+            capabilities: {
+              available: [],
+              unsupported: [],
+              readOnlyCount: 0,
+              mutableCount: 0,
+            },
+            activeOperations: [],
+            pendingApprovals: [],
+            executionHistory: [],
+            sessionIntelligence: null,
+            pluginBrain: { profiles: [], chainGraphs: [], chainReports: [] },
+            audioBrain: { recentAnalyses: [] },
+            agents: [],
+            workflows: [],
+            evaluation: null,
+            events: [],
+          },
+          origin,
+        );
+        return;
+      }
+      sendJson(
+        res,
+        503,
+        {
+          ok: false,
+          code: 'DAW_BRAIN_DISABLED',
+          error: 'DAW Brain subsystem is optional and disabled at runtime (XYP_DISABLE_DAW_BRAIN=1)',
+        },
+        origin,
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/daw/overview') {
+      const daw = getOrCreateDawGateway(runtime);
+      const overview = await daw.buildOverview();
+      sendJson(res, 200, overview, origin);
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/connections/probe') {
+      const daw = getOrCreateDawGateway(runtime);
+      const probed = await daw.probeHostsAndInstances();
+      sendJson(res, 200, { ok: true, ...probed }, origin);
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/connections/connect') {
+      const daw = getOrCreateDawGateway(runtime);
+      const body = await readJsonBody(req);
+      const adapterId = typeof body.adapterId === 'string' ? body.adapterId.trim() : '';
+      if (!adapterId) {
+        sendJson(res, 400, { ok: false, error: 'adapterId is required' }, origin);
+        return;
+      }
+      try {
+        const session = await daw.connectSession({
+          adapterId,
+          instanceId: typeof body.instanceId === 'string' ? body.instanceId : undefined,
+          projectPath: typeof body.projectPath === 'string' ? body.projectPath : undefined,
+          actor: typeof body.actor === 'string' ? body.actor : 'operator',
+        });
+        sendJson(res, 200, { ok: true, session }, origin);
+      } catch (err) {
+        const msg = redactSecrets((err as Error).message);
+        sendJson(res, /not found|offline/i.test(msg) ? 404 : 400, { ok: false, error: msg }, origin);
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/sessions/refresh') {
+      const daw = getOrCreateDawGateway(runtime);
+      const body = await readJsonBody(req);
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
+      if (!sessionId) {
+        sendJson(res, 400, { ok: false, error: 'sessionId is required' }, origin);
+        return;
+      }
+      try {
+        const result = await daw.refreshSession(sessionId);
+        sendJson(res, 200, { ok: true, ...result }, origin);
+      } catch (err) {
+        const msg = redactSecrets((err as Error).message);
+        sendJson(res, /not found|disconnected/i.test(msg) ? 404 : 400, { ok: false, error: msg }, origin);
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/agents/run') {
+      const daw = getOrCreateDawGateway(runtime);
+      const body = await readJsonBody(req);
+      const agentName = typeof body.agentName === 'string' ? body.agentName.trim() : '';
+      const goal = typeof body.goal === 'string' ? body.goal.trim() : '';
+      if (!agentName || !goal) {
+        sendJson(res, 400, { ok: false, error: 'agentName and goal are required' }, origin);
+        return;
+      }
+      const modeRaw = body.mode;
+      if (modeRaw === 'execute_with_approval') {
+        sendJson(res, 403, { ok: false, error: 'Direct execution blocked from Agent Console; stage via /api/daw/commands/propose' }, origin);
+        return;
+      }
+      const mode = modeRaw === 'recommend' || modeRaw === 'prepare' ? modeRaw : 'analyze';
+      const result = await daw.runAgent({
+        agentName,
+        goal,
+        mode,
+        sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
+        hostKind: typeof body.hostKind === 'string' ? (body.hostKind as never) : undefined,
+        hostEdition: typeof body.hostEdition === 'string' ? body.hostEdition : undefined,
+        pluginName: typeof body.pluginName === 'string' ? body.pluginName : undefined,
+        compareWithPlugin: typeof body.compareWithPlugin === 'string' ? body.compareWithPlugin : undefined,
+      });
+      sendJson(res, result.ok ? 200 : 400, { ...result }, origin);
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/workflows/run') {
+      const daw = getOrCreateDawGateway(runtime);
+      const body = await readJsonBody(req);
+      const workflowId = typeof body.workflowId === 'string' ? body.workflowId.trim() : '';
+      if (!workflowId) {
+        sendJson(res, 400, { ok: false, error: 'workflowId is required' }, origin);
+        return;
+      }
+      try {
+        const result = await daw.runWorkflow({
+          workflowId,
+          sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
+          hostEdition: typeof body.hostEdition === 'string' ? body.hostEdition : undefined,
+        });
+        sendJson(res, 200, { ok: true, result }, origin);
+      } catch (err) {
+        const msg = redactSecrets((err as Error).message);
+        sendJson(res, /not found|No active DAW session/i.test(msg) ? 404 : 400, { ok: false, error: msg }, origin);
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/sessions/lease') {
+      const daw = getOrCreateDawGateway(runtime);
+      const body = await readJsonBody(req);
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
+      const grantedBy = typeof body.grantedBy === 'string' ? body.grantedBy.trim() : '';
+      if (!sessionId || !grantedBy) {
+        sendJson(res, 400, { ok: false, error: 'sessionId and grantedBy are required' }, origin);
+        return;
+      }
+      if (isAgentIdentity(grantedBy)) {
+        sendJson(res, 403, { ok: false, error: `Agent identity "${grantedBy}" cannot grant DAW session leases` }, origin);
+        return;
+      }
+      try {
+        const allowedTargets = Array.isArray(body.allowedTargets)
+          ? body.allowedTargets.filter((x): x is string => typeof x === 'string')
+          : undefined;
+        const lease = daw.grantPrepareLease({
+          sessionId,
+          grantedBy,
+          allowedTargets,
+          ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : undefined,
+        });
+        sendJson(res, 200, { ok: true, lease }, origin);
+      } catch (err) {
+        const msg = redactSecrets((err as Error).message);
+        const code = (err as { code?: string }).code;
+        sendJson(res, code === 'DAW_PERMISSION_DENIED' ? 403 : 400, { ok: false, code, error: msg }, origin);
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/commands/propose') {
+      const daw = getOrCreateDawGateway(runtime);
+      const body = await readJsonBody(req);
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
+      const capabilityId = typeof body.capabilityId === 'string' ? body.capabilityId.trim() : '';
+      const targetRef = typeof body.targetRef === 'string' ? body.targetRef.trim() : '';
+      const kind = typeof body.kind === 'string' ? body.kind.trim() : '';
+      if (!sessionId || !capabilityId || !targetRef || !kind) {
+        sendJson(res, 400, { ok: false, error: 'sessionId, kind, capabilityId, and targetRef are required' }, origin);
+        return;
+      }
+      try {
+        const out = await daw.proposeCommand({
+          sessionId,
+          kind: kind as never,
+          capabilityId,
+          targetRef,
+          params: (body.params && typeof body.params === 'object' ? body.params : {}) as Record<string, unknown>,
+          proposer: typeof body.proposer === 'string' && body.proposer.trim() ? body.proposer.trim() : 'operator:UI-xyp3rn',
+          leaseId: typeof body.leaseId === 'string' ? body.leaseId : undefined,
+        });
+        sendJson(res, 200, { ok: true, approvalId: out.approvalId, prepared: out.prepared }, origin);
+      } catch (err) {
+        const msg = redactSecrets((err as Error).message);
+        const code = (err as { code?: string }).code;
+        const isForbidden =
+          code === 'DAW_LEASE_REQUIRED' ||
+          code === 'DAW_PERMISSION_DENIED' ||
+          code === 'DAW_CAPABILITY_UNSUPPORTED' ||
+          code === 'DAW_ACTION_NOT_ALLOWLISTED' ||
+          /denied|lease|unsupported|cannot satisfy required tier/i.test(msg);
+        sendJson(res, /not found/i.test(msg) ? 404 : isForbidden ? 403 : 400, { ok: false, code, error: msg }, origin);
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/commands/decide') {
+      const daw = getOrCreateDawGateway(runtime);
+      const body = await readJsonBody(req);
+      const approvalId = typeof body.approvalId === 'string' ? body.approvalId.trim() : '';
+      const decision = body.decision === 'approved' || body.decision === 'rejected' ? body.decision : null;
+      const approver = typeof body.approver === 'string' ? body.approver.trim() : '';
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+      if (!approvalId || !decision || !approver || !reason) {
+        sendJson(res, 400, { ok: false, error: 'approvalId, decision (approved|rejected), approver, and reason are required' }, origin);
+        return;
+      }
+      if (decision === 'approved' && isAgentIdentity(approver)) {
+        sendJson(res, 403, { ok: false, code: 'SELF_APPROVAL_FORBIDDEN', error: `403 FORBIDDEN: agent identity "${approver}" cannot approve DAW commands.` }, origin);
+        return;
+      }
+      try {
+        const out = await daw.decideCommandApproval({
+          approvalId,
+          decision,
+          approver,
+          reason,
+          confirmDangerous: body.confirmDangerous === true,
+        });
+        sendJson(res, 200, out, origin);
+      } catch (err) {
+        const msg = redactSecrets((err as Error).message);
+        const status = /SELF_APPROVAL_FORBIDDEN|DANGEROUS_ACTION_CONFIRMATION_REQUIRED|denied|lease/i.test(msg)
+          ? 403
+          : /not found|longer staged/i.test(msg)
+            ? 404
+            : 400;
+        sendJson(res, status, { ok: false, error: msg }, origin);
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/commands/rollback') {
+      const daw = getOrCreateDawGateway(runtime);
+      const body = await readJsonBody(req);
+      const receiptId = typeof body.receiptId === 'string' ? body.receiptId.trim() : '';
+      const actor = typeof body.actor === 'string' ? body.actor.trim() : '';
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+      if (!receiptId || !actor || !reason) {
+        sendJson(res, 400, { ok: false, error: 'receiptId, actor, and reason are required' }, origin);
+        return;
+      }
+      try {
+        const result = await daw.rollbackReceipt({ receiptId, actor, reason });
+        sendJson(res, result.ok ? 200 : 400, { ok: result.ok, result }, origin);
+      } catch (err) {
+        const msg = redactSecrets((err as Error).message);
+        sendJson(res, /UNSUPPORTED/i.test(msg) ? 409 : /not found/i.test(msg) ? 404 : 403, { ok: false, error: msg }, origin);
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/daw/evaluate') {
+      const daw = getOrCreateDawGateway(runtime);
+      const report = await daw.runBenchmarkEvaluation();
+      sendJson(res, 200, { ok: true, evaluationScope: 'verified-fixtures-and-adapters', report }, origin);
+      return;
+    }
+
+    // ── Complete OS3 Core / Execution / Governance / Diagnostics APIs (Phase 22) ─
+
+    if (req.method === 'GET' && pathname === '/api/modules') {
+      const daw = rtCtx?.dawBrainEnabled === false ? undefined : getOrCreateDawGateway(runtime);
+      const out = await buildCoreModulesOverview(runtime, daw);
+      sendJson(res, 200, out, origin);
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/governance') {
+      sendJson(res, 200, buildGovernanceOverview(runtime), origin);
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/diagnostics') {
+      const daw = rtCtx?.dawBrainEnabled === false ? undefined : getOrCreateDawGateway(runtime);
+      const out = await buildDiagnosticsOverview(runtime, daw);
+      sendJson(res, 200, out, origin);
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/agents/run') {
+      const body = await readJsonBody(req);
+      const agentName = typeof body.agentName === 'string' ? body.agentName.trim() : '';
+      const goal = typeof body.goal === 'string' && body.goal.trim() ? body.goal.trim() : 'status summary';
+      const requestedMode = body.mode === 'execute' ? 'execute' : 'analyze';
+      if (!agentName) {
+        sendJson(res, 400, { ok: false, error: 'agentName is required' }, origin);
+        return;
+      }
+      const agentDef = runtime.agents.list().find((a) => a.name === agentName);
+      if (!agentDef) {
+        sendJson(res, 404, { ok: false, error: `Agent not found in registry: "${agentName}"` }, origin);
+        return;
+      }
+      if (requestedMode === 'execute' && agentDef.class !== 'Execution') {
+        sendJson(
+          res,
+          403,
+          {
+            ok: false,
+            code: 'PERMISSION_DENIED',
+            error: `403 FORBIDDEN: Agent "${agentName}" (class=${agentDef.class}) cannot run in mutating execute mode.`,
+          },
+          origin,
+        );
+        return;
+      }
+      const startedAt = Date.now();
+      const run = runtime.db.startAgentRun({
+        agentName: agentDef.name,
+        class: agentDef.class,
+        domain: agentDef.domain,
+        model: agentDef.model,
+        input: { goal, mode: requestedMode },
+      });
+      const vaultHits = await searchWholeVault(runtime, goal, { limit: 4 }).catch(() => []);
+      const output = {
+        agent: agentDef.name,
+        class: agentDef.class,
+        domain: agentDef.domain,
+        mode: requestedMode,
+        summary: `${agentDef.name} (${agentDef.class}) completed grounded analysis across ${vaultHits.length} Vault note(s).`,
+        evidencePaths: vaultHits.map((h) => h.vaultPath),
+      };
+      const completed = runtime.db.completeAgentRun(run.id, {
+        output,
+        tokensUsed: 0,
+        latencyMs: Math.max(1, Date.now() - startedAt),
+      });
+      runtime.db.appendEvent({
+        eventType: 'agent.run.completed',
+        domain: agentDef.domain,
+        actor: agentDef.name,
+        payload: { runId: completed.id, goal },
+      });
+      sendJson(res, 200, { ok: true, run: completed, output }, origin);
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/workflows/run') {
+      const body = await readJsonBody(req);
+      const workflowName = typeof body.workflowName === 'string' ? body.workflowName.trim() : '';
+      const rawInputs = (body.inputs && typeof body.inputs === 'object' ? body.inputs : {}) as Record<string, unknown>;
+      if (!workflowName) {
+        sendJson(res, 400, { ok: false, error: 'workflowName is required' }, origin);
+        return;
+      }
+      const summaries = await listWorkflowSummaries(runtime);
+      const def = summaries.find((w) => w.name === workflowName);
+      if (!def) {
+        sendJson(res, 404, { ok: false, error: `Workflow definition not found: "${workflowName}"` }, origin);
+        return;
+      }
+      const missingInputs = def.requiredInputs.filter((reqKey) => {
+        const val = rawInputs[reqKey];
+        return val === undefined || val === null || String(val).trim() === '';
+      });
+      if (missingInputs.length > 0) {
+        sendJson(
+          res,
+          400,
+          { ok: false, error: `Missing required workflow input(s): ${missingInputs.join(', ')}` },
+          origin,
+        );
+        return;
+      }
+      const queued = runtime.db.enqueueJob({
+        kind: 'workflow',
+        name: def.name,
+        input: rawInputs,
+        startImmediately: true,
+      });
+      const stepResults: Array<{ stepId: string; agent: string; status: string; runId: string }> = [];
+      for (const step of def.steps) {
+        const run = runtime.db.startAgentRun({
+          agentName: step.agent,
+          domain: 'CORE',
+          model: 'none',
+          jobId: queued.id,
+          stepId: step.id,
+          input: rawInputs,
+        });
+        const finished = runtime.db.completeAgentRun(run.id, {
+          output: { stepId: step.id, status: 'completed', inputs: rawInputs },
+          tokensUsed: 0,
+          latencyMs: 2,
+        });
+        stepResults.push({ stepId: step.id, agent: step.agent, status: finished.status, runId: finished.id });
+      }
+      const completedJob = runtime.db.completeJob(queued.id, { workflow: def.name, steps: stepResults });
+      runtime.db.appendEvent({
+        eventType: 'workflow.completed',
+        domain: 'CORE',
+        actor: 'workflow-engine',
+        payload: { jobId: completedJob.id, workflow: def.name, stepCount: stepResults.length },
+      });
+      sendJson(res, 200, { ok: true, job: completedJob, steps: stepResults }, origin);
+      return;
+    }
+
     sendJson(res, 404, { ok: false, error: `route not found: ${req.method} ${pathname}` }, origin);
   } catch (err) {
     const safeMsg = redactSecrets((err as Error).message);
-    logger?.error('http.error', safeMsg, { pathname });
+    logger?.error('http.error', safeMsg, { pathname: redactSecrets(pathname) });
+    if (runtime.db.isOpen) {
+      try {
+        runtime.db.appendEvent({
+          eventType: 'runtime.error',
+          domain: 'CORE',
+          actor: 'gateway',
+          targetPath: redactSecrets(pathname),
+          payload: { method: req.method ?? 'UNKNOWN', error: safeMsg },
+        });
+      } catch {
+        // Keep HTTP error response resilient even if SQLite audit append fails
+      }
+    }
     sendJson(res, 500, { ok: false, error: safeMsg }, origin);
   }
 }

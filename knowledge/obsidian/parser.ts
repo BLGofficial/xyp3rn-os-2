@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { parse as parseYaml } from 'yaml';
+import { parseDocument } from 'yaml';
 import type { ExtractedWikilink, ObsidianFrontmatter, ParsedObsidianNote } from './types.ts';
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
@@ -40,8 +40,13 @@ export const parseObsidianNote = (raw: string): ParsedObsidianNote => {
   let frontmatterError: string | null = null;
   if (m) {
     try {
-      const parsed: unknown = parseYaml(m[1]!, { logLevel: 'silent' });
-      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed as Record<string, unknown>;
+      const doc = parseDocument(m[1]!, { logLevel: 'silent' });
+      if (doc.errors.length > 0) {
+        frontmatterError = doc.errors[0]!.message.split('\n')[0]!;
+      } else {
+        const parsed: unknown = doc.toJS();
+        if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed as Record<string, unknown>;
+      }
     } catch (e) {
       frontmatterError = (e as Error).message.split('\n')[0]!;
     }

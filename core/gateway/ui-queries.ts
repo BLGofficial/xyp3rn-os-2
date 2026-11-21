@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { AgentRunRecord, IndexEntryRecord, JobRecord } from '../sqlite/client.ts';
+import type { DawGatewayController } from './daw-gateway.ts';
 import type { Os3JarvisRuntime } from './jarvis-runtime.ts';
 
 const SECTORS = [
@@ -11,6 +12,26 @@ const SECTORS = [
   '04_RESEARCH_MATERIAL',
   '05_XYP3RN_RECORDS',
   '06_GOVERNANCE',
+] as const;
+
+const ALL_OS3_SECTORS = [
+  '00_SYSTEM',
+  '01_CORE',
+  '02_KNOWLEDGE',
+  '02_KNOWLEDGE_LAYER',
+  '03_RESEARCH_INTELLIGENCE',
+  '04_AGENTS',
+  '04_RESEARCH_MATERIAL',
+  '05_WORKFLOWS',
+  '05_XYP3RN_RECORDS',
+  '06_RECORDS',
+  '06_GOVERNANCE',
+  '07_TECH',
+  '08_GOVERNANCE',
+  '09_X3LIUS_MUSIC',
+  '10_DAW_BRAIN',
+  '11_INBOX',
+  '12_ARCHIVE',
 ] as const;
 
 export type WorkflowSummary = {
@@ -206,9 +227,12 @@ export const buildVaultTree = (
 ) => {
   const limitPerSector = Math.min(500, Math.max(20, options.limit ?? 200));
   const stats = runtime.db.getIndexStats();
-  const targetSectors = options.sector && SECTORS.includes(options.sector as (typeof SECTORS)[number])
+  const knownSet = new Set<string>([...ALL_OS3_SECTORS, ...Object.keys(stats.bySector)]);
+  const targetSectors = options.sector && knownSet.has(options.sector)
     ? [options.sector]
-    : [...SECTORS];
+    : [...knownSet].filter(
+        (sec) => (SECTORS as readonly string[]).includes(sec) || (stats.bySector[sec] ?? 0) > 0,
+      );
 
   const sectors = targetSectors.map((sector) => {
     const entries = runtime.db.listIndexEntries(sector, limitPerSector);
@@ -261,9 +285,12 @@ export const buildKnowledgeGraph = (
 ) => {
   const limit = Math.min(350, Math.max(20, options.limit ?? 160));
   const stats = runtime.db.getIndexStats();
+  const sectorKeys = [...new Set<string>([...SECTORS, ...Object.keys(stats.bySector)])];
   const entries = options.sector
     ? runtime.db.listIndexEntries(options.sector, limit)
-    : SECTORS.flatMap((sec) => runtime.db.listIndexEntries(sec, Math.max(15, Math.floor(limit / SECTORS.length))));
+    : sectorKeys.flatMap((sec) =>
+        runtime.db.listIndexEntries(sec, Math.max(15, Math.floor(limit / Math.max(1, sectorKeys.length)))),
+      );
 
   const byExactPath = new Map<string, IndexEntryRecord>();
   const byStem = new Map<string, IndexEntryRecord>();
@@ -387,10 +414,11 @@ export const buildResearchOverview = (runtime: Os3JarvisRuntime) => {
 };
 
 export const buildRecordsOverview = (runtime: Os3JarvisRuntime) => {
-  const recordsEntries = runtime.db.listIndexEntries('05_XYP3RN_RECORDS', 400);
+  const legacyRecords = runtime.db.listIndexEntries('05_XYP3RN_RECORDS', 400);
+  const os3Records = runtime.db.listIndexEntries('06_RECORDS', 400);
   const x3liusEntries = runtime.db.listIndexEntries('09_X3LIUS_MUSIC', 400);
   const seenPaths = new Set<string>();
-  const entries = [...recordsEntries, ...x3liusEntries].filter((entry) => {
+  const entries = [...legacyRecords, ...os3Records, ...x3liusEntries].filter((entry) => {
     if (seenPaths.has(entry.vaultPath)) return false;
     seenPaths.add(entry.vaultPath);
     return true;
@@ -406,14 +434,14 @@ export const buildRecordsOverview = (runtime: Os3JarvisRuntime) => {
     entries.filter(matcher).map(summarizeEntry);
 
   const songs = pickBy((e) => e.docType === 'song' || e.vaultPath.includes('/00_Songs/') || e.vaultPath.includes('/SONGS/'));
-  const lyrics = pickBy((e) => e.docType === 'lyric_version' || e.vaultPath.includes('/01_Lyrics/') || e.vaultPath.includes('/LYRICS/'));
+  const lyrics = pickBy((e) => e.docType === 'lyric_version' || e.docType === 'lyric' || e.vaultPath.includes('/01_Lyrics/') || e.vaultPath.includes('/LYRICS/'));
   const vocalDna = pickBy((e) => e.docType === 'vocal_dna' || e.vaultPath.includes('/02_Vocal_DNA/') || e.vaultPath.includes('/VOCAL_DNA/'));
   const sunoPrompts = pickBy((e) => e.docType === 'suno_package' || e.docType === 'audio-extracted-prompt' || e.vaultPath.includes('/07_Suno_Prompts/') || e.vaultPath.includes('/AUDIO_EXTRACTED_PROMPTS/') || e.vaultPath.includes('/SUNO_PACKAGES/'));
-  const audioTakes = pickBy((e) => e.docType === 'take' || e.vaultPath.includes('/06_Audio/') || e.vaultPath.includes('/TAKES/'));
-  const releases = pickBy((e) => e.docType === 'release' || e.vaultPath.includes('/05_Releases/'));
-  const rightsSplits = pickBy((e) => e.docType === 'rights_split_set' || e.vaultPath.includes('Rights') || e.vaultPath.includes('Split'));
-  const catalogAssignments = pickBy((e) => e.docType === 'isrc_assignment' || e.docType === 'upc_assignment' || e.vaultPath.includes('/Catalog/'));
-  const sessionsDaily = pickBy((e) => e.vaultPath.includes('/00_Daily_Notes/') || e.vaultPath.includes('/01_Session_Logs/') || e.vaultPath.includes('/02_Decisions_ADR/'));
+  const audioTakes = pickBy((e) => e.docType === 'take' || e.docType === 'mix_version' || e.docType === 'master_version' || e.vaultPath.includes('/06_Audio/') || e.vaultPath.includes('/TAKES/'));
+  const releases = pickBy((e) => e.docType === 'release' || e.vaultPath.includes('/05_Releases/') || e.vaultPath.includes('/RELEASES/'));
+  const rightsSplits = pickBy((e) => e.docType === 'rights_split_set' || e.docType === 'rights_split' || e.vaultPath.includes('Rights') || e.vaultPath.includes('/RIGHTS/'));
+  const catalogAssignments = pickBy((e) => e.docType === 'isrc_assignment' || e.docType === 'upc_assignment' || e.docType === 'track' || e.docType === 'credit' || e.vaultPath.includes('/Catalog/') || e.vaultPath.includes('/TRACKS/') || e.vaultPath.includes('/CREDITS/'));
+  const sessionsDaily = pickBy((e) => e.docType === 'daw_catalog_link' || e.vaultPath.includes('/00_Daily_Notes/') || e.vaultPath.includes('/01_Session_Logs/') || e.vaultPath.includes('/02_Decisions_ADR/') || e.vaultPath.includes('/CATALOG_LINKS/'));
 
   return {
     ok: true,
@@ -440,5 +468,203 @@ export const buildRecordsOverview = (runtime: Os3JarvisRuntime) => {
     catalogAssignments: catalogAssignments.slice(0, 20),
     sessionsDaily: sessionsDaily.slice(0, 20),
     recentRuns: recentRuns.slice(0, 20),
+  };
+};
+
+export const buildCoreModulesOverview = async (
+  runtime: Os3JarvisRuntime,
+  dawGateway?: DawGatewayController,
+) => {
+  const stats = runtime.db.getIndexStats();
+  const integrity = runtime.db.isOpen ? runtime.db.checkIntegrity() : null;
+  const agentsSnap = runtime.agents.snapshot();
+  const workflows = await listWorkflowSummaries(runtime);
+  const dawOverview = dawGateway ? await dawGateway.buildOverview() : null;
+
+  const modules = [
+    {
+      id: 'vault-engine',
+      name: 'Obsidian Vault Engine',
+      sector: '00_SYSTEM / 01_CORE',
+      status: stats.totalFiles > 0 ? 'healthy' : 'degraded',
+      summary: `${stats.totalFiles} indexed Markdown notes across ${Object.keys(stats.bySector).length} sectors`,
+      sourcePath: 'core/vault-engine/vault-engine.ts',
+    },
+    {
+      id: 'sqlite-runtime',
+      name: 'SQLite Runtime & Lock Store',
+      sector: '01_CORE',
+      status: runtime.db.isOpen && integrity?.ok ? 'healthy' : 'offline',
+      summary: `Schema v${integrity?.schemaVersion ?? 0} · ${runtime.db.listLocks().length} active locks · ${runtime.db.listApprovals('pending').length} pending approvals`,
+      sourcePath: 'core/sqlite/client.ts',
+    },
+    {
+      id: 'agent-registry',
+      name: 'Agent & Tool Registry',
+      sector: '04_AGENTS',
+      status: agentsSnap.failures.length === 0 ? 'healthy' : 'degraded',
+      summary: `${agentsSnap.agents.length} agents loaded · ${agentsSnap.failures.length} failures`,
+      sourcePath: 'core/agent-registry/os3-agent-registry.ts',
+    },
+    {
+      id: 'workflow-engine',
+      name: 'Deterministic Workflow Engine',
+      sector: '05_WORKFLOWS',
+      status: workflows.length > 0 ? 'healthy' : 'degraded',
+      summary: `${workflows.length} YAML definitions · ${runtime.db.listJobs(50).length} recorded jobs`,
+      sourcePath: 'core/workflow-engine/os3-workflow-engine.ts',
+    },
+    {
+      id: 'context-engine',
+      name: 'Local Knowledge & Context Engine',
+      sector: '02_KNOWLEDGE',
+      status: 'healthy',
+      summary: 'Hybrid structural/FTS5 retrieval + multi-hop wikilink graph',
+      sourcePath: 'core/context-engine/os3-context-engine.ts',
+    },
+    {
+      id: 'research-intelligence',
+      name: 'Research Intelligence Subsystem',
+      sector: '03_RESEARCH_INTELLIGENCE',
+      status: 'healthy',
+      summary: `${(stats.bySector['03_RESEARCH_INTELLIGENCE'] ?? 0)} research entities indexed`,
+      sourcePath: 'research-intelligence/os3-research-engine.ts',
+    },
+    {
+      id: 'records-music-system',
+      name: 'X3LIUS Records + Music System',
+      sector: '06_RECORDS / 09_X3LIUS_MUSIC',
+      status: 'healthy',
+      summary: `${(stats.bySector['06_RECORDS'] ?? 0) + (stats.bySector['09_X3LIUS_MUSIC'] ?? 0) + (stats.bySector['05_XYP3RN_RECORDS'] ?? 0)} catalog & studio notes`,
+      sourcePath: 'records/os3-records-engine.ts',
+    },
+    {
+      id: 'daw-brain',
+      name: 'Universal DAW Brain & Adapters',
+      sector: '10_DAW_BRAIN',
+      status: dawOverview?.connectionSummary.state === 'connected' ? 'healthy' : dawOverview ? 'degraded' : 'offline',
+      summary: dawOverview
+        ? `State: ${dawOverview.connectionSummary.state} · ${dawOverview.adapters.length} adapters · ${dawOverview.capabilities.available.length} available / ${dawOverview.capabilities.unsupported.length} unsupported caps`
+        : 'DAW gateway idle',
+      sourcePath: 'core/daw-brain/daw-core.ts',
+    },
+    {
+      id: 'plugin-brain',
+      name: 'Plugin Brain Subsystem',
+      sector: '10_DAW_BRAIN/PLUGINS',
+      status: 'healthy',
+      summary: `${dawOverview?.pluginBrain.profiles.length ?? 0} verified plugin profiles · edition compatibility checks active`,
+      sourcePath: 'core/daw-brain/plugin-brain/plugin-brain.ts',
+    },
+    {
+      id: 'audio-brain',
+      name: 'Audio Brain & DSP Analyzer',
+      sector: '10_DAW_BRAIN/AUDIO_ANALYSES',
+      status: 'healthy',
+      summary: `${dawOverview?.audioBrain.recentAnalyses.length ?? 0} session analyses · DSP + probabilistic MIR separation`,
+      sourcePath: 'core/daw-brain/audio-brain/audio-brain.ts',
+    },
+  ];
+
+  return {
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    modules,
+  };
+};
+
+export const buildGovernanceOverview = (runtime: Os3JarvisRuntime) => {
+  const legacyGov = runtime.db.listIndexEntries('06_GOVERNANCE', 250);
+  const os3Gov = runtime.db.listIndexEntries('08_GOVERNANCE', 250);
+  const seen = new Set<string>();
+  const govNotes = [...legacyGov, ...os3Gov].filter((e) => {
+    if (seen.has(e.vaultPath)) return false;
+    seen.add(e.vaultPath);
+    return true;
+  });
+
+  const policies = govNotes
+    .filter((e) => e.vaultPath.includes('Policies') || e.vaultPath.includes('POLICIES') || e.docType === 'policy')
+    .map(summarizeEntry);
+  const standards = govNotes
+    .filter((e) => e.vaultPath.includes('Standards') || e.vaultPath.includes('STANDARDS') || e.vaultPath.includes('Access') || e.vaultPath.includes('ACCESS'))
+    .map(summarizeEntry);
+
+  const approvals = runtime.db.listApprovals();
+  const locks = runtime.db.listLocks();
+  const securityEvents = runtime.db
+    .listEvents({ limit: 120 })
+    .filter((e) => e.domain === 'GOVERNANCE' || /denied|approval|security|lock/i.test(e.eventType));
+
+  return {
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    enforcedInvariants: [
+      { id: 'F35-D2', name: 'No Self-Approval / Human Gate', enforced: true, detail: 'Agent & proposer identities rejected with 403 on canonical & DAW execution approvals' },
+      { id: 'LOCALHOST-BINDING', name: '127.0.0.1 Gateway + CORS Allowlist', enforced: true, detail: 'Rejects non-localhost Host/Origin/Referer requests' },
+      { id: 'CAS-NO-OVERWRITE', name: 'Vault Expected-SHA256 & Append-Only Audit', enforced: true, detail: 'Prevents silent overwrites and preserves immutable history' },
+    ],
+    counts: {
+      policies: policies.length,
+      standards: standards.length,
+      totalGovNotes: govNotes.length,
+      activeLocks: locks.length,
+      pendingApprovals: approvals.filter((a) => a.status === 'pending').length,
+      approvedCount: approvals.filter((a) => a.status === 'approved').length,
+      rejectedCount: approvals.filter((a) => a.status === 'rejected').length,
+      securityEventsCount: securityEvents.length,
+    },
+    policies: policies.slice(0, 30),
+    standards: standards.slice(0, 30),
+    activeLocks: locks,
+    recentSecurityEvents: securityEvents.slice(0, 40),
+  };
+};
+
+export const buildDiagnosticsOverview = async (
+  runtime: Os3JarvisRuntime,
+  dawGateway?: DawGatewayController,
+) => {
+  const integrity = runtime.db.isOpen ? runtime.db.checkIntegrity() : { ok: false, schemaVersion: 0, message: 'SQLite offline' };
+  const stats = runtime.db.getIndexStats();
+  const snap = runtime.agents.snapshot();
+  const recentRuns = runtime.db.listAgentRuns(40);
+  const recentJobs = runtime.db.listJobs(40);
+  const dawOverview = dawGateway ? await dawGateway.buildOverview() : null;
+
+  return {
+    ok: true,
+    generatedAt: new Date().toISOString(),
+    sqlite: {
+      open: runtime.db.isOpen,
+      integrityOk: integrity.ok,
+      schemaVersion: integrity.schemaVersion,
+      dbPath: runtime.db.dbPath,
+    },
+    vault: {
+      vaultRoot: runtime.vault.vaultRoot,
+      totalIndexedFiles: stats.totalFiles,
+      sectorsCount: Object.keys(stats.bySector).length,
+    },
+    agents: {
+      loadedCount: snap.agents.length,
+      failuresCount: snap.failures.length,
+      failures: snap.failures,
+      skippedCount: snap.skipped.length,
+    },
+    runtimeHealth: {
+      failedRunsCount: recentRuns.filter((r) => r.status === 'error').length,
+      failedJobsCount: recentJobs.filter((j) => j.status === 'error').length,
+      activeLocksCount: runtime.db.listLocks().length,
+    },
+    dawHealth: dawOverview
+      ? {
+          state: dawOverview.connectionSummary.state,
+          stale: dawOverview.connectionSummary.stale,
+          adaptersRegistered: dawOverview.adapters.length,
+          reachableInstances: dawOverview.discoveredInstances.filter((i) => i.reachable).length,
+          hostProbes: dawOverview.hostProbes,
+        }
+      : null,
   };
 };

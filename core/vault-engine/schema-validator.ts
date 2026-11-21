@@ -42,8 +42,11 @@ const VALID_HOST_SUPPORT = new Set<string>(['SUPPORTED', 'TEMPLATE_SCOPED', 'REA
 const SECRET_PATTERNS: ReadonlyArray<{ readonly label: string; readonly re: RegExp }> = [
   { label: 'OpenRouter API key (sk-or-v1-...)', re: /\bsk-or-v1-[a-f0-9]{32,}\b/i },
   { label: 'Anthropic API key (sk-ant-...)', re: /\bsk-ant-[a-z0-9_-]{20,}\b/i },
+  { label: 'OpenAI API key (sk-proj-...)', re: /\bsk-proj-[a-z0-9_-]{20,}\b/i },
+  { label: 'GitHub Token (ghp_/github_pat_...)', re: /\b(?:ghp_[a-zA-Z0-9]{20,}|github_pat_[a-zA-Z0-9_]{20,})\b/ },
   { label: 'Groq API key (gsk_...)', re: /\bgsk_[a-z0-9]{20,}\b/i },
   { label: 'Google API key (AIza...)', re: /\bAIza[0-9A-Za-z_-]{20,}\b/ },
+  { label: 'Credentialed URI (user:pass@...)', re: /\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^:/\s]+:[^@\s]+@/ },
   { label: 'PEM Private Key', re: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
 ];
 

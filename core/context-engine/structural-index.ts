@@ -15,9 +15,12 @@ export type StructuralEntityNode = {
   readonly sector: string;
   readonly tags: readonly string[];
   readonly status: string | null;
+  readonly version: number | null;
   readonly wikilinks: readonly string[];
   readonly backlinks: readonly string[];
   readonly dependencies: readonly string[];
+  readonly createdAt: string | null;
+  readonly updatedAt: string | null;
   readonly mtimeMs: number;
   readonly checksum: string;
 };
@@ -96,6 +99,7 @@ const extractDependencies = (entry: IndexEntryRecord): readonly string[] => {
 export class Os3StructuralIndex {
   readonly #vault: VaultEngine;
   readonly #db: SqliteRuntimeDb;
+  readonly #bodyCache = new Map<string, { readonly sha256: string; readonly body: string }>();
 
   constructor(options: { readonly vault: VaultEngine; readonly db: SqliteRuntimeDb }) {
     this.#vault = options.vault;
@@ -104,19 +108,23 @@ export class Os3StructuralIndex {
 
   toStructuralNode(entry: IndexEntryRecord): StructuralEntityNode {
     const links = this.#vault.resolveLinks(entry.vaultPath);
+    const fm = entry.frontmatter;
     return {
       vaultPath: entry.vaultPath,
       entityId: deriveEntityId(entry),
       title: entry.title,
       docType: entry.docType,
-      schema: typeof entry.frontmatter.schema === 'string' ? entry.frontmatter.schema : null,
+      schema: typeof fm.schema === 'string' ? fm.schema : null,
       domain: entry.domain ?? entry.sector,
       sector: entry.sector,
       tags: entry.tags,
       status: entry.status,
+      version: typeof fm.version === 'number' && Number.isInteger(fm.version) ? fm.version : null,
       wikilinks: links.outgoing,
       backlinks: links.backlinks,
       dependencies: extractDependencies(entry),
+      createdAt: typeof fm.created_at === 'string' ? fm.created_at : null,
+      updatedAt: typeof fm.updated_at === 'string' ? fm.updated_at : null,
       mtimeMs: entry.mtimeMs,
       checksum: entry.sha256,
     };
@@ -186,8 +194,27 @@ export class Os3StructuralIndex {
     return this.#vault.backlinks(vaultPath);
   }
 
+  async #readCachedBody(entry: IndexEntryRecord): Promise<string | null> {
+    const cached = this.#bodyCache.get(entry.vaultPath);
+    if (cached && cached.sha256 === entry.sha256) {
+      return cached.body;
+    }
+    try {
+      const doc = await this.#vault.read(entry.vaultPath);
+      const body = doc.body.trim();
+      if (this.#bodyCache.size >= 3_000) {
+        this.#bodyCache.clear();
+      }
+      this.#bodyCache.set(entry.vaultPath, { sha256: entry.sha256, body });
+      return body;
+    } catch {
+      return null;
+    }
+  }
+
   /**
-   * Full-text and metadata search across indexed notes AND live Markdown body content.
+   * Full-text and metadata search across indexed notes AND live Markdown body content,
+   * with support for docType, tag, and ISO time-window filters.
    */
   async fullTextSearch(
     query: string,
@@ -195,8 +222,15 @@ export class Os3StructuralIndex {
       readonly domain?: string | undefined;
       readonly sector?: string | undefined;
       readonly docType?: string | undefined;
+      readonly docTypes?: readonly string[] | undefined;
       readonly status?: string | undefined;
       readonly tags?: readonly string[] | undefined;
+      readonly updatedAfter?: string | undefined;
+      readonly updatedBefore?: string | undefined;
+      readonly createdAfter?: string | undefined;
+      readonly createdBefore?: string | undefined;
+      readonly sortBy?: 'relevance' | 'recency' | undefined;
+      readonly maxBodyScans?: number | undefined;
       readonly limit?: number | undefined;
     } = {},
   ): Promise<
@@ -204,6 +238,7 @@ export class Os3StructuralIndex {
       readonly node: StructuralEntityNode;
       readonly score: number;
       readonly excerpt: string;
+      readonly matchReasons: readonly string[];
     }>
   > {
     const limit = options.limit ?? 20;
@@ -212,19 +247,46 @@ export class Os3StructuralIndex {
       .split(/[^a-z0-9_.-]+/)
       .filter((t) => t.length >= 2);
 
+    const uAfter = options.updatedAfter ? Date.parse(options.updatedAfter) : null;
+    const uBefore = options.updatedBefore ? Date.parse(options.updatedBefore) : null;
+    const cAfter = options.createdAfter ? Date.parse(options.createdAfter) : null;
+    const cBefore = options.createdBefore ? Date.parse(options.createdBefore) : null;
+    const docTypesSet = options.docTypes && options.docTypes.length > 0
+      ? new Set(options.docTypes.map((d) => d.toLowerCase()))
+      : null;
+
     const all = this.#db.listIndexEntries(options.sector, 50_000);
     const scored: {
       readonly entry: IndexEntryRecord;
       readonly metadataScore: number;
+      readonly metaReasons: readonly string[];
     }[] = [];
 
     for (const entry of all) {
       if (options.domain && (entry.domain ?? '').toUpperCase() !== options.domain.toUpperCase()) continue;
-      if (options.docType && entry.docType !== options.docType) continue;
+      if (options.docType && (entry.docType ?? '').toLowerCase() !== options.docType.toLowerCase()) continue;
+      if (docTypesSet && (!entry.docType || !docTypesSet.has(entry.docType.toLowerCase()))) continue;
       if (options.status && entry.status !== options.status) continue;
       if (options.tags && options.tags.length > 0) {
         const tagSet = new Set(entry.tags.map((t) => t.toLowerCase()));
         if (!options.tags.every((t) => tagSet.has(t.toLowerCase().replace(/^#/, '')))) continue;
+      }
+
+      if (uAfter !== null || uBefore !== null) {
+        const rawUpd = typeof entry.frontmatter.updated_at === 'string'
+          ? Date.parse(entry.frontmatter.updated_at)
+          : entry.mtimeMs;
+        if (Number.isNaN(rawUpd)) continue;
+        if (uAfter !== null && rawUpd < uAfter) continue;
+        if (uBefore !== null && rawUpd > uBefore) continue;
+      }
+      if (cAfter !== null || cBefore !== null) {
+        const rawCreated = typeof entry.frontmatter.created_at === 'string'
+          ? Date.parse(entry.frontmatter.created_at)
+          : entry.mtimeMs;
+        if (Number.isNaN(rawCreated)) continue;
+        if (cAfter !== null && rawCreated < cAfter) continue;
+        if (cBefore !== null && rawCreated > cBefore) continue;
       }
 
       const titleLower = entry.title.toLowerCase();
@@ -233,44 +295,58 @@ export class Os3StructuralIndex {
       const fmLower = JSON.stringify(entry.frontmatter).toLowerCase();
 
       let metaScore = 0;
+      const metaReasons: string[] = [];
       if (terms.length === 0) {
         metaScore = 1;
+        metaReasons.push('filtered query match');
       } else {
         for (const term of terms) {
-          if (titleLower.includes(term)) metaScore += 3.0;
-          if (tagsLower.includes(term)) metaScore += 2.0;
-          if (pathLower.includes(term)) metaScore += 1.5;
-          if (fmLower.includes(term)) metaScore += 1.0;
+          if (titleLower.includes(term)) {
+            metaScore += 3.0;
+            metaReasons.push(`title:${term}`);
+          }
+          if (tagsLower.includes(term)) {
+            metaScore += 2.0;
+            metaReasons.push(`tag:${term}`);
+          }
+          if (pathLower.includes(term)) {
+            metaScore += 1.5;
+            metaReasons.push(`path:${term}`);
+          }
+          if (fmLower.includes(term)) {
+            metaScore += 1.0;
+            metaReasons.push(`metadata:${term}`);
+          }
         }
       }
 
-      scored.push({ entry, metadataScore: metaScore });
+      scored.push({ entry, metadataScore: metaScore, metaReasons });
     }
 
-    // Inspect top candidates' Markdown bodies for body-level full-text matches and excerpts
-    scored.sort((a, b) => b.metadataScore - a.metadataScore);
-    const candidates = scored.slice(0, Math.max(limit * 4, 80));
+    // Prioritize metadata hits first, then scan remaining entries (up to maxBodyScans) so body-only matches are never missed
+    scored.sort((a, b) => b.metadataScore - a.metadataScore || b.entry.mtimeMs - a.entry.mtimeMs);
+    const maxScans = options.maxBodyScans ?? 1_500;
+    const candidates = scored.slice(0, maxScans);
 
     const results: {
       readonly node: StructuralEntityNode;
       readonly score: number;
       readonly excerpt: string;
+      readonly matchReasons: readonly string[];
     }[] = [];
 
     for (const cand of candidates) {
-      let bodyText = '';
-      try {
-        const doc = await this.#vault.read(cand.entry.vaultPath);
-        bodyText = doc.body.trim();
-      } catch {
-        continue;
-      }
+      if (cand.entry.fileExt !== '.md' && cand.entry.fileExt !== '.yaml' && cand.entry.fileExt !== '.yml') continue;
+      const bodyText = await this.#readCachedBody(cand.entry);
+      if (bodyText === null) continue;
 
       const bodyLower = bodyText.toLowerCase();
       let bodyScore = 0;
+      const reasons = [...cand.metaReasons];
       for (const term of terms) {
         if (bodyLower.includes(term)) {
           bodyScore += 1.25;
+          reasons.push(`body:${term}`);
         }
       }
 
@@ -283,16 +359,27 @@ export class Os3StructuralIndex {
           : cand.entry.status === 'approved' || cand.entry.status === 'live'
             ? 1.1
             : 1.0;
+      if (cand.entry.status === 'canonical') reasons.push('canonical boost');
+      else if (cand.entry.status === 'approved' || cand.entry.status === 'live') reasons.push(`${cand.entry.status} status`);
 
       const excerpt = extractRelevantExcerpt(bodyText || cand.entry.title, terms, 260);
       results.push({
         node: this.toStructuralNode(cand.entry),
         score: Number((totalScore * statusBoost).toFixed(4)),
         excerpt,
+        matchReasons: [...new Set(reasons)],
       });
     }
 
-    results.sort((a, b) => b.score - a.score || a.node.vaultPath.localeCompare(b.node.vaultPath));
+    if (options.sortBy === 'recency') {
+      results.sort((a, b) => {
+        const tsB = b.node.updatedAt ? Date.parse(b.node.updatedAt) : b.node.mtimeMs;
+        const tsA = a.node.updatedAt ? Date.parse(a.node.updatedAt) : a.node.mtimeMs;
+        return tsB - tsA || b.score - a.score;
+      });
+    } else {
+      results.sort((a, b) => b.score - a.score || a.node.vaultPath.localeCompare(b.node.vaultPath));
+    }
     return results.slice(0, limit);
   }
 

@@ -1,4 +1,4 @@
-import { parse as parseYaml, stringify as toYaml } from 'yaml';
+import { parseDocument, stringify as toYaml } from 'yaml';
 import { parseObsidianNote } from '../../knowledge/obsidian/parser.ts';
 import type { ExtractedWikilink, ObsidianFrontmatter } from '../../knowledge/obsidian/types.ts';
 import { VaultValidationError } from './errors.ts';
@@ -65,7 +65,16 @@ export const parseFrontmatterDocument = (
 
   if (match) {
     try {
-      const yamlValue = parseYaml(match[1] ?? '');
+      const doc = parseDocument(match[1] ?? '', { logLevel: 'silent' });
+      if (doc.errors.length > 0) {
+        const msg = doc.errors[0]!.message.split('\n')[0] ?? doc.errors[0]!.message;
+        if (options.strict) {
+          throw new VaultValidationError('INVALID_YAML', `Invalid YAML frontmatter: ${msg}`, {
+            vaultPath: options.vaultPath,
+          });
+        }
+      }
+      const yamlValue = doc.errors.length === 0 ? doc.toJS() : undefined;
       if (yamlValue !== null && yamlValue !== undefined && (typeof yamlValue !== 'object' || Array.isArray(yamlValue))) {
         const msg = 'Frontmatter YAML must evaluate to a key-value mapping object';
         if (options.strict) {

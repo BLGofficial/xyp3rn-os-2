@@ -52,11 +52,11 @@ export const resolveVaultPathSync = (
   if (!trimmed) {
     throw new VaultPathSecurityError('PATH_TRAVERSAL', 'Empty vault path rejected', { vaultPath: relPath });
   }
-  if (trimmed.includes('\0')) {
-    throw new VaultPathSecurityError('PATH_TRAVERSAL', 'Null byte in vault path rejected', { vaultPath: relPath });
+  if (trimmed.includes('\0') || /[\x00-\x1f\x7f]/.test(trimmed)) {
+    throw new VaultPathSecurityError('PATH_TRAVERSAL', 'Null byte or control character in vault path rejected', { vaultPath: relPath });
   }
-  if (trimmed.startsWith('/') || trimmed.startsWith('\\') || /^[a-zA-Z]:/.test(trimmed)) {
-    throw new VaultPathSecurityError('ABSOLUTE_PATH_FORBIDDEN', `Absolute path rejected: ${trimmed}`, {
+  if (trimmed.startsWith('/') || trimmed.startsWith('\\') || trimmed.includes(':')) {
+    throw new VaultPathSecurityError('ABSOLUTE_PATH_FORBIDDEN', `Absolute path or alternate data stream rejected: ${trimmed}`, {
       vaultPath: relPath,
     });
   }
@@ -75,6 +75,11 @@ export const resolveVaultPathSync = (
     }
     if (segment.startsWith('.')) {
       throw new VaultPathSecurityError('DISALLOWED_DIRECTORY', `Hidden segment rejected: ${segment}`, {
+        vaultPath: relPath,
+      });
+    }
+    if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(segment)) {
+      throw new VaultPathSecurityError('DISALLOWED_DIRECTORY', `Reserved Windows device name rejected: ${segment}`, {
         vaultPath: relPath,
       });
     }
@@ -125,8 +130,9 @@ export const resolveVaultPathSync = (
     );
   }
 
+  const normalizedLower = normalizedPath.toLowerCase();
   const isCanonical =
-    CANONICAL_PATH_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix)) ||
+    CANONICAL_PATH_PREFIXES.some((prefix) => normalizedLower.startsWith(prefix.toLowerCase())) ||
     (sector === 'ROOT_KB' && normalizedPath !== 'README.md');
 
   return {

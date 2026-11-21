@@ -5,6 +5,46 @@ import { sha256Hex } from '../core/vault-engine/revision.ts';
 import type { VaultEngine } from '../core/vault-engine/vault-engine.ts';
 import { checkRights, type RightsVerdict } from './ops/rights-splits/check.ts';
 import type { CatalogRecord, ReleaseStatus } from './ops/tools.ts';
+import {
+  addContributorAlias as opsAddContributorAlias,
+  applyApprovedSplitProposal as opsApplyApprovedSplitProposal,
+  approveMasterVersion as opsApproveMasterVersion,
+  computeCatalogReadinessChecks as opsComputeCatalogReadinessChecks,
+  createMusicProject as opsCreateMusicProject,
+  getAlbumContinuity as opsGetAlbumContinuity,
+  linkSongTarget as opsLinkSongTarget,
+  proposeRightsSplitChange as opsProposeRightsSplitChange,
+  recordMasterVersion as opsRecordMasterVersion,
+  recordMixVersion as opsRecordMixVersion,
+  recordReleaseDelivery as opsRecordReleaseDelivery,
+  registerContributor as opsRegisterContributor,
+  requestMasterApproval as opsRequestMasterApproval,
+  retractCredit as opsRetractCredit,
+  retractPlatformLink as opsRetractPlatformLink,
+  retractSongLink as opsRetractSongLink,
+  setReleaseArtwork as opsSetReleaseArtwork,
+  validateRightsSharesMilli,
+  writeCredit as opsWriteCredit,
+  writePlatformLink as opsWritePlatformLink,
+} from './os3-records-catalog-ops.ts';
+import type {
+  CatalogReadinessReport,
+  AlbumContinuityReport,
+  ContributorAliasInput,
+  ContributorInput,
+  CreditInput,
+  CreditRetractionInput,
+  MasterVersionInput,
+  MixVersionInput,
+  MusicProjectInput,
+  PlatformLinkInput,
+  PlatformLinkRetractionInput,
+  ReleaseArtworkInput,
+  ReleaseDeliveryInput,
+  SongLinkInput,
+  SongLinkRetractionInput,
+  SplitProposalInput,
+} from './os3-records-types.ts';
 import { mixedScriptWords } from './x3lius/creative/script-check.ts';
 
 export const X3LIUS_DOMAINS = [
@@ -490,10 +530,13 @@ export class Os3RecordsEngine {
   }
 
   async recordGenerationAttemptAndTake(input: {
+    readonly attemptId?: string | undefined;
+    readonly takeId?: string | undefined;
     readonly songPathOrId: string;
     readonly sunoModel: string;
     readonly stylePrompt: string;
     readonly promptText: string;
+    readonly audioSha256?: string | undefined;
     readonly lyricRef?: string | undefined;
     readonly styleRecipeRef?: string | undefined;
     readonly adapter?: 'manual' | 'sunoapi' | undefined;
@@ -508,12 +551,12 @@ export class Os3RecordsEngine {
     const songId = String(songEntry.frontmatter.id);
 
     const shortId = randomUUID().slice(0, 8);
-    const attemptId = `gtry-${shortId}`;
-    const takeId = `take-${shortId}`;
+    const attemptId = input.attemptId?.trim() || `gtry-${shortId}`;
+    const takeId = input.takeId?.trim() || `take-${shortId}`;
     const packageSha256 = sha256Hex(`${input.sunoModel}\n${input.stylePrompt}\n${input.promptText}`);
 
     // 1. Write Generation Attempt (provenance envelope)
-    const attemptPath = `09_X3LIUS_MUSIC/SUNO_PACKAGES/GTRY-${shortId}.md`;
+    const attemptPath = `09_X3LIUS_MUSIC/SUNO_PACKAGES/GTRY-${attemptId.replace(/^gtry-/, '')}.md`;
     const attemptContent = serializeFrontmatterDocument(
       {
         schema: 'xyp3rn.entity/v3',
@@ -544,7 +587,7 @@ export class Os3RecordsEngine {
     });
 
     // 2. Write Take with full back-linked AI provenance
-    const takePath = `09_X3LIUS_MUSIC/TAKES/TAKE-${shortId}.md`;
+    const takePath = `09_X3LIUS_MUSIC/TAKES/TAKE-${takeId.replace(/^take-/, '')}.md`;
     const takeContent = serializeFrontmatterDocument(
       {
         schema: 'xyp3rn.entity/v3',
@@ -560,6 +603,7 @@ export class Os3RecordsEngine {
         package_sha256: packageSha256,
         style_prompt: input.stylePrompt.trim(),
         prompt_text: input.promptText.trim(),
+        audio_sha256: input.audioSha256 ?? null,
         audio_ref: input.audioAttachmentRef ?? null,
         status: 'draft',
         version: 1,
@@ -709,6 +753,7 @@ export class Os3RecordsEngine {
     readonly releasePathOrId: string;
     readonly position: number;
     readonly title: string;
+    readonly songId?: string | undefined;
     readonly takePathOrId?: string | undefined;
     readonly sourceRef?: string | undefined;
     readonly actor?: string | undefined;
@@ -748,6 +793,7 @@ export class Os3RecordsEngine {
       );
     }
 
+    const takeEntry = input.takePathOrId ? this.#findEntry(input.takePathOrId, '09_X3LIUS_MUSIC/TAKES/') : null;
     const vaultPath = `06_RECORDS/TRACKS/TRK-${trackId.replace(/^trk-/, '')}-${slugify(input.title)}.md`;
     const content = serializeFrontmatterDocument(
       {
@@ -759,10 +805,13 @@ export class Os3RecordsEngine {
         sector: '06_RECORDS',
         release_id: releaseId,
         release_ref: relEntry.vaultPath,
+        song_id: input.songId ?? (takeEntry?.frontmatter.song_id ? String(takeEntry.frontmatter.song_id) : null),
         position: input.position,
         isrc: null,
         recording_kind: input.takePathOrId ? 'suno_take' : 'vault_audio',
         recording_ref: recordingRef,
+        take_id: takeEntry ? String(takeEntry.frontmatter.id) : input.takePathOrId ?? null,
+        source_path: input.sourceRef ?? null,
         status: 'draft',
         version: 1,
         tags: ['xyp3rn', 'os3', 'track'],
@@ -933,33 +982,7 @@ export class Os3RecordsEngine {
     if (!trackEntry) throw new Error(`Track not found: "${input.trackPathOrId}"`);
     const trackId = String(trackEntry.frontmatter.id);
 
-    const seenPayees = new Set<string>();
-    let totalMilli = 0;
-    let unassignedMilli = 0;
-
-    for (const s of input.shares) {
-      if (!Number.isFinite(s.percentage) || s.percentage <= 0 || s.percentage > 100) {
-        throw new Error(`Invalid split percentage ${String(s.percentage)} (must be > 0 and <= 100)`);
-      }
-      const payeeKey = s.payee === null ? '__UNASSIGNED__' : s.payee.trim().toLowerCase();
-      if (s.payee !== null && s.payee.trim().length === 0) {
-        throw new Error('Split share payee must be non-empty string or null (unassigned)');
-      }
-      if (seenPayees.has(payeeKey)) {
-        throw new Error(`Duplicate payee "${String(s.payee)}" inside same split set`);
-      }
-      seenPayees.add(payeeKey);
-
-      const m = milli(s.percentage);
-      totalMilli += m;
-      if (s.payee === null) unassignedMilli += m;
-    }
-
-    if (totalMilli !== 100_000) {
-      throw new Error(`Rights split total must equal exactly 100.000% (got ${totalMilli / 1000}%)`);
-    }
-
-    const hasUnassigned = unassignedMilli > 0;
+    const { unassignedMilli, hasUnassigned } = validateRightsSharesMilli(input.shares);
     const existingSets = this.#db
       .listIndexEntries('06_RECORDS', 5_000)
       .filter(
@@ -1300,6 +1323,96 @@ export class Os3RecordsEngine {
       },
       discrepancies,
     };
+  }
+
+  // ─── 6. Extended X3LIUS + Records Catalog Domains (Phase 20) ────────────────
+
+  get #opsCtx() {
+    return { vault: this.#vault, db: this.#db };
+  }
+
+  createMusicProject(input: MusicProjectInput) {
+    return opsCreateMusicProject(this.#opsCtx, input);
+  }
+
+  getAlbumContinuity(releasePathOrId: string): AlbumContinuityReport {
+    return opsGetAlbumContinuity(this.#opsCtx, releasePathOrId);
+  }
+
+  registerContributor(input: ContributorInput) {
+    return opsRegisterContributor(this.#opsCtx, input);
+  }
+
+  addContributorAlias(input: ContributorAliasInput) {
+    return opsAddContributorAlias(this.#opsCtx, input);
+  }
+
+  writeCredit(input: CreditInput) {
+    return opsWriteCredit(this.#opsCtx, input);
+  }
+
+  retractCredit(input: CreditRetractionInput) {
+    return opsRetractCredit(this.#opsCtx, input);
+  }
+
+  recordMixVersion(input: MixVersionInput) {
+    return opsRecordMixVersion(this.#opsCtx, input);
+  }
+
+  recordMasterVersion(input: MasterVersionInput) {
+    return opsRecordMasterVersion(this.#opsCtx, input);
+  }
+
+  requestMasterApproval(input: { readonly masterPathOrId: string; readonly proposer: string }) {
+    return opsRequestMasterApproval(this.#opsCtx, input);
+  }
+
+  approveMasterVersion(input: {
+    readonly masterPathOrId: string;
+    readonly approvalId: string;
+    readonly approver: string;
+    readonly reason: string;
+  }) {
+    return opsApproveMasterVersion(this.#opsCtx, input);
+  }
+
+  proposeRightsSplitChange(input: SplitProposalInput) {
+    return opsProposeRightsSplitChange(this.#opsCtx, input);
+  }
+
+  applyApprovedSplitProposal(input: { readonly proposalId: string; readonly approver: string; readonly reason: string }) {
+    return opsApplyApprovedSplitProposal(this.#opsCtx, {
+      ...input,
+      writeSplitsFn: (args) => this.writeRightsSplits(args),
+    });
+  }
+
+  writePlatformLink(input: PlatformLinkInput) {
+    return opsWritePlatformLink(this.#opsCtx, input);
+  }
+
+  retractPlatformLink(input: PlatformLinkRetractionInput) {
+    return opsRetractPlatformLink(this.#opsCtx, input);
+  }
+
+  setReleaseArtwork(input: ReleaseArtworkInput) {
+    return opsSetReleaseArtwork(this.#opsCtx, input);
+  }
+
+  recordReleaseDelivery(input: ReleaseDeliveryInput) {
+    return opsRecordReleaseDelivery(this.#opsCtx, input);
+  }
+
+  linkSongTarget(input: SongLinkInput) {
+    return opsLinkSongTarget(this.#opsCtx, input);
+  }
+
+  retractSongLink(input: SongLinkRetractionInput) {
+    return opsRetractSongLink(this.#opsCtx, input);
+  }
+
+  computeCatalogReadinessChecks(releasePathOrId?: string): CatalogReadinessReport {
+    return opsComputeCatalogReadinessChecks(this.#opsCtx, releasePathOrId);
   }
 
   #listTracksForRelease(releaseId: string) {
